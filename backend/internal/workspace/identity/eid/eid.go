@@ -100,6 +100,10 @@ type EIDService struct {
 	tokenURL     string
 	userInfoURL  string
 	mockMode     bool
+	// rpConfigured reports whether EID_RP_UUID and EID_RP_SECRET were both
+	// given. Without them a start request can only fail, so the sign-in
+	// screen asks (via Configured) before offering the rail at all.
+	rpConfigured bool
 	httpClient   *http.Client
 	rpClient     coreeid.Client
 	mockMu       sync.Mutex
@@ -159,6 +163,7 @@ func NewEIDService() *EIDService {
 		tokenURL:     tokenURL,
 		userInfoURL:  userURL,
 		mockMode:     mock,
+		rpConfigured: os.Getenv("EID_RP_UUID") != "" && os.Getenv("EID_RP_SECRET") != "",
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 		rpClient: coreeid.NewClient(
 			os.Getenv("EID_BASE_URL"), os.Getenv("EID_RP_UUID"),
@@ -262,6 +267,14 @@ func (s *EIDService) startSignature(ctx context.Context, nationalID, displayText
 // still waiting on. The relying party's own EXPIRED state is what ends a wait.
 func normalizeStart(started *coreeid.StartResult) *StartResult {
 	return &StartResult{SessionID: started.SessionID, DeviceLinkURL: started.DeviceLinkURL, VerificationCode: started.VerificationCode, ExpiresAt: started.ExpiresAt}
+}
+
+// Configured reports whether this rail can actually start a session: either
+// the mock is on, or the relying-party credentials are present. A deployment
+// that has neither is not broken — it has not been given eID — and the sign-in
+// screen should not offer a button that only ever says "could not be started".
+func (s *EIDService) Configured() bool {
+	return s.mockMode || s.rpConfigured
 }
 
 func (s *EIDService) startMock(nationalID string, deviceLink bool) *StartResult {

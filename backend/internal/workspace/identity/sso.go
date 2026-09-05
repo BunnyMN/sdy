@@ -63,6 +63,11 @@ func (h *Handlers) LocalLoginAllowed() bool {
 	return !h.SsoClientEnabled() || h.ssoClient.Config().LocalLogin
 }
 
+// EIDLoginEnabled reports whether this deployment can start an eID session.
+func (h *Handlers) EIDLoginEnabled() bool {
+	return h.eidSvc != nil && h.eidSvc.Configured()
+}
+
 // RequireLocalLogin wraps the sign-in handlers this deployment may have given
 // away. It answers rather than 404s: a native client or a stale browser tab
 // posting a password to a federated deployment needs to be told where sign-in
@@ -115,6 +120,12 @@ func (h *Handlers) HandleSSOConfig(w http.ResponseWriter, r *http.Request) {
 	if h.GoogleLoginEnabled() && h.LocalLoginAllowed() {
 		answer["google"] = map[string]any{"enabled": true, "start_url": h.GoogleStartURL()}
 	}
+
+	// eID, by the same rule as Google: offered only when a session could
+	// actually be started. A deployment without relying-party credentials
+	// used to show the eID card first and answer every press with "session
+	// could not be started", with the password form folded away beneath it.
+	answer["eid"] = map[string]any{"enabled": h.EIDLoginEnabled() && h.LocalLoginAllowed()}
 	httpx.JSON(w, http.StatusOK, answer)
 }
 

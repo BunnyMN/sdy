@@ -40,7 +40,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
   // undefined = хараахан асуугаагүй. Энэ ялгаа чухал: асуухаас өмнө eID
   // хэлбэрийг зурчихвал холбоосон суулгац дээр хүн энд нэвтэрч болно гэж
   // хэсэг хугацаанд итгэж, дараа нь өөр рүү шилжсэн нь будлиантай.
-  const [sso,setSSO]=useState<{enabled:boolean;provider_name?:string;start_url?:string;local_login:boolean;google?:{enabled:boolean;start_url?:string};access_mode?:"public"|"private"}|undefined>();
+  const [sso,setSSO]=useState<{enabled:boolean;provider_name?:string;start_url?:string;local_login:boolean;google?:{enabled:boolean;start_url?:string};eid?:{enabled:boolean};access_mode?:"public"|"private"}|undefined>();
   // Хэн асууж байна. Зөвхөн authorization хүсэлтээс ирсэн үед л утгатай, ба
   // нэрийг нь серверээс асууна — `next` дотор ирсэн client_id-г л ашиглаж,
   // дэлгэц дээр гарах нэрийг хаяг тодорхойлохыг зөвшөөрөхгүй.
@@ -78,6 +78,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
   // дамжуулах цэг. Алдаа гарсан үед л энд үлдэж, юу болсныг хэлнэ.
   const redirecting=federated&&!sso?.local_login&&!error;
   const showLocal=!!sso&&(!federated||sso.local_login);
+  const eidEnabled=sso?.eid===undefined||sso.eid.enabled;
 
   return <main className="signin-shell">
     <header className="signin-shell__nav">
@@ -115,7 +116,9 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
               that makes the refusal make sense. */}
           {sso?.access_mode==="private"&&<p className="signin-note">{t("auth.message.platform_private")}</p>}
           {error&&!federated&&<p className="signin-alert">{error}</p>}
-          <EIDLogin next={next} variant="signin"/>
+          {/* eID нь сервер тохируулсан үед л. Хуучин хариу (eid талбаргүй)
+              бол өмнөх шигээ харуулна. */}
+          {eidEnabled&&<EIDLogin next={next} variant="signin"/>}
 
           {/* Google. Сервер тохируулсан үед л гарна: тохируулаагүй байхад
               дарж болох мөртлөө юу ч болдоггүй товч харуулах нь амлалт биш,
@@ -127,8 +130,10 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
 
           <div className="signin-footer">
             <hr/>
-            <button className="admin-disclosure" onClick={()=>setAdmin(v=>!v)}><Lock/> {t("auth.action.admin_disclosure")} <ChevronDown className={admin?"rotate-180":""}/></button>
-            {admin&&<form className="admin-login" onSubmit={passwordLogin}>{error&&<p>{error}</p>}<label><Mail/> <input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>setEmail(e.target.value)} required/></label><label><Lock/> <input type="password" autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button>{t("auth.action.admin_sign_in")}</button></form>}
+            {/* eID-гүй суулгац дээр нууц үг бол цорын ганц зам: түүнийг
+                эвхээд нуух нь дэлгэцийг хоосон болгоно, тиймээс шууд нээлттэй. */}
+            {eidEnabled&&<button className="admin-disclosure" onClick={()=>setAdmin(v=>!v)}><Lock/> {t("auth.action.admin_disclosure")} <ChevronDown className={admin?"rotate-180":""}/></button>}
+            {(admin||!eidEnabled)&&<form className="admin-login" onSubmit={passwordLogin}>{error&&<p>{error}</p>}<label><Mail/> <input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>setEmail(e.target.value)} required/></label><label><Lock/> <input type="password" autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button>{t("auth.action.admin_sign_in")}</button></form>}
             {/* Link rather than an anchor: this points at a page of this
                 application, and a full page load here throws away the sign-in
                 state the screen is holding. */}
