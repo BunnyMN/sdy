@@ -21,6 +21,7 @@ export const setup = {
     mn: "Эхний бүртгэл нь Super Admin нэрээр автоматаар үүснэ. Энэ нь хүн биш — байгууллага үүсгэж, ажилчдаа урих хаалга. И-мэйл нь нууц үг сэргээх мессеж хүлээн авахад хэрэгтэй.",
     en: "The first account is created as Super Admin. It is a door rather than a person: it creates the organisations and invites the people who will work here. The address is where a password reset is sent.",
   },
+  "setup.field.admin_name": { mn: "Операторын нэр", en: "Operator name" },
   "setup.field.password_again": { mn: "Нууц үгээ давтах", en: "Repeat the password" },
   "setup.field.totp_code": { mn: "Authenticator-ийн код", en: "Code from the authenticator" },
 
