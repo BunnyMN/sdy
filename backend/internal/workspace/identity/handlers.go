@@ -38,6 +38,11 @@ func (h *Handlers) HandleEIDStart(w http.ResponseWriter, r *http.Request) {
 	}
 	started, err := h.eidSvc.StartDeviceLink(r.Context(), callback)
 	if err != nil {
+		// The citizen sees one sentence; the operator needs the provider's
+		// answer. A rejected RP secret and an unreachable gateway used to
+		// look identical from this side, and diagnosing either meant
+		// replaying the request by hand. The error carries no secret.
+		slog.Warn("eID device-link session could not be started", "error", err)
 		httpx.Error(w, http.StatusBadGateway, "eID Mongolia session could not be started")
 		return
 	}
@@ -60,6 +65,7 @@ func (h *Handlers) HandleEIDStartByNationalID(w http.ResponseWriter, r *http.Req
 	}
 	started, err := h.eidSvc.StartByNationalID(r.Context(), req.NationalID, callback)
 	if err != nil {
+		slog.Warn("eID notification session could not be started", "error", err)
 		httpx.Error(w, http.StatusBadRequest, "Регистрийн дугаар олдсонгүй эсвэл eID апп-д бүртгэлгүй байна")
 		return
 	}
