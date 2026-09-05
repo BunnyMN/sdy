@@ -220,7 +220,7 @@ func (s *Service) Representations(ctx context.Context, personEtsi string) ([]Rep
 	if s.mock {
 		return []Representation{{
 			OrgEtsi: "NTRMN-1234567", OrgRegister: "1234567",
-			OrgName: "Demo Corporation", RightType: "ADMIN",
+			OrgName: "Монголын Залуучуудын Холбоо", RightType: "ADMIN",
 		}}, nil
 	}
 	found, err := s.rp.Representations(ctx, personEtsi)

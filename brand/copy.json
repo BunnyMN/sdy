@@ -1,0 +1,162 @@
+{
+  "brand.name": {
+    "mn": "Монголын Залуучуудын Холбоо",
+    "en": "Mongolian Youth Federation"
+  },
+  "brand.short_name": {
+    "mn": "МЗХ",
+    "en": "MYF"
+  },
+  "brand.description": {
+    "mn": "Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.",
+    "en": "The internal system of the Mongolian Youth Federation for its members, branch councils and secretariat."
+  },
+  "website.view.hero_title_lead": {
+    "mn": "Залуучуудын холбооны",
+    "en": "The federation's"
+  },
+  "website.view.hero_title_highlight": {
+    "mn": "нэгдсэн дотоод систем",
+    "en": "one internal system"
+  },
+  "website.view.hero_title_tail": {
+    "mn": "— гишүүн бүрд",
+    "en": "for every member"
+  },
+  "website.view.hero_lede": {
+    "mn": "{brand}-ны төв аппарат, аймаг, дүүргийн салбар зөвлөл, гишүүн байгууллагууд нэг нэвтрэлт, нэг эрхийн бүртгэл, нэг аудиттай орчинд ажиллана. Хүн бүр өөрийн салбарын мэдээллийг л харна.",
+    "en": "The {brand}'s secretariat, provincial and district branch councils and member organisations work in one place, with one sign-in, one register of roles and one audit trail. Everyone sees their own branch and nothing else."
+  },
+  "website.action.see_features": {
+    "mn": "Систем юу хийдэг вэ",
+    "en": "What the system does"
+  },
+  "website.stat.apps_count": {
+    "mn": "1",
+    "en": "1"
+  },
+  "website.stat.apps": {
+    "mn": "нэвтрэлт — гишүүн бүрд",
+    "en": "sign-in for every member"
+  },
+  "website.stat.binary_count": {
+    "mn": "21+",
+    "en": "21+"
+  },
+  "website.stat.binary": {
+    "mn": "аймаг, нийслэлийн салбар зөвлөл нэг системд",
+    "en": "provincial and capital branch councils in one system"
+  },
+  "website.view.features_eyebrow": {
+    "mn": "НЭВТРЭЛТ БА ЭРХ",
+    "en": "SIGN-IN AND ACCESS"
+  },
+  "website.view.features_title": {
+    "mn": "Гишүүн, салбар, төв аппарат — нэг нэвтрэлт",
+    "en": "Members, branches and the secretariat — one sign-in"
+  },
+  "website.view.features_lede": {
+    "mn": "{brand}-ны систем нууц үг, eID болон холбооны бүртгэлийг гишүүнчлэл, албан тушаалын эрх, аудиттай нэг сервер талын урсгалд холбоно.",
+    "en": "The {brand}'s system connects password, eID and federation sign-in to membership, position-based roles and audit in one server-side flow."
+  },
+  "website.feature.instant_title": {
+    "mn": "eID-ээр нэвтрэх",
+    "en": "Sign in with eID"
+  },
+  "website.feature.instant_body": {
+    "mn": "Гишүүн регистрийн дугаараараа, QR-аар эсвэл утасны eID аппаараа нэвтэрнэ. Нууц үг санах шаардлагагүй, хувийн мэдээлэл нь иргэний үнэмлэхээр баталгаажна.",
+    "en": "A member signs in by registration number, QR code or the eID app on their phone. No password to remember, and identity is verified against the national ID."
+  },
+  "website.feature.sso_title": {
+    "mn": "Нэг нэвтрэлт — холбооны бүх систем",
+    "en": "One sign-in for every federation system"
+  },
+  "website.feature.sso_body": {
+    "mn": "Дотоод OAuth2/OIDC provider нь нэг удаа нэвтэрсэн гишүүнийг холбооны бусад вэб, апп, мэдээллийн системд дахин нэвтрүүлэлгүй оруулна.",
+    "en": "The built-in OAuth2/OIDC provider lets a member who signed in once open the federation's other sites, apps and information systems without signing in again."
+  },
+  "website.feature.passwordless_title": {
+    "mn": "Гишүүний мэдээлэл сервер талд",
+    "en": "Member data stays server-side"
+  },
+  "website.feature.passwordless_body": {
+    "mn": "Регистр, утас, хаяг зэрэг хувийн мэдээлэл хөтөч, утсанд хадгалагдахгүй. Session token өгөгдлийн санд зөвхөн hash хэлбэрээр байна.",
+    "en": "Registration numbers, phone numbers and addresses are never stored in the browser or on the phone. Session tokens live in the database only as hashes."
+  },
+  "website.feature.channels_title": {
+    "mn": "Вэб, утас — нэг систем",
+    "en": "Web and phone — one system"
+  },
+  "website.feature.channels_body": {
+    "mn": "Салбар зөвлөлийн ажилтан компьютерээсээ, гишүүн утаснаасаа нэг системд, нэг эрхтэйгээр ордог.",
+    "en": "A branch council officer from a desk and a member from a phone enter the same system with the same rights."
+  },
+  "website.view.trust_eyebrow": {
+    "mn": "МЭДЭЭЛЛИЙН ХАМГААЛАЛТ",
+    "en": "DATA PROTECTION"
+  },
+  "website.view.trust_title": {
+    "mn": "Салбар бүрийн мэдээлэл салбартаа үлдэнэ",
+    "en": "Each branch's data stays with that branch"
+  },
+  "website.view.trust_lede": {
+    "mn": "Нэвтрэлт → сервер session → салбарын гишүүнчлэл → албан тушаалын эрх → холбогдсон систем. Алхам бүр сервер талд шалгагдаж, өгөгдлийн сангийн түвшинд тусгаарлагдана.",
+    "en": "Sign-in → server session → branch membership → position-based role → connected system. Every link is checked on the server and isolated at the database level."
+  },
+  "website.trust.rbac": {
+    "mn": "Салбар зөвлөл бүрээр тусгаарласан эрх",
+    "en": "Roles isolated per branch council"
+  },
+  "website.trust.audit": {
+    "mn": "Хэн, хэзээ, юу өөрчилснийг бүртгэсэн аудит",
+    "en": "An audit trail of who changed what and when"
+  },
+  "website.tech.erp_body": {
+    "mn": "Гишүүнчлэл, салбар, эрх, аудит",
+    "en": "Membership, branches, roles, audit"
+  },
+  "website.tech.sso_body": {
+    "mn": "Холбооны бусад системүүд, нэг session",
+    "en": "The federation's other systems, one session"
+  },
+  "website.service.eyebrow": {
+    "mn": "ХОЛБООНЫ ДЭД БҮТЭЦ",
+    "en": "FEDERATION INFRASTRUCTURE"
+  },
+  "website.service.title": {
+    "mn": "Дотоод системийн хажууд юу ажилладаг вэ",
+    "en": "What runs beside the internal system"
+  },
+  "website.service.lede": {
+    "mn": "Дотоод систем нэг хаяг биш. Удирдлагын консол, тайлангийн агуулах, нөөцлөлт, хяналт тус бүр өөрийн хаягтай. Эхнийх нь холбооных биш — иргэнийг таних үндэсний дэд бүтэц.",
+    "en": "The internal system is not one hostname. The admin console, the reporting warehouse, backups and monitoring each answer on their own address. The first is not the federation's — it is the national identity infrastructure."
+  },
+  "website.service.admin_title": {
+    "mn": "Удирдлагын консол",
+    "en": "Admin console"
+  },
+  "website.service.admin_body": {
+    "mn": "Салбар зөвлөл нээх, түдгэлзүүлэх, эрх олгох, аудит унших. Гишүүний бүртгэлээс тусдаа identity, тусдаа cookie.",
+    "en": "Open and suspend branch councils, grant capabilities, read the audit trail. A separate identity and cookie from a member account."
+  },
+  "website.service.dwh_title": {
+    "mn": "Тайлангийн агуулах",
+    "en": "Reporting warehouse"
+  },
+  "website.service.dwh_body": {
+    "mn": "Салбар бүрийн гишүүнчлэл, үйл ажиллагаа, арга хэмжээний мэдээллийг өдөр бүр нэгтгэсэн нэг агуулах. Дээр нь тайлан, BI давхарга.",
+    "en": "One warehouse that consolidates membership, activity and event data from every branch daily. Reports and BI on top."
+  },
+  "website.message.footer_note": {
+    "mn": "Монголын Залуучуудын Холбоо · Дотоод систем",
+    "en": "Mongolian Youth Federation · Internal system"
+  },
+  "sso_clients.view.empty_body": {
+    "mn": "Холбооны бусад систем {brand}-гоор дамжуулан нэвтрэхийн тулд эхлээд OAuth2 client бүртгэнэ.",
+    "en": "Register an OAuth2 client so another federation system can sign members in through the {brand}."
+  },
+  "oauth.consent.lede": {
+    "mn": "{app} таны {brand}-ны бүртгэлээр нэвтрэхийг хүсэж байна.",
+    "en": "{app} wants to sign you in with your {brand} account."
+  }
+}

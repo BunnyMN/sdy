@@ -1,4 +1,20 @@
-# Gerege Nexus
+# Монголын Залуучуудын Холбоо — дотоод систем
+
+**Монголын Залуучуудын Холбооны (МЗХ) гишүүд, салбар зөвлөл, ажлын албаны
+нэгдсэн дотоод систем.** Gerege Nexus платформ дээр суурилсан: нэвтрэлт (нууц
+үг, eID, ДАН, SSO), байгууллага/салбар бүрийн тусгаарлагдсан гишүүнчлэл ба эрх,
+аудит, тайлангийн хөдөлгүүр, холбооны бусад системд нэг удаа нэвтрэх OIDC
+provider, операторын консол.
+
+Холбооны нэр, лого, өнгө, үг хэллэг нь кодонд биш, тохиргоонд байна
+(`docker-compose.yml`, `.env.example`, [`brand/copy.json`](brand/copy.json)).
+Юу өөрчлөгдсөн, лого хэрхэн солих, production-д юу нэмэлт хэрэгтэйг
+[`docs/MZH.md`](docs/MZH.md)-ээс үзнэ үү. Доорх бүх зүйл нь суурь платформын
+тайлбар бөгөөд upstream `gerege-systems/open-gerege-nexus`-тэй адил хэвээр.
+
+---
+
+# Gerege Nexus (суурь платформ)
 
 **Олон байгууллагатай, модуль нэмж бүтээгдэхүүн болгох платформын цөм**
 
@@ -131,7 +147,9 @@ docker compose ps
 ```
 
 Compose нь PostgreSQL, Redis, нэг удаагийн migration, backend, frontend
-асаана. Дараах хаягуудыг ашиглана:
+асаана. Брэнд нь compose-ийн default-оор МЗХ-ных; өөр нэрээр асаахын тулд
+`BRAND_NAME=... docker compose up` ([`docs/MZH.md`](docs/MZH.md)). Дараах
+хаягуудыг ашиглана:
 
 - Tenant web: <http://nexus.localhost:3000>
 - Control plane web: <http://admin.localhost:3000>
@@ -143,7 +161,7 @@ Development demo account:
 | --- | --- |
 | И-мэйл | `admin@example.com` |
 | Нууц үг | `Password123!` |
-| Tenant | `Demo Corporation` (`demo`) |
+| Tenant | `Монголын Залуучуудын Холбоо` (`demo`), хоёр дахь нь `МЗХ — Улаанбаатар хотын салбар зөвлөл` (`demo-branch`) |
 
 `SEED_DEMO_DATA` нь production-оос бусад орчинд анхдагчаар идэвхтэй.
 Production-д explicit `true` өгөөгүй бол demo account үүсэхгүй.

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Placeholder launcher icon for the Mongolian Youth Federation deployment.
+       Same artwork as logo.svg, drawn edge to edge for a tab or home screen. -->
+  <rect width="512" height="512" rx="112" fill="#0b2a6f"/>
+  <g transform="translate(64 64) scale(4)">
+    <path d="M48 16c3 7 9 10 9 18 0 4-2 7-4 9 5-1 8-5 9-9 2 6 0 12-4 16-2 2-6 4-10 4s-8-2-10-4c-4-4-6-10-4-16 1 4 4 8 9 9-2-2-4-5-4-9 0-8 6-11 9-18z" fill="#f5c542"/>
+    <circle cx="48" cy="60" r="8" fill="#f5c542"/>
+    <rect x="26" y="74" width="44" height="5" rx="2.5" fill="#f5c542"/>
+  </g>
+</svg>

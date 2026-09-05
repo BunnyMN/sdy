@@ -1,62 +1,51 @@
-name: Deploy to Production (nexus.gerege.mn)
+name: Deploy to Production (e-sdy.mn)
 
-# Lint, tests and builds live in ci.yml. This workflow publishes images for an
-# already-green commit and rolls them out — and now actually waits for that to
-# be true.
+# Монголын Залуучуудын Холбооны дотоод системийг e-sdy.mn (5.45.65.164) дээр
+# гаргах ажиллагаа. Lint, тест, build нь ci.yml-д; энэ файл нь CI ногоон болсон
+# commit-ийн image-ийг GHCR-д түлхээд хост руу ssh-ээр гаргана.
 #
-# It used to trigger on push to main, which meant it raced CI rather than
-# following it: a merge started both at once and the rollout was usually done
-# before the tests finished. Two pull requests that are each green can still
-# break main together, and that is precisely the case where an automatic deploy
-# should not happen. It is now chained to CI's completion and runs only on
-# success.
+# CI-г дуустал хүлээдэг (workflow_run), push дээр шууд биш: хоёр тус тусдаа
+# ногоон PR main дээр нийлээд эвдэрч болно, тэр нь яг автоматаар гаргах ёсгүй
+# тохиолдол.
 #
-# Required repository secrets:
-#   DEPLOY_SSH_KEY              private key for the deploy user (required)
-#   DEPLOY_DISPATCH_TOKEN       fine-grained token the operator console uses to
-#                               trigger *this* workflow, and nothing else. It
-#                               reaches the server as GITHUB_DEPLOY_TOKEN; the
-#                               names differ because GitHub refuses secrets
-#                               beginning with GITHUB_. Optional: without it the
-#                               console's deploy button refuses and says why.
-#   DEPLOY_HOST                 defaults to nexus.gerege.mn
-#   DEPLOY_USER                 defaults to deploy
-#   DEPLOY_PORT                 defaults to 22
-#   POSTGRES_PASSWORD           database password on the server
-#   SSO_DEFAULT_CLIENT_SECRET   OAuth2 secret for the built-in client
-#   GEMINI_API_KEY              Google Gemini API key (AI degrades safely if empty)
-#   EID_RP_UUID                 eID Mongolia relying-party UUID
-#   EID_RP_SECRET               eID Mongolia relying-party secret
-#   ESIGN_TOKEN                 Gerege eSign HSM credential (optional)
-#   INTEGRATION_ENCRYPTION_KEY  the deployment's one cipher for credentials at
-#                               rest (nexus.SecretSealer). Named for the
-#                               connectors, which were its first caller and are
-#                               now an app elsewhere; the key stays here because
-#                               a deployment must have exactly one
-#   GOOGLE_LOGIN_CLIENT_ID      OAuth client for the "sign in with Google"
-#   GOOGLE_LOGIN_CLIENT_SECRET  button (optional: absent, it is not offered).
-#                               There used to be a second Google pair here, for
-#                               the Drive and Meet connectors, kept separate on
-#                               purpose so that a document connector could not
-#                               open a sign-in path by itself. The connectors
-#                               are an app in client-gerege-nexus now and took
-#                               their pair, and Dropbox's, with them.
-#   EID_SIGN_SIGNER_CERT_PEM    server Document-Signer certificate, PEM (optional)
-#   EID_SIGN_SIGNER_KEY_PEM     its ECDSA private key, PEM (optional)
+# Урсгал:
+#   ghcr.io/<owner>/<repo>/{backend,frontend} image бүтээж түлхэх (tag = sha, latest)
+#     ↓
+#   хост руу ssh: compose + brand хуулах → .env шинээр бичих → pull → migrate → restart
+#     ↓
+#   /health, /ready, нүүр хуудас шалгах
 #
-# Repository variables:
-#   PUBLIC_ORIGIN               defaults to https://nexus.gerege.mn
-#   EID_APP_CALLBACKS           exact native return URIs; defaults to
-#                               gerege-nexus://auth
-#   REDIS_URL                   defaults to the compose service (redis://redis:6379/0).
-#                               Set it to point at an external Redis; leave it
-#                               unset and the stack runs its own. Empty turns
-#                               Redis off entirely, which is only correct while
-#                               there is a single API replica.
-#   DEMO_MODE                   "true" seeds the demo account and mock connectors
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_KEY              deploy хэрэглэгчийн хувийн түлхүүр (заавал)
+#   DEPLOY_HOST                 анхдагч 5.45.65.164
+#   DEPLOY_USER                 анхдагч deploy
+#   DEPLOY_PORT                 анхдагч 22
+#   POSTGRES_PASSWORD           өгөгдлийн сангийн нууц үг (заавал)
+#   SSO_DEFAULT_CLIENT_SECRET   built-in OAuth2 клиентийн нууц (заавал)
+#   INTEGRATION_ENCRYPTION_KEY  хадгалагдах итгэмжлэлийн шифр, `openssl rand -base64 32` (заавал)
+#   GEMINI_API_KEY              AI туслах (сонголттой)
+#   EID_RP_UUID / EID_RP_SECRET eID Mongolia relying party (сонголттой; байхгүй бол eID унтраа)
+#   GEREGE_CORE_TOKEN           Gerege Core лавлагаа (сонголттой)
+#   GOOGLE_LOGIN_CLIENT_ID / _SECRET  Google нэвтрэлт (сонголттой)
+#
+# Repository variables (нууц биш):
+#   PUBLIC_ORIGIN               анхдагч https://e-sdy.mn
+#   CONTROL_PLANE_HOST          анхдагч admin.e-sdy.mn
+#   DEMO_MODE                   "true" бол demo account + mock eID/ДАН/ХУР; анхдагч false
+#   EID_MOCK_MODE               анхдагч false
+#   EID_APP_CALLBACKS           анхдагч gerege-nexus://auth
+#   EID_BASE_URL                анхдагч https://eidmongolia.mn/v3
+#   GOOGLE_LOGIN_TENANT, GOOGLE_LOGIN_ALLOWED_DOMAINS
+#
+# Хост дээр урьдчилан байх ёстой (docs/MZH.md → «Сервер»): Docker, nginx
+# (e-sdy.mn ба admin.e-sdy.mn vhost, TLS), `deploy` хэрэглэгч docker бүлэгт,
+# /opt/sdy нь deploy-ийнх. admin.e-sdy.mn-ийн IP allowlist
+# (/etc/nginx/snippets/cp-allowlist.conf) нь хост дээр root-оор засагддаг,
+# энэ ажиллагаа түүнд хүрдэггүй.
+
 on:
   workflow_run:
-    # Must match ci.yml's `name:` exactly.
+    # ci.yml-ийн `name:`-тэй яг таарна.
     workflows: ["CI"]
     types: [completed]
     branches: [main]
@@ -68,42 +57,26 @@ on:
 
 permissions:
   contents: read
-  # Without this the GHCR push fails with
-  # "denied: installation not allowed to Write the repository".
   packages: write
 
 concurrency:
-  # Named for the host rather than for the stack, because anything else that
-  # touches this machine's registry credentials or its images belongs in the
-  # group too — today that is ghcr-retention.yml. The App Store rollout used to
-  # be here as well; it shared this host and this user, so it shared one
-  # ~/.docker/config.json, and when the two overlapped one workflow's `docker
-  # logout` landed between the other's `docker rm -f` and its pull. The
-  # platform spent several minutes serving 502 because its containers were gone
-  # and the replacement pull was denied. That workflow left with the App Store
-  # (07ff4b5), and the workflow that rolled out its Nexus instance left with the
-  # product itself — the App Store is its own repository now and deploys itself
-  # to its own host.
   group: production-host-rollout
   cancel-in-progress: false
 
 env:
-  # Repository variables, not secrets: the `secrets` context is not available
-  # in workflow-level env (or in a job name), which fails workflow validation
-  # outright — the run never starts.
-  PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN || 'https://nexus.gerege.mn' }}
-  # Repository variable (Settings → Variables), not a secret. "true" turns the
-  # target into a public demo: seeded demo account plus mock E-ID/DAN/XYP.
+  PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN || 'https://e-sdy.mn' }}
+  CONTROL_PLANE_HOST: ${{ vars.CONTROL_PLANE_HOST || 'admin.e-sdy.mn' }}
   DEMO_MODE: ${{ vars.DEMO_MODE || 'false' }}
   EID_MOCK_MODE: ${{ vars.EID_MOCK_MODE || 'false' }}
-  # Repository variable, not a secret: a URL scheme is not a credential.
-  # The eID RP callback_hosts must separately contain `gerege-nexus://`.
   EID_APP_CALLBACKS: ${{ vars.EID_APP_CALLBACKS || 'gerege-nexus://auth' }}
+  EID_BASE_URL: ${{ vars.EID_BASE_URL || 'https://eidmongolia.mn/v3' }}
   REDIS_URL: ${{ vars.REDIS_URL || 'redis://redis:6379/0' }}
+  APP_DIR: /opt/sdy
+  STACK: sdy
 
 jobs:
   build-and-push:
-    name: Build & push ${{ matrix.component }} image
+    name: Build and push ${{ matrix.component }}
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     strategy:
@@ -120,35 +93,24 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # GHCR rejects uppercase paths; github.repository keeps the owner casing.
+      # GHCR том үсэгтэй замыг хүлээж авдаггүй.
       - name: Compute image name
         id: meta
         run: echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${{ matrix.component }}" >> "$GITHUB_OUTPUT"
 
-      # What this build should call itself to an app store.
-      #
-      # PlatformVersion is what a manifest's `"platform": ">=1.1.0"` is checked
-      # against, and the Dockerfile has always accepted it as a build argument —
-      # nothing ever passed one, so every image built here has told every store
-      # it is 1.0.0. Read from the source constant rather than from the tag,
-      # because this workflow builds every commit on main and most of them are
-      # not tagged; the release workflow is what holds the two in step.
       - name: Resolve the platform version
         id: version
         run: |
           value=$(grep -oE 'PlatformVersion = "[^"]+"' backend/internal/kernel/config/version.go | cut -d'"' -f2)
           echo "value=$value" >> "$GITHUB_OUTPUT"
-          echo "building as platform $value"
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -159,134 +121,67 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}:latest
             ${{ steps.meta.outputs.image }}:${{ github.event.workflow_run.head_sha || github.sha }}
-          # NEXT_PUBLIC_API_URL is deliberately not passed. Baked in, it ties
-          # the image to one hostname, so the same product needs a second image
-          # for its staging and a third for the next deployment. Left empty the
-          # browser asks whichever host served the page — see lib/apiBase.ts.
+          # NEXT_PUBLIC_API_URL санаатайгаар өгөхгүй: хоосон бол хөтөч өөрийг нь
+          # үйлчилсэн хостоос асууна (frontend/lib/apiBase.ts).
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
   deploy:
-    name: Roll out to production
+    name: Roll out to e-sdy.mn
     runs-on: ubuntu-latest
-    needs: [build-and-push]
-    # Job түвшний `permissions` нь workflow түвшнийхийг НЭМДЭГГҮЙ, бүхэлд нь
-    # ОРЛОДОГ. Энэ блокийг `id-token: write`-ийн төлөө нэмэхэд `packages`
-    # эрх нь хамт алга болж, серверт дамждаг GITHUB_TOKEN нь ghcr.io-д
-    # нэвтэрч чадсан атлаа хувийн image уншиж чадахгүй болов — «Login
-    # Succeeded», дараа нь «denied». Rollout зогсож, ажиллаж байсан
-    # контейнерууд хөндөгдөөгүй нь доорх дахин оролдох логикийн ач.
-    #
-    # `read` нь хангалттай: энэ job түлхдэггүй, зөвхөн татдаг.
-    permissions:
-      contents: read
-      packages: read
-      # Infisical-ийн OIDC нэвтрэлтэд.
-      id-token: write
+    needs: build-and-push
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_ORIGIN || 'https://e-sdy.mn' }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      # Нууцын эх сурвалж — secrets.gerege.mn (Infisical).
-      #
-      # OIDC-ээр, client secret-гүй: GitHub энэ ажиллагааны хувьд богино
-      # настай токен гаргаж, Infisical түүнийг шалгана. Тэгснээр «нууц
-      # хадгалах газар руу орох нууц» гэдэг асуудал огт үүсэхгүй — GitHub-д
-      # хадгалагдах урт настай Infisical хэрэглэгч байхгүй.
-      #
-      # Алхам нь `vars.INFISICAL_IDENTITY_ID` тавигдсан үед л ажиллана.
-      # Тавиагүй бол юу ч экспортлохгүй, доорх бүх утга GitHub-ийн secret-ээс
-      # хэвээр ирнэ — өөрөөр хэлбэл энэ өөрчлөлт нь өөрөө юуг ч шилжүүлэхгүй.
-      - name: Fetch secrets from the vault
-        if: vars.INFISICAL_IDENTITY_ID != ''
-        uses: Infisical/secrets-action@v1.0.17
-        with:
-          method: oidc
-          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
-          domain: ${{ vars.INFISICAL_DOMAIN || 'https://secrets.gerege.mn' }}
-          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ vars.INFISICAL_ENV_SLUG || 'prod' }}
-          secret-path: ${{ vars.INFISICAL_SECRET_PATH || '/' }}
-
-      # Fork clones have no deployment secrets; skip instead of failing the run.
-      #
-      # Everything past this point writes the server's .env from scratch, and a
-      # secret that is not configured is written as an empty line rather than
-      # left out. The platform then starts with it: an empty POSTGRES_PASSWORD
-      # is a database that will not open, an empty INTEGRATION_ENCRYPTION_KEY is
-      # worse than that. Nothing in the rollout notices — the containers come
-      # up, the health check passes on a fresh process, and the failure is
-      # whatever asks for the missing value first.
-      #
-      # This has already happened once in a smaller way: five SERVICE_URL_*
-      # values were added to the server by hand, erased by the next rollout, and
-      # written back as empty lines. Nobody was paged; the cards simply stopped
-      # being drawn.
-      #
-      # So the values that cannot be empty are checked here, before the first
-      # byte reaches the server. Only emptiness is tested and only names are
-      # printed — a guard that echoes a secret to prove it is set has published
-      # it to every reader of the run log.
-      - name: Check deployment secrets
+      # Хоосон нууц .env-д хоосон мөр болж бичигдээд платформ түүгээрээ асдаг.
+      # Тиймээс байх ёстой утгуудыг эхний байт серверт хүрэхээс өмнө шалгана —
+      # зөвхөн нэрийг нь хэвлэнэ.
+      - name: Check the required secrets are present
         id: guard
         env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || env.POSTGRES_PASSWORD }}
-          SSO_DEFAULT_CLIENT_SECRET: ${{ secrets.SSO_DEFAULT_CLIENT_SECRET || env.SSO_DEFAULT_CLIENT_SECRET }}
-          INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY || env.INTEGRATION_ENCRYPTION_KEY }}
-          EID_RP_UUID: ${{ secrets.EID_RP_UUID || env.EID_RP_UUID }}
-          EID_RP_SECRET: ${{ secrets.EID_RP_SECRET || env.EID_RP_SECRET }}
-          GEREGE_CORE_TOKEN: ${{ secrets.GEREGE_CORE_TOKEN || env.GEREGE_CORE_TOKEN }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SSO_DEFAULT_CLIENT_SECRET: ${{ secrets.SSO_DEFAULT_CLIENT_SECRET }}
+          INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
         run: |
-          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
             echo "::warning::DEPLOY_SSH_KEY is not configured — skipping rollout."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          # Optional settings are deliberately absent from this list. A
-          # deployment with no assistant, no Google sign-in and no signing
-          # certificate is a deployment, and failing its rollout over a value it
-          # was never meant to have would teach everybody to ignore this step.
           missing=""
-          # PUBLIC_ORIGIN нь энд байхгүй: тэр нь secret биш, workflow-ийн
-          # `env:` дэх `vars.PUBLIC_ORIGIN || 'https://nexus.gerege.mn'` —
-          # анхдагчтай тул хоосон байх боломжгүй. `secrets.PUBLIC_ORIGIN`-ээс
-          # уншсан хувилбар нь бүх rollout-ыг унагаах байсан.
-          for name in POSTGRES_PASSWORD SSO_DEFAULT_CLIENT_SECRET \
-                      INTEGRATION_ENCRYPTION_KEY EID_RP_UUID EID_RP_SECRET \
-                      GEREGE_CORE_TOKEN; do
+          for name in POSTGRES_PASSWORD SSO_DEFAULT_CLIENT_SECRET INTEGRATION_ENCRYPTION_KEY; do
             [ -n "${!name}" ] || missing="$missing $name"
           done
-
           if [ -n "$missing" ]; then
             echo "::error::These deployment secrets are empty and would be written to the server as blank lines:$missing"
             exit 1
           fi
-
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Resolve image tag
         id: tag
         run: echo "value=${{ github.event.inputs.tag || github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
 
-      - name: Copy compose file to the server
+      # Compose файл ба брэндийн хавтас. brand/ нь /brand:ro гэж mount хийгддэг
+      # тул copy.json хостод байх ёстой.
+      - name: Copy compose file and brand to the server
         if: steps.guard.outputs.ready == 'true'
         uses: appleboy/scp-action@v1.0.0
         with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
+          host: ${{ secrets.DEPLOY_HOST || '5.45.65.164' }}
           username: ${{ secrets.DEPLOY_USER || 'deploy' }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # The monitoring directories are here because merging a dashboard fix
-          # used to change nothing: nothing in any pipeline copied them, so the
-          # server kept whatever had last been scp'd by hand. Grafana rereads
-          # its dashboards from disk every 30 seconds, so for those, arriving is
-          # the whole deployment. Prometheus needs the reload below.
-          source: "docker-compose.prod.yml,deploy/nginx/snippets/nexus-oauth.conf,deploy/nginx/snippets/cp-api.conf,deploy/scripts/render_cp_allowlist.py,deploy/monitoring/grafana/dashboards,deploy/monitoring/grafana/provisioning,deploy/monitoring/prometheus"
-          target: /opt/open-gerege-nexus
+          source: "docker-compose.prod.yml,brand/copy.json,brand/README.md"
+          target: ${{ env.APP_DIR }}
 
       - name: Pull images, migrate and restart
         if: steps.guard.outputs.ready == 'true'
@@ -296,140 +191,86 @@ jobs:
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || env.POSTGRES_PASSWORD }}
-          SSO_DEFAULT_CLIENT_SECRET: ${{ secrets.SSO_DEFAULT_CLIENT_SECRET || env.SSO_DEFAULT_CLIENT_SECRET }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || env.GEMINI_API_KEY }}
-          EID_RP_UUID: ${{ secrets.EID_RP_UUID || env.EID_RP_UUID }}
-          EID_RP_SECRET: ${{ secrets.EID_RP_SECRET || env.EID_RP_SECRET }}
-          EID_BASE_URL: ${{ vars.EID_BASE_URL || 'https://eidmongolia.mn/v3' }}
-          GEREGE_CORE_TOKEN: ${{ secrets.GEREGE_CORE_TOKEN || env.GEREGE_CORE_TOKEN }}
-          # Gerege eSign HSM credential. Left empty the HSM rail reports itself
-          # unconfigured and refuses to sign, rather than silently returning the
-          # document unchanged as mock mode did.
-          ESIGN_TOKEN: ${{ secrets.ESIGN_TOKEN || env.ESIGN_TOKEN }}
-          INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY || env.INTEGRATION_ENCRYPTION_KEY }}
-          GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.GOOGLE_LOGIN_CLIENT_ID || env.GOOGLE_LOGIN_CLIENT_ID }}
-          GOOGLE_LOGIN_CLIENT_SECRET: ${{ secrets.GOOGLE_LOGIN_CLIENT_SECRET || env.GOOGLE_LOGIN_CLIENT_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SSO_DEFAULT_CLIENT_SECRET: ${{ secrets.SSO_DEFAULT_CLIENT_SECRET }}
+          INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EID_RP_UUID: ${{ secrets.EID_RP_UUID }}
+          EID_RP_SECRET: ${{ secrets.EID_RP_SECRET }}
+          GEREGE_CORE_TOKEN: ${{ secrets.GEREGE_CORE_TOKEN }}
+          GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.GOOGLE_LOGIN_CLIENT_ID }}
+          GOOGLE_LOGIN_CLIENT_SECRET: ${{ secrets.GOOGLE_LOGIN_CLIENT_SECRET }}
           GOOGLE_LOGIN_TENANT: ${{ vars.GOOGLE_LOGIN_TENANT }}
           GOOGLE_LOGIN_ALLOWED_DOMAINS: ${{ vars.GOOGLE_LOGIN_ALLOWED_DOMAINS }}
-          # Server Document-Signer for the PAdES fallback. Optional: signing
-          # works without it, only the stamp-outage fallback does not.
-          EID_SIGN_SIGNER_CERT_PEM: ${{ secrets.EID_SIGN_SIGNER_CERT_PEM || env.EID_SIGN_SIGNER_CERT_PEM }}
-          EID_SIGN_SIGNER_KEY_PEM: ${{ secrets.EID_SIGN_SIGNER_KEY_PEM || env.EID_SIGN_SIGNER_KEY_PEM }}
           PUBLIC_ORIGIN: ${{ env.PUBLIC_ORIGIN }}
-          # The app catalogue's source. Both empty (the default) keeps the
-          # bundled file, which is what this deployment has always used.
-          APP_CATALOG_URL: ${{ vars.APP_CATALOG_URL }}
-          APPSTORE_PUBLIC_KEY: ${{ secrets.APPSTORE_PUBLIC_KEY || env.APPSTORE_PUBLIC_KEY }}
-          CATALOG_SYNC_INTERVAL: ${{ vars.CATALOG_SYNC_INTERVAL || '1h' }}
-          CONSOLE_ORIGIN: ${{ vars.CONSOLE_ORIGIN }}
-          # The operator console. Empty means this deployment has none: the
-          # /cp routes answer 404 on every hostname, which is the safe reading
-          # of a variable nobody set (docs/OPERATIONS.md).
-          CONTROL_PLANE_HOST: ${{ vars.CONTROL_PLANE_HOST }}
-          CONTROL_PLANE_ALLOWED_CIDRS: ${{ secrets.CONTROL_PLANE_ALLOWED_CIDRS || env.CONTROL_PLANE_ALLOWED_CIDRS }}
-          # What the console's front page reads. The monitoring stack listens
-          # on the host's loopback, so the address is the host gateway — the
-          # compose file adds the extra_hosts entry that resolves it.
-          PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}
-          ALERTMANAGER_URL: ${{ vars.ALERTMANAGER_URL }}
-          GRAFANA_URL: ${{ vars.GRAFANA_URL }}
-          OAUTH_REDIRECT_HOSTS: ${{ vars.OAUTH_REDIRECT_HOSTS }}
-          # Нүүр хуудсан дээрх үйлчилгээний картуудын хаяг. Нууц биш —
-          # нийтийн hostname-ууд — тиймээс secret биш, variable. Тавиагүйг нь
-          # хоосон утга болж, тэр карт зурагдахгүй.
-          SERVICE_URL_EID: ${{ vars.SERVICE_URL_EID }}
-          SERVICE_URL_ADMIN: ${{ vars.SERVICE_URL_ADMIN }}
-          SERVICE_URL_DWH: ${{ vars.SERVICE_URL_DWH }}
-          SERVICE_URL_BACKUPS: ${{ vars.SERVICE_URL_BACKUPS }}
-          SERVICE_URL_MONITOR: ${{ vars.SERVICE_URL_MONITOR }}
-          SERVICE_URL_DOCS: ${{ vars.SERVICE_URL_DOCS }}
-          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG }}
-          # The console's deploy button asks GitHub to run *this* workflow. The
-          # token must be a fine-grained one scoped to it and nothing else;
-          # without it the button refuses and says so.
-          #
-          # The secret is called DEPLOY_DISPATCH_TOKEN rather than matching the
-          # variable: GitHub refuses to create any secret whose name begins
-          # with GITHUB_, so a secret of that name would silently be empty for
-          # ever — which is the failure mode this comment exists to prevent.
-          GITHUB_DEPLOY_TOKEN: ${{ secrets.DEPLOY_DISPATCH_TOKEN || env.DEPLOY_DISPATCH_TOKEN }}
+          CONTROL_PLANE_HOST: ${{ env.CONTROL_PLANE_HOST }}
           DEMO_MODE: ${{ env.DEMO_MODE }}
           EID_MOCK_MODE: ${{ env.EID_MOCK_MODE }}
           EID_APP_CALLBACKS: ${{ env.EID_APP_CALLBACKS }}
+          EID_BASE_URL: ${{ env.EID_BASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
+          APP_DIR: ${{ env.APP_DIR }}
+          STACK: ${{ env.STACK }}
         with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
+          host: ${{ secrets.DEPLOY_HOST || '5.45.65.164' }}
           username: ${{ secrets.DEPLOY_USER || 'deploy' }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: IMAGE_TAG,REGISTRY_USER,REGISTRY_TOKEN,REPO,REDIS_URL,POSTGRES_PASSWORD,SSO_DEFAULT_CLIENT_SECRET,GEMINI_API_KEY,EID_RP_UUID,EID_RP_SECRET,EID_BASE_URL,GEREGE_CORE_TOKEN,ESIGN_TOKEN,EID_SIGN_SIGNER_CERT_PEM,EID_SIGN_SIGNER_KEY_PEM,PUBLIC_ORIGIN,DEMO_MODE,EID_MOCK_MODE,EID_APP_CALLBACKS,INTEGRATION_ENCRYPTION_KEY,GOOGLE_LOGIN_CLIENT_ID,GOOGLE_LOGIN_CLIENT_SECRET,GOOGLE_LOGIN_TENANT,GOOGLE_LOGIN_ALLOWED_DOMAINS,APP_CATALOG_URL,APPSTORE_PUBLIC_KEY,CATALOG_SYNC_INTERVAL,CONSOLE_ORIGIN,CONTROL_PLANE_HOST,CONTROL_PLANE_ALLOWED_CIDRS,PROMETHEUS_URL,ALERTMANAGER_URL,GRAFANA_URL,OAUTH_REDIRECT_HOSTS,SERVICE_URL_EID,SERVICE_URL_ADMIN,SERVICE_URL_DWH,SERVICE_URL_BACKUPS,SERVICE_URL_MONITOR,SERVICE_URL_DOCS,OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_TRACES_SAMPLER_ARG,GITHUB_DEPLOY_TOKEN
+          command_timeout: 20m
+          envs: IMAGE_TAG,REGISTRY_USER,REGISTRY_TOKEN,REPO,POSTGRES_PASSWORD,SSO_DEFAULT_CLIENT_SECRET,INTEGRATION_ENCRYPTION_KEY,GEMINI_API_KEY,EID_RP_UUID,EID_RP_SECRET,GEREGE_CORE_TOKEN,GOOGLE_LOGIN_CLIENT_ID,GOOGLE_LOGIN_CLIENT_SECRET,GOOGLE_LOGIN_TENANT,GOOGLE_LOGIN_ALLOWED_DOMAINS,PUBLIC_ORIGIN,CONTROL_PLANE_HOST,DEMO_MODE,EID_MOCK_MODE,EID_APP_CALLBACKS,EID_BASE_URL,REDIS_URL,APP_DIR,STACK
           script: |
             set -euo pipefail
-            APP_DIR=/opt/open-gerege-nexus
-            mkdir -p "$APP_DIR"
             cd "$APP_DIR"
-
             REPO_LOWER=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
+            PUBLIC_HOST=${PUBLIC_ORIGIN#https://}
 
-            # Written fresh every deploy so the server never drifts from CI.
+            # Ажиллагаа бүрд шинээр бичигдэнэ — хост CI-гаас хэзээ ч зөрөхгүй.
+            # Хост дээр гараар нэмсэн мөр дараагийн rollout дээр арчигдана;
+            # шинэ тохиргоо нь энэ файлд орно (docs/OPERATIONS.md).
             umask 077
             cat > .env <<EOF
+            STACK=${STACK}
+            POSTGRES_VOLUME=sdy_postgres_data
+            CATALOG_CACHE_VOLUME=sdy_catalog_cache
             IMAGE_BACKEND=ghcr.io/${REPO_LOWER}/backend
             IMAGE_FRONTEND=ghcr.io/${REPO_LOWER}/frontend
             IMAGE_TAG=${IMAGE_TAG}
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             SSO_DEFAULT_CLIENT_SECRET=${SSO_DEFAULT_CLIENT_SECRET}
+            INTEGRATION_ENCRYPTION_KEY=${INTEGRATION_ENCRYPTION_KEY}
             GEMINI_API_KEY=${GEMINI_API_KEY}
             EID_RP_UUID=${EID_RP_UUID}
             EID_RP_SECRET=${EID_RP_SECRET}
             EID_BASE_URL=${EID_BASE_URL}
             GEREGE_CORE_TOKEN=${GEREGE_CORE_TOKEN}
-            ESIGN_TOKEN=${ESIGN_TOKEN}
-            EID_SIGN_SIGNER_CERT_PEM=${EID_SIGN_SIGNER_CERT_PEM}
-            EID_SIGN_SIGNER_KEY_PEM=${EID_SIGN_SIGNER_KEY_PEM}
-            PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
-            DEMO_MODE=${DEMO_MODE}
-            EID_MOCK_MODE=${EID_MOCK_MODE}
-            EID_APP_CALLBACKS=${EID_APP_CALLBACKS}
-            REDIS_URL=${REDIS_URL}
-            INTEGRATION_ENCRYPTION_KEY=${INTEGRATION_ENCRYPTION_KEY}
             GOOGLE_LOGIN_CLIENT_ID=${GOOGLE_LOGIN_CLIENT_ID}
             GOOGLE_LOGIN_CLIENT_SECRET=${GOOGLE_LOGIN_CLIENT_SECRET}
             GOOGLE_LOGIN_TENANT=${GOOGLE_LOGIN_TENANT}
             GOOGLE_LOGIN_ALLOWED_DOMAINS=${GOOGLE_LOGIN_ALLOWED_DOMAINS}
-            APP_CATALOG_URL=${APP_CATALOG_URL}
-            APPSTORE_PUBLIC_KEY=${APPSTORE_PUBLIC_KEY}
-            CATALOG_SYNC_INTERVAL=${CATALOG_SYNC_INTERVAL}
-            CONSOLE_ORIGIN=${CONSOLE_ORIGIN}
+            PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
+            DEVICE_LINE_ORIGINS=https://www.${PUBLIC_HOST}
             CONTROL_PLANE_HOST=${CONTROL_PLANE_HOST}
-            CONTROL_PLANE_ALLOWED_CIDRS=${CONTROL_PLANE_ALLOWED_CIDRS}
-            PROMETHEUS_URL=${PROMETHEUS_URL}
-            ALERTMANAGER_URL=${ALERTMANAGER_URL}
-            GRAFANA_URL=${GRAFANA_URL}
-            OAUTH_REDIRECT_HOSTS=${OAUTH_REDIRECT_HOSTS}
-            SERVICE_URL_EID=${SERVICE_URL_EID}
-            SERVICE_URL_ADMIN=${SERVICE_URL_ADMIN}
-            SERVICE_URL_DWH=${SERVICE_URL_DWH}
-            SERVICE_URL_BACKUPS=${SERVICE_URL_BACKUPS}
-            SERVICE_URL_MONITOR=${SERVICE_URL_MONITOR}
-            SERVICE_URL_DOCS=${SERVICE_URL_DOCS}
-            OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
-            OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG}
-            GITHUB_DEPLOY_TOKEN=${GITHUB_DEPLOY_TOKEN}
+            DEMO_MODE=${DEMO_MODE}
+            EID_MOCK_MODE=${EID_MOCK_MODE}
+            EID_APP_CALLBACKS=${EID_APP_CALLBACKS}
+            REDIS_URL=${REDIS_URL}
             GITHUB_REPOSITORY=${REPO}
+            # ── Монголын Залуучуудын Холбооны брэнд (docs/MZH.md) ──
+            BRAND_NAME=Монголын Залуучуудын Холбоо
+            BRAND_SHORT_NAME=МЗХ
+            BRAND_DESCRIPTION=Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.
+            BRAND_LOGO_URL=/mzh/logo.svg
+            BRAND_THEME_COLOR=#0b2a6f
+            BRAND_ICON_URL=/mzh/icon-512.png
+            BRAND_COPY_FILE=/brand/copy.json
+            LANDING_SECTIONS=hero capabilities trust services
+            SERVICE_URL_ADMIN=https://${CONTROL_PLANE_HOST}
             EOF
 
             echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 
-            # GHCR answers a just-pushed private image with "denied" often
-            # enough to have failed a rollout of images this same run had
-            # published ninety seconds earlier and which pulled fine minutes
-            # later. A single-shot pull turns that into a deploy that has to be
-            # re-run by hand, so retry — logging in again each time, because an
-            # expired registry token is denied in exactly the same words and
-            # there is no way to tell the two apart from the message.
+            # GHCR дөнгөж түлхсэн хувийн image-д "denied" гэж хариулах нь ховор
+            # биш; дахин нэвтрээд давтана.
             for attempt in 1 2 3 4 5; do
               if docker compose -f docker-compose.prod.yml pull; then
                 break
@@ -443,11 +284,7 @@ jobs:
               echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
             done
 
-            # Nothing is torn down until the images that replace it are on this
-            # host. The running containers are the only thing serving, and a
-            # pull that fails after they are gone is an outage rather than a
-            # failed deploy — which is exactly what happened when a concurrent
-            # rollout logged this host out of the registry mid-pull.
+            # Хуучныг шинэ нь хост дээр ирсний дараа л буулгана.
             for image in "ghcr.io/${REPO_LOWER}/backend:${IMAGE_TAG}" "ghcr.io/${REPO_LOWER}/frontend:${IMAGE_TAG}"; do
               if ! docker image inspect "$image" >/dev/null 2>&1; then
                 echo "::error::$image is not on the host after the pull; refusing to remove the running containers"
@@ -455,35 +292,11 @@ jobs:
               fi
             done
 
-            # A previously interrupted Compose recreate can leave a stopped
-            # container holding one of our explicit container names. Remove
-            # only the stateless application services before bringing the new
-            # revision up; PostgreSQL and its production volume stay running.
-            # Do not ask Compose for a graceful stop here: a wedged frontend
-            # previously held that wait until the SSH action's 10-minute
-            # timeout. These containers are stateless and safe to force-remove.
-            set +e
-            timeout 30s docker rm -f gerege_nexus_backend gerege_nexus_frontend gerege_nexus_migrate
-            REMOVE_STATUS=$?
-            set -e
-            if [ "$REMOVE_STATUS" -eq 124 ]; then
-              echo "Docker did not remove stateless containers within 30s; collecting host state."
-              docker ps -a --no-trunc || true
-              systemctl --no-pager --full status docker containerd || true
-              echo "Restarting the wedged Docker runtime; the database volume is not removed."
-              timeout 90s sudo -n systemctl restart docker
-              for i in $(seq 1 30); do
-                docker info >/dev/null 2>&1 && break
-                sleep 2
-              done
-              docker info >/dev/null
-              timeout 30s docker rm -f gerege_nexus_backend gerege_nexus_frontend gerege_nexus_migrate 2>/dev/null || true
-            elif [ "$REMOVE_STATUS" -ne 0 ]; then
-              # Missing containers are expected after an interrupted rollout.
-              echo "Some stateless containers were already absent; continuing."
-            fi
-            # `up -d` runs the migrate service to completion first, then swaps
-            # the API and frontend over.
+            # Stateless контейнеруудыг л хүчээр авна; PostgreSQL ба volume нь
+            # хэвээр. Graceful stop асуухгүй — гацсан frontend өмнө нь 10 минут
+            # барьж байсан.
+            timeout 30s docker rm -f "${STACK}_backend" "${STACK}_frontend" "${STACK}_migrate" 2>/dev/null || true
+            # `up -d` эхлээд migrate-ийг дуустал ажиллуулаад API, frontend-ийг солино.
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             docker logout ghcr.io
@@ -492,331 +305,44 @@ jobs:
       - name: Verify the deployment is healthy
         if: steps.guard.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          APP_DIR: ${{ env.APP_DIR }}
+          STACK: ${{ env.STACK }}
+          PUBLIC_ORIGIN: ${{ env.PUBLIC_ORIGIN }}
         with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
+          host: ${{ secrets.DEPLOY_HOST || '5.45.65.164' }}
           username: ${{ secrets.DEPLOY_USER || 'deploy' }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: APP_DIR,STACK,PUBLIC_ORIGIN
           script: |
             set -euo pipefail
-            # The API is published on loopback only; nginx fronts it publicly.
+            cd "$APP_DIR"
             for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8080/health > /dev/null; then
-                echo "backend healthy"
-                curl -fsS http://127.0.0.1:8080/ready > /dev/null && echo "database reachable"
-                exit 0
+              if curl -fsS http://127.0.0.1:8080/ready >/dev/null 2>&1; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "::error::backend never became ready"
+                docker compose -f docker-compose.prod.yml ps
+                docker logs --tail 100 "${STACK}_migrate" 2>&1 || true
+                docker logs --tail 100 "${STACK}_backend" 2>&1 || true
+                exit 1
               fi
               sleep 5
             done
-            echo "::error::backend did not become healthy within 150s"
-            docker compose -f /opt/open-gerege-nexus/docker-compose.prod.yml logs --tail=80 backend migrate
-            exit 1
-
-      - name: Route the OIDC endpoints to the API
-        if: steps.guard.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
-          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -uo pipefail
-            # /oauth2/auth and the two well-known documents were never routed to
-            # the API: the vhost sends / to the frontend and named only
-            # /oauth2/token. So a sign-in started by any client outside this
-            # deployment landed on the Next.js shell.
-            #
-            # The fix is one include line. It is added rather than the vhost
-            # being replaced, because certbot owns the TLS block in that file
-            # and rewriting it would take the site off HTTPS between the copy
-            # and the next certbot run.
-            if ! sudo -n true 2>/dev/null; then
-              echo "::warning::No passwordless sudo; add 'include snippets/nexus-oauth.conf;' to the nexus vhost by hand."
-              exit 0
-            fi
-
-            LIVE=$(sudo grep -rl "server_name nexus.gerege.mn" /etc/nginx/sites-available /etc/nginx/conf.d 2>/dev/null | head -1)
-            if [ -z "$LIVE" ]; then
-              echo "::warning::Could not find the nexus vhost; OIDC endpoints stay unrouted."
-              exit 0
-            fi
-
-            sudo install -d /etc/nginx/snippets
-            sudo cp /opt/open-gerege-nexus/deploy/nginx/snippets/nexus-oauth.conf /etc/nginx/snippets/nexus-oauth.conf
-
-            if sudo grep -q "snippets/nexus-oauth.conf" "$LIVE"; then
-              echo "already routed; refreshing the snippet only"
-            else
-              BACKUP="${LIVE}.bak.$(date +%s)"
-              sudo cp "$LIVE" "$BACKUP"
-              # Inserted after the first real `listen 443` directive, which is
-              # the TLS server block — never the port-80 one, where these
-              # endpoints would answer over plain HTTP instead of redirecting.
-              #
-              # Anchored to the start of the line so a comment mentioning
-              # `listen 443` does not match: the vhost's own header explains
-              # what certbot adds, and matching that put the include above every
-              # server block, where nginx rightly refuses a location directive.
-              sudo awk 'BEGIN{done=0} {print} /^[[:space:]]*listen[[:space:]]+443/ && !done {print "    include snippets/nexus-oauth.conf;"; done=1}' \
-                "$LIVE" | sudo tee "${LIVE}.new" >/dev/null
-
-              if ! grep -q "snippets/nexus-oauth.conf" "${LIVE}.new"; then
-                echo "::error::no `listen 443` directive in $LIVE; the include was not added"
-                sudo rm -f "${LIVE}.new"
-                exit 1
-              fi
-              sudo mv "${LIVE}.new" "$LIVE"
-              if ! sudo nginx -t; then
-                echo "::error::nginx rejected the patched vhost; restoring $BACKUP"
-                sudo cp "$BACKUP" "$LIVE"
-                sudo nginx -t && sudo systemctl reload nginx
-                exit 1
-              fi
-            fi
-
-            sudo nginx -t && sudo systemctl reload nginx
-            # Proof rather than hope: the discovery document is JSON from the
-            # API, and HTML if this is still hitting the frontend.
-            if curl -fsS https://nexus.gerege.mn/.well-known/openid-configuration | head -c 1 | grep -q '{'; then
-              echo "OIDC discovery is served by the API"
-            else
-              echo "::error::/.well-known/openid-configuration is still not the API"
-              exit 1
-            fi
-
-            # /.well-known/appstore-keys.json used to be checked here too. It is
-            # served by the registry module, which left with the App Store, so
-            # this deployment answers 404 for it — correctly. The check outlived
-            # the thing it was checking and turned a good rollout red.
-
-      - name: Configure the control-plane network allowlist
-        if: steps.guard.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.5
-        env:
-          CONTROL_PLANE_ALLOWED_CIDRS: ${{ secrets.CONTROL_PLANE_ALLOWED_CIDRS || env.CONTROL_PLANE_ALLOWED_CIDRS }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
-          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: CONTROL_PLANE_ALLOWED_CIDRS
-          script: |
-            set -euo pipefail
-            if [ -z "${CONTROL_PLANE_ALLOWED_CIDRS:-}" ]; then
-              echo "No managed control-plane CIDRs configured; preserving the server allowlist."
-              exit 0
-            fi
-            if ! sudo -n true 2>/dev/null; then
-              echo "::error::Passwordless sudo is required to configure the control-plane allowlist."
-              exit 1
-            fi
-
-            ALLOWLIST=/etc/nginx/snippets/cp-allowlist.conf
-            sudo install -d /etc/nginx/snippets
-            ALLOWLIST_BACKUP=""
-            if sudo test -f "$ALLOWLIST"; then
-              ALLOWLIST_BACKUP="${ALLOWLIST}.bak.$(date +%s)"
-              sudo cp "$ALLOWLIST" "$ALLOWLIST_BACKUP"
-            fi
-
-            ALLOWLIST_TEMP=$(mktemp)
-            trap 'rm -f "$ALLOWLIST_TEMP"' EXIT
-            if ! printf '%s' "$CONTROL_PLANE_ALLOWED_CIDRS" | \
-              python3 /opt/open-gerege-nexus/deploy/scripts/render_cp_allowlist.py > "$ALLOWLIST_TEMP"; then
-              echo "::error::CONTROL_PLANE_ALLOWED_CIDRS is not a fail-closed address list"
-              exit 1
-            fi
-            # `|| true` because grep exits 1 when it counts none, and a
-            # snippet with no `allow` lines is a real answer: it is what
-            # CONTROL_PLANE_ALLOWED_CIDRS=open renders, and the platform decides
-            # per request instead. Without this, `set -e` killed the whole
-            # rollout with no message at all.
-            CIDR_COUNT=$(grep -c '^allow ' "$ALLOWLIST_TEMP" || true)
-            sudo install -o root -g root -m 0644 "$ALLOWLIST_TEMP" "$ALLOWLIST"
-
-            if ! sudo nginx -t; then
-              if [ -n "$ALLOWLIST_BACKUP" ]; then
-                sudo cp "$ALLOWLIST_BACKUP" "$ALLOWLIST"
-                sudo nginx -t && sudo systemctl reload nginx
-              else
-                sudo mv "$ALLOWLIST" "${ALLOWLIST}.rejected.$(date +%s)"
-              fi
-              echo "::error::nginx rejected the managed control-plane allowlist"
-              exit 1
-            fi
-            sudo systemctl reload nginx
-            if [ "$CIDR_COUNT" -eq 0 ]; then
-              echo "control-plane allowlist: no address restriction at the edge"
-            else
-              echo "control-plane allowlist configured with $CIDR_COUNT CIDR(s)"
-            fi
-
-      - name: Route the control-plane API to the backend
-        if: steps.guard.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.5
-        env:
-          CONTROL_PLANE_HOST: ${{ vars.CONTROL_PLANE_HOST }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
-          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: CONTROL_PLANE_HOST
-          script: |
-            set -euo pipefail
-            if [ -z "$CONTROL_PLANE_HOST" ]; then
-              echo "No control-plane hostname configured; no control-plane vhost to patch."
-              exit 0
-            fi
-            if ! sudo -n true 2>/dev/null; then
-              echo "::error::Passwordless sudo is required to publish the versioned control-plane API route."
-              exit 1
-            fi
-
-            # Only mutate a configuration nginx actually loads. Searching
-            # sites-available can select a stale HTTP-only or backup file while
-            # the active TLS vhost in sites-enabled keeps serving old routes.
-            LIVE=""
-            while IFS= read -r CANDIDATE; do
-              if sudo grep -qE '^[[:space:]]*listen[[:space:]]+443([[:space:];]|$)' "$CANDIDATE"; then
-                LIVE=$(sudo readlink -f "$CANDIDATE")
+            for i in $(seq 1 30); do
+              if curl -fsS -o /dev/null -H "Host: ${PUBLIC_ORIGIN#https://}" http://127.0.0.1:3000/; then
                 break
               fi
-            done < <(sudo grep -Rl "server_name $CONTROL_PLANE_HOST" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null)
-            if [ -z "$LIVE" ]; then
-              echo "::error::Could not find the active TLS vhost for $CONTROL_PLANE_HOST."
-              exit 1
-            fi
-
-            sudo install -d /etc/nginx/snippets
-            sudo cp /opt/open-gerege-nexus/deploy/nginx/snippets/cp-api.conf /etc/nginx/snippets/cp-api.conf
-
-            if sudo grep -qE 'location[[:space:]]+/api/platform/v1/|snippets/cp-api.conf' "$LIVE"; then
-              echo "versioned control-plane route already published; refreshing its snippet only"
-            else
-              BACKUP="${LIVE}.bak.$(date +%s)"
-              sudo cp "$LIVE" "$BACKUP"
-              sudo awk 'BEGIN{done=0} {print} /^[[:space:]]*listen[[:space:]]+443/ && !done {print "    include snippets/cp-api.conf;"; done=1}' \
-                "$LIVE" | sudo tee "${LIVE}.new" >/dev/null
-
-              if ! grep -q 'snippets/cp-api.conf' "${LIVE}.new"; then
-                echo "::error::no TLS listen directive in $LIVE; the control-plane include was not added"
-                sudo rm -f "${LIVE}.new"
+              if [ "$i" -eq 30 ]; then
+                echo "::error::frontend never answered"
+                docker logs --tail 100 "${STACK}_frontend" 2>&1 || true
                 exit 1
               fi
-              sudo mv "${LIVE}.new" "$LIVE"
-              if ! sudo nginx -t; then
-                echo "::error::nginx rejected the control-plane route; restoring $BACKUP"
-                sudo cp "$BACKUP" "$LIVE"
-                sudo nginx -t && sudo systemctl reload nginx
-                exit 1
-              fi
-            fi
-
-            # Certbot and historical installs can split one hostname across
-            # several included files. Work from nginx's loaded topology, not a
-            # guessed vhost path, so every active temporary /cp redirect moves
-            # together. Keep per-file backups for an all-or-nothing rollback.
-            mapfile -t NGINX_CONFIGS < <(sudo nginx -T 2>&1 | \
-              sed -n 's@^# configuration file \(.*\):$@\1@p' | sort -u)
-            ROOT_REDIRECT_FILES=()
-            ROOT_REDIRECT_BACKUPS=()
-            for CONFIG_SOURCE in "${NGINX_CONFIGS[@]}"; do
-              CONFIG_SOURCE=$(sudo readlink -f "$CONFIG_SOURCE")
-              if [ -f "$CONFIG_SOURCE" ] && \
-                 sudo grep -qE 'return[[:space:]]+302[[:space:]]+/cp;' "$CONFIG_SOURCE"; then
-                CONFIG_BACKUP="${CONFIG_SOURCE}.root-redirect.bak.$(date +%s)"
-                sudo cp "$CONFIG_SOURCE" "$CONFIG_BACKUP"
-                ROOT_REDIRECT_FILES+=("$CONFIG_SOURCE")
-                ROOT_REDIRECT_BACKUPS+=("$CONFIG_BACKUP")
-                sudo sed -i -E 's@return[[:space:]]+302[[:space:]]+/cp;@return 308 /cp;@' "$CONFIG_SOURCE"
-              fi
+              sleep 5
             done
-
-            restore_root_redirects() {
-              local index
-              for index in "${!ROOT_REDIRECT_FILES[@]}"; do
-                sudo cp "${ROOT_REDIRECT_BACKUPS[$index]}" "${ROOT_REDIRECT_FILES[$index]}"
-              done
-              sudo nginx -t && sudo systemctl reload nginx
-            }
-
-            if ! sudo nginx -t; then
-              restore_root_redirects
-              echo "::error::nginx rejected the permanent control-plane root redirect"
-              exit 1
-            fi
-            sudo systemctl reload nginx
-
-            ROOT_HEADERS=$(curl -sS -D - -o /dev/null --max-time 20 \
-              --resolve "$CONTROL_PLANE_HOST:443:127.0.0.1" "https://$CONTROL_PLANE_HOST/")
-            ROOT_STATUS=$(printf '%s\n' "$ROOT_HEADERS" | awk 'NR == 1 { print $2 }')
-            ROOT_LOCATION=$(printf '%s\n' "$ROOT_HEADERS" | \
-              awk 'tolower($1) == "location:" { gsub("\r", "", $2); print $2; exit }')
-            if [ "$ROOT_STATUS" = 308 ] && \
-               { [ "$ROOT_LOCATION" = "/cp" ] || [ "$ROOT_LOCATION" = "https://$CONTROL_PLANE_HOST/cp" ]; }; then
-              echo "control-plane root returns its permanent /cp redirect"
-            else
-              restore_root_redirects
-              echo "::error::control-plane root returned status=$ROOT_STATUS location=$ROOT_LOCATION"
-              exit 1
-            fi
-
-            STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-              -H "Host: $CONTROL_PLANE_HOST" http://127.0.0.1:8080/api/platform/v1/health)
-            case "$STATUS" in
-              200|401|403) echo "versioned control-plane API reached the backend ($STATUS)" ;;
-              *) echo "::error::versioned control-plane API answered $STATUS through the backend"; exit 1 ;;
-            esac
-
-            LEGACY_HEADERS=$(curl -sS -D - -o /dev/null \
-              -H "Host: $CONTROL_PLANE_HOST" http://127.0.0.1:8080/cp/api/health)
-            LEGACY_STATUS=$(printf '%s\n' "$LEGACY_HEADERS" | awk 'NR == 1 { print $2 }')
-            LEGACY_LOCATION=$(printf '%s\n' "$LEGACY_HEADERS" | \
-              awk 'tolower($1) == "location:" { gsub("\\r", "", $2); print $2; exit }')
-            if [ "$LEGACY_STATUS" = 308 ] && [ "$LEGACY_LOCATION" = "/api/platform/v1/health" ]; then
-              echo "legacy control-plane API returns its guarded 308"
-            else
-              echo "::error::legacy control-plane API returned status=$LEGACY_STATUS location=$LEGACY_LOCATION"
-              exit 1
-            fi
-
-      # Last, and deliberately so. Placed before the rollout, a refused reload
-      # would cancel every step after it and a monitoring problem would stop the
-      # application from shipping. Grafana picks the dashboards up on its own;
-      # Prometheus does not. Without
-      # this the rule files on disk and the rules being evaluated drift apart
-      # silently, and the divergence only surfaces the next time the container
-      # restarts — which is the worst possible moment to discover a bad rule.
-      #
-      # A reload that fails leaves the running config untouched, so the alerting
-      # keeps working, but the file on disk is now one that Prometheus will
-      # refuse at next boot. That is a red step, not a warning.
-      - name: Reload Prometheus
-        if: steps.guard.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.DEPLOY_HOST || 'nexus.gerege.mn' }}
-          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -euo pipefail
-            if ! docker ps --format '{{.Names}}' | grep -qx gerege_nexus_prometheus; then
-              echo "Prometheus is not running on this host; nothing to reload."
-              exit 0
-            fi
-            curl -fsS -X POST http://127.0.0.1:9091/-/reload
-            # /-/reload returns 200 before the new config is in place, so ask
-            # Prometheus what it actually loaded rather than trusting the POST.
-            for _ in $(seq 1 10); do
-              if [ "$(curl -fsS http://127.0.0.1:9091/api/v1/status/config \
-                      | python3 -c 'import sys,json; print(len(json.load(sys.stdin)["data"]["yaml"]) > 0)')" = "True" ]; then
-                echo "Prometheus reloaded its configuration."
-                exit 0
-              fi
-              sleep 2
-            done
-            echo "Prometheus did not report a configuration after the reload." >&2
-            exit 1
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_ORIGIN}/")
+            echo "${PUBLIC_ORIGIN}/ → HTTP ${code}"
+            [ "$code" = "200" ] || exit 1
+            docker compose -f docker-compose.prod.yml ps

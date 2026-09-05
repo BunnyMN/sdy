@@ -96,11 +96,16 @@ var demoTenants = []struct {
 	// the sixth time and the same reason: a slug here that names nothing this
 	// binary carries is a warning per app per boot, and a seed that routinely
 	// fails is a seed nobody reads.
-	{demoTenantID, "demo", "Demo Corporation", demoRoleID, []string{"ai"}},
+	// The names are the Mongolian Youth Federation's: this repository is the
+	// federation's internal system (docs/MZH.md), so the tenant a developer
+	// lands in reads as the federation and the second as one of its branch
+	// councils. The slugs stay as they were — "demo" is also the default owner
+	// of the built-in SSO client (ssoprovider.EnsureDefaultClient).
+	{demoTenantID, "demo", "Монголын Залуучуудын Холбоо", demoRoleID, []string{"ai"}},
 	// The two tenants used to keep different sets so that switching visibly
 	// changed the sidebar. There is one app left to differ by, so they no
 	// longer do.
-	{secondTenantID, "demo-trade", "Demo Trade LLC", secondRoleID, []string{"ai"}},
+	{secondTenantID, "demo-branch", "МЗХ — Улаанбаатар хотын салбар зөвлөл", secondRoleID, []string{"ai"}},
 }
 
 // seedingEnabled reports whether the documented demo account should be

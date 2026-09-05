@@ -62,7 +62,7 @@ services:
       # The same name the frontend service is given below. The API uses it in
       # the sentence it shows when linking an eID identity fails and as the
       # relying-party name eID puts in front of a citizen.
-      BRAND_NAME: ${BRAND_NAME:-}
+      BRAND_NAME: ${BRAND_NAME:-Монголын Залуучуудын Холбоо}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_TTS_MODEL: ${GEMINI_TTS_MODEL:-gemini-2.5-flash-preview-tts}
@@ -92,15 +92,24 @@ services:
     container_name: gerege_nexus_frontend
     # The brand is read per request, so unlike the line above it needs no
     # rebuild to try: `BRAND_NAME="Something Else" docker compose up frontend`.
+    # Энэ репо нь Монголын Залуучуудын Холбооны (МЗХ) дотоод системийн
+    # суулгац. Нэр, лого, өнгө, үг хэллэг нь кодонд биш, энд болон
+    # brand/copy.json-д байна — цөм нь Gerege Nexus хэвээр тул upstream-ээс
+    # аюулгүй байдлын засвар татахад мөргөлдөхгүй. Дэлгэрэнгүй: docs/MZH.md.
     environment:
-      BRAND_NAME: ${BRAND_NAME:-}
-      BRAND_SHORT_NAME: ${BRAND_SHORT_NAME:-}
-      BRAND_DESCRIPTION: ${BRAND_DESCRIPTION:-}
-      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-}
-      BRAND_THEME_COLOR: ${BRAND_THEME_COLOR:-}
+      BRAND_NAME: ${BRAND_NAME:-Монголын Залуучуудын Холбоо}
+      BRAND_SHORT_NAME: ${BRAND_SHORT_NAME:-МЗХ}
+      BRAND_DESCRIPTION: "${BRAND_DESCRIPTION:-Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.}"
+      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-/mzh/logo.svg}
+      BRAND_THEME_COLOR: "${BRAND_THEME_COLOR:-#0b2a6f}"
+      BRAND_ICON_URL: ${BRAND_ICON_URL:-/mzh/icon-512.png}
+      BRAND_MASKABLE_ICON_URL: ${BRAND_MASKABLE_ICON_URL:-}
       # Wording a deployment says differently; see brand/README.md.
-      BRAND_COPY_FILE: ${BRAND_COPY_FILE:-}
+      BRAND_COPY_FILE: ${BRAND_COPY_FILE:-/brand/copy.json}
       BRAND_COPY: ${BRAND_COPY:-}
+      # Дотоод системийн нүүр: платформын архитектур, апп каталогийн
+      # маркетинг хэсгүүдгүй. Бүх долоон хэсгийг харахын тулд хоосон өг.
+      LANDING_SECTIONS: ${LANDING_SECTIONS:-hero capabilities trust services}
       CONTROL_PLANE_HOST: admin.localhost
       # Серверийн талын шалгалтууд (setup шаардлагатай эсэх, стор, нэвтрэлтийн
       # хэлбэр) хуудсыг илгээхээс өмнө API-гаас асуудаг. Хөтчийн хаяг энд

@@ -20,5 +20,11 @@ language reading as it did. `{brand}` still works inside an override.
 Read once at startup: a change takes effect when the container restarts, the
 same moment `BRAND_NAME` would.
 
-Empty is the normal state. Most deployments differ by name and logo alone, and
-those are environment variables — see `.env.example`.
+Most deployments differ by name and logo alone, and those are environment
+variables — see `.env.example`.
+
+This repository is the Mongolian Youth Federation's internal system, so
+`copy.json` here is **not** empty: it holds the federation's name in Mongolian
+and English, the landing page's wording and the OAuth consent line. The
+compose files point `BRAND_COPY_FILE` at it by default. What each key does and
+how to change it: `docs/MZH.md`.
