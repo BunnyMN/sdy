@@ -342,10 +342,16 @@ jobs:
               fi
               sleep 5
             done
-            # Redirect-ийг дагана: шинэ суулгац нүүрээ /setup руу (307),
-            # www нь bare домэйн руу чиглүүлдэг — хоёулаа эрүүл хариу.
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "${PUBLIC_ORIGIN}/")
-            echo "${PUBLIC_ORIGIN}/ → HTTP ${code}"
-            [ "$code" = "200" ] || exit 1
-            curl -fsS "${PUBLIC_ORIGIN}/api/v1/setup/status" && echo
             docker compose -f docker-compose.prod.yml ps
+
+      # Public хаягийг хостоос биш, runner-ээс шалгана: хост өөрийн public IP
+      # руу хандахад том хариу гацдаг (hairpin NAT), нэвтрэлтийн хуудас нь
+      # тэр хэмжээнд хүрдэг. Redirect-ийг дагана — шинэ суулгац нүүрээ
+      # /setup руу 307-оор чиглүүлдэг нь эрүүл хариу.
+      - name: Verify the public address answers
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 60 "${PUBLIC_ORIGIN}/")
+          echo "${PUBLIC_ORIGIN}/ → HTTP ${code}"
+          [ "$code" = "200" ] || exit 1
+          curl -fsS --max-time 30 "${PUBLIC_ORIGIN}/api/v1/setup/status" && echo

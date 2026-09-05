@@ -46,6 +46,10 @@ COPY --from=builder /app/package.json /app/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+# Next бичих боломжтой cache хавтас хэрэгтэй (fetch-cache, ISR). Файлууд root-оор
+# хуулагдаж, процесс `node`-оор ажилладаг тул хавтсыг нь урьдчилан өгнө;
+# үгүй бол хүсэлт бүр "EACCES: mkdir /app/.next/cache" гэж лог бичдэг.
+RUN mkdir -p .next/cache && chown -R node:node .next/cache
 
 USER node
 EXPOSE 3000
