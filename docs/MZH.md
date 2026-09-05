@@ -174,3 +174,8 @@ wizard-аар, эсвэл хост дээр `docker exec sdy_backend /app/operat
 **eID.** `EID_RP_UUID`/`EID_RP_SECRET` secret тавиагүй тул eID нэвтрэлт
 унтраа; нууц үг, урилга ажиллана. Холбоо eID Mongolia-аас RP авмагц хоёр
 secret-ийг нэмээд workflow-г дахин ажиллуулна.
+
+**Аюулгүй байдлын санамж.** Серверийн root нууц үг чатаар дамжсан тул түүнийг
+солих (`passwd`) эсвэл `PasswordAuthentication no` болгож зөвхөн SSH
+түлхүүрээр нэвтэрдэг болгох. Root болон `deploy` хэрэглэгчид SSH түлхүүр
+суусан.
