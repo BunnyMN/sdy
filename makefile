@@ -5,15 +5,17 @@ DEV_TENANT_HOST ?= nexus.localhost
 DEV_TENANT_ORIGIN ?= http://$(DEV_TENANT_HOST):3000
 DEV_CONTROL_PLANE_HOST ?= admin.localhost
 
-# Монголын Залуучуудын Холбооны (МЗХ) дотоод системийн брэнд. docker-compose.yml
+# Социал Демократ Монголын Залуучуудын Холбооны (СДМЗХ) дотоод системийн брэнд. docker-compose.yml
 # дахь default-уудтай ижил; гараар ажиллуулахад ч нэг нэр, нэг лого харагдана.
 # Дэлгэрэнгүй: docs/MZH.md, brand/copy.json.
-BRAND_NAME ?= Монголын Залуучуудын Холбоо
-BRAND_SHORT_NAME ?= МЗХ
-BRAND_DESCRIPTION ?= Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.
-BRAND_LOGO_URL ?= /mzh/logo.svg
-BRAND_THEME_COLOR ?= \#0b2a6f
-BRAND_ICON_URL ?= /mzh/icon-512.png
+BRAND_NAME ?= Социал Демократ Монголын Залуучуудын Холбоо
+BRAND_SHORT_NAME ?= SDY
+BRAND_DESCRIPTION ?= Социал Демократ Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.
+BRAND_LOGO_URL ?= /sdy/logo.png
+BRAND_WORDMARK_URL ?= /sdy/wordmark.png
+BRAND_THEME_COLOR ?= \#9c1d25
+BRAND_ACCENT_COLOR ?= \#e4e7ec
+BRAND_ICON_URL ?= /sdy/icon-512.png
 BRAND_COPY_FILE ?= $(CURDIR)/brand/copy.json
 LANDING_SECTIONS ?= hero capabilities trust services
 
@@ -28,8 +30,8 @@ dev-frontend:
 		NEXT_PUBLIC_API_URL=http://$(DEV_TENANT_HOST):8080/api/v1 \
 		NEXT_PUBLIC_CONTROL_PLANE_API_URL=http://$(DEV_CONTROL_PLANE_HOST):8080/api/platform/v1 \
 		BRAND_NAME="$(BRAND_NAME)" BRAND_SHORT_NAME="$(BRAND_SHORT_NAME)" \
-		BRAND_DESCRIPTION="$(BRAND_DESCRIPTION)" BRAND_LOGO_URL="$(BRAND_LOGO_URL)" \
-		BRAND_THEME_COLOR="$(BRAND_THEME_COLOR)" BRAND_ICON_URL="$(BRAND_ICON_URL)" \
+		BRAND_DESCRIPTION="$(BRAND_DESCRIPTION)" BRAND_LOGO_URL="$(BRAND_LOGO_URL)" BRAND_WORDMARK_URL="$(BRAND_WORDMARK_URL)" \
+		BRAND_THEME_COLOR="$(BRAND_THEME_COLOR)" BRAND_ACCENT_COLOR="$(BRAND_ACCENT_COLOR)" BRAND_ICON_URL="$(BRAND_ICON_URL)" \
 		BRAND_COPY_FILE="$(BRAND_COPY_FILE)" LANDING_SECTIONS="$(LANDING_SECTIONS)" \
 		npm run dev
 

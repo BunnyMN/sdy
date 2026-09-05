@@ -1,6 +1,6 @@
 name: Deploy to Production (e-sdy.mn)
 
-# Монголын Залуучуудын Холбооны дотоод системийг e-sdy.mn (5.45.65.164) дээр
+# Социал Демократ Монголын Залуучуудын Холбооны дотоод системийг e-sdy.mn (5.45.65.164) дээр
 # гаргах ажиллагаа. Lint, тест, build нь ci.yml-д; энэ файл нь CI ногоон болсон
 # commit-ийн image-ийг GHCR-д түлхээд хост руу ssh-ээр гаргана.
 #
@@ -247,8 +247,8 @@ jobs:
             EID_RP_UUID=${EID_RP_UUID}
             EID_RP_SECRET=${EID_RP_SECRET}
             EID_BASE_URL=${EID_BASE_URL}
-            EID_RP_NAME=Монголын Залуучуудын Холбоо
-            EID_DISPLAY_TEXT=Монголын Залуучуудын Холбооны системд нэвтрэх
+            EID_RP_NAME=SDY Mongolia
+            EID_DISPLAY_TEXT=SDY Mongolia системд нэвтрэх
             GEREGE_CORE_TOKEN=${GEREGE_CORE_TOKEN}
             GOOGLE_LOGIN_CLIENT_ID=${GOOGLE_LOGIN_CLIENT_ID}
             GOOGLE_LOGIN_CLIENT_SECRET=${GOOGLE_LOGIN_CLIENT_SECRET}
@@ -263,13 +263,16 @@ jobs:
             EID_APP_CALLBACKS=${EID_APP_CALLBACKS}
             REDIS_URL=${REDIS_URL}
             GITHUB_REPOSITORY=${REPO}
-            # ── Монголын Залуучуудын Холбооны брэнд (docs/MZH.md) ──
-            BRAND_NAME=Монголын Залуучуудын Холбоо
-            BRAND_SHORT_NAME=МЗХ
-            BRAND_DESCRIPTION=Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.
-            BRAND_LOGO_URL=/mzh/logo.svg
-            BRAND_THEME_COLOR=#0b2a6f
-            BRAND_ICON_URL=/mzh/icon-512.png
+            # ── Социал Демократ Монголын Залуучуудын Холбооны брэнд (docs/MZH.md) ──
+            BRAND_NAME=Социал Демократ Монголын Залуучуудын Холбоо
+            BRAND_SHORT_NAME=SDY
+            BRAND_DESCRIPTION=Социал Демократ Монголын Залуучуудын Холбооны гишүүд, салбар зөвлөл, ажлын албаны нэгдсэн дотоод систем.
+            BRAND_LOGO_URL=/sdy/logo.png
+            BRAND_WORDMARK_URL=/sdy/wordmark.png
+            BRAND_THEME_COLOR=#9c1d25
+            BRAND_ACCENT_COLOR=#e4e7ec
+            BRAND_ICON_URL=/sdy/icon-512.png
+            BRAND_MASKABLE_ICON_URL=/sdy/icon-maskable-512.png
             BRAND_COPY_FILE=/brand/copy.json
             LANDING_SECTIONS=hero capabilities trust services
             SERVICE_URL_ADMIN=https://${CONTROL_PLANE_HOST}

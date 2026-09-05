@@ -34,8 +34,30 @@ export type Brand = {
   description: string;
   /** Where the mark is served from — a path on this host, or an absolute URL. */
   logoUrl: string;
+  /**
+   * A wide version of the mark for the one place that has room for it and
+   * needs it: the landing page's header, which is painted in the brand colour.
+   * A square badge in the brand colour sitting on a header of the same colour
+   * is invisible, and a wordmark squeezed into the 36-pixel square every other
+   * screen draws is a smear. Two pictures for two jobs; unset means the logo
+   * does both, as it always has. The sign-in shells keep the square: their
+   * header is light, where the badge reads and a silver wordmark does not.
+   */
+  wordmarkUrl: string;
   /** The browser and launcher chrome colour, as a CSS hex colour. */
   themeColor: string;
+  /**
+   * The second colour of the deployment's palette — the highlight in the
+   * hero headline, the call-to-action button, the marker dots. Gerege Nexus
+   * is navy and gold; a red-and-silver brand is not, and a rebrand that
+   * changes the word and keeps the gold is only half a rebrand. Unset means
+   * the platform's own gold.
+   *
+   * Both colours reach the page as CSS custom properties on <html>, set by
+   * app/layout.tsx only when a deployment supplied its own theme colour, so
+   * that the default deployment keeps the palette it has always had.
+   */
+  accentColor: string;
   /**
    * The icon a launcher, a tab and a home screen use — the tab favicon, the
    * Apple touch icon and the manifest's own entry, all from one address.
@@ -85,7 +107,9 @@ export const DEFAULT_BRAND: Brand = {
   description:
     "Төрийн болон хувийн хэвшлийн байгууллагын үйлчилгээ, үйл ажиллагаа, систем, өгөгдлийг нэгтгэх модульт платформ.",
   logoUrl: "/brand.webp",
+  wordmarkUrl: "",
   themeColor: "#1869eb",
+  accentColor: "",
   // The icons that ship in the image. See app/manifest.ts for why the maskable
   // one is separate artwork rather than the same file relabelled.
   iconUrl: "",

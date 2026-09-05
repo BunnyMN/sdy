@@ -1,7 +1,7 @@
 # Gerege Nexus
 
-> **This repository is the Mongolian Youth Federation's (Монголын Залуучуудын
-> Холбоо, МЗХ) internal system.** The platform below is unchanged; the
+> **This repository is the Social Democratic Youth Union of Mongolia's (Монголын Залуучуудын
+> Холбоо, СДМЗХ) internal system.** The platform below is unchanged; the
 > federation's name, logo, colour and wording live in configuration — see
 > [`docs/MZH.md`](MZH.md) (Mongolian).
 
@@ -214,7 +214,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | --- | --- |
 | Email | `admin@example.com` |
 | Password | `Password123!` |
-| Tenant | `Монголын Залуучуудын Холбоо` (`slug: demo`); second: `МЗХ — Улаанбаатар хотын салбар зөвлөл` (`slug: demo-branch`) |
+| Tenant | `Социал Демократ Монголын Залуучуудын Холбоо` (`slug: demo`); second: `СДМЗХ — Улаанбаатар хотын салбар зөвлөл` (`slug: demo-branch`) |
 
 The demo account is only seeded outside production. In production it is created
 only when `SEED_DEMO_DATA=true` is set explicitly.

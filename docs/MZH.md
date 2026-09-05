@@ -1,6 +1,6 @@
-# Монголын Залуучуудын Холбооны дотоод систем
+# Социал Демократ Монголын Залуучуудын Холбооны дотоод систем
 
-Энэ репо нь **Монголын Залуучуудын Холбооны (МЗХ)** дотоод системийн суулгац.
+Энэ репо нь **Социал Демократ Монголын Залуучуудын Холбооны (СДМЗХ)** дотоод системийн суулгац.
 Доор нь Gerege Nexus платформ хэвээр ажиллана; холбооны нэр, лого, өнгө, үг
 хэллэг нь **кодонд биш, тохиргоонд** байна. Энэ баримт нь юу өөрчлөгдсөн,
 яагаад ингэж өөрчилсөн, цаашид юу хийхийг хэлнэ.
@@ -20,19 +20,19 @@
 хоёр удаа авдаг байсан — тэр алдааг давтахгүй.
 
 Үр дүнд нь upstream (`gerege-systems/open-gerege-nexus`)-аас засвар татахад
-энэ репогийн МЗХ-ны өөрчлөлтүүд мөргөлдөхгүй: тэдгээр нь compose-ийн
-default, `.env` жишээ, `brand/copy.json`, `frontend/public/mzh/` ба энэ баримт.
+энэ репогийн СДМЗХ-ны өөрчлөлтүүд мөргөлдөхгүй: тэдгээр нь compose-ийн
+default, `.env` жишээ, `brand/copy.json`, `frontend/public/sdy/` ба энэ баримт.
 
 ## Юу өөрчлөгдсөн
 
 | Хаана | Юу |
 | --- | --- |
-| `brand/copy.json` | МЗХ-ны нэр (mn/en), нүүр хуудасны гарчиг, тайлбар, нэвтрэлт/хамгаалалт/дэд бүтцийн хэсгүүдийн үг хэллэг, OAuth зөвшөөрлийн дэлгэц |
-| `frontend/public/mzh/` | `logo.svg`, `icon.svg`, `icon-192.png`, `icon-512.png` — **түр загвар**, албан ёсны сүлдээр солино |
-| `docker-compose.yml` | `BRAND_*`, `BRAND_COPY_FILE=/brand/copy.json`, `LANDING_SECTIONS` default нь МЗХ-ных |
+| `brand/copy.json` | СДМЗХ-ны нэр (mn/en), нүүр хуудасны гарчиг, тайлбар, нэвтрэлт/хамгаалалт/дэд бүтцийн хэсгүүдийн үг хэллэг, OAuth зөвшөөрлийн дэлгэц |
+| `frontend/public/sdy/` | SDY Mongolia wordmark, лого, icon-ууд (`sdyLogo.jpg`-аас) |
+| `docker-compose.yml` | `BRAND_*`, `BRAND_COPY_FILE=/brand/copy.json`, `LANDING_SECTIONS` default нь СДМЗХ-ных |
 | `.env.example`, `deploy/.env.prod.example` | Мөн адил утгууд, тайлбартай |
 | `makefile` | `make dev-frontend` / `dev-backend` гараар ажиллуулахад ч ижил брэнд |
-| `backend/pkg/host/seed.go` | Хөгжүүлэлтийн seed tenant: «Монголын Залуучуудын Холбоо» (`demo`) ба «МЗХ — Улаанбаатар хотын салбар зөвлөл» (`demo-branch`) |
+| `backend/pkg/host/seed.go` | Хөгжүүлэлтийн seed tenant: «Социал Демократ Монголын Залуучуудын Холбоо» (`demo`) ба «СДМЗХ — Улаанбаатар хотын салбар зөвлөл» (`demo-branch`) |
 | `backend/internal/workspace/identity/eidmongolia` | Mock eID-ийн төлөөлөх байгууллагын нэр |
 
 Өөрчлөгдөөгүй, санаатайгаар:
@@ -58,10 +58,10 @@ docker compose up -d
 
 - Систем: <http://nexus.localhost:3000>
 - Удирдлагын консол: <http://admin.localhost:3000>
-- Нэвтрэх: `admin@example.com` / `Password123!` → «Монголын Залуучуудын Холбоо»
+- Нэвтрэх: `admin@example.com` / `Password123!` → «Социал Демократ Монголын Залуучуудын Холбоо»
 
 Хуучин `.env` байвал `BRAND_*` мөрүүд нь compose-ийн default-ыг дарна;
-хоосон утга (`BRAND_NAME=`) ч дарна — тэгвэл Gerege Nexus гарч ирнэ. МЗХ
+хоосон утга (`BRAND_NAME=`) ч дарна — тэгвэл Gerege Nexus гарч ирнэ. СДМЗХ
 брэндийг харахын тулд тэдгээр мөрийг устгах эсвэл `.env.example`-ийн утгыг
 хуулна.
 
@@ -79,21 +79,23 @@ docker compose up -d
 `services` хэсэг нь `SERVICE_URL_*` тохируулсан үед л зурагдана
 (`.env.example`). Хөгжүүлэлтийн орчинд юу ч тохируулаагүй тул харагдахгүй.
 
-## Лого солих
+## Лого ба өнгө
 
-`frontend/public/mzh/` дахь файлууд нь Соёмбогийн галаас санаа авсан **түр
-загвар**. Албан ёсны сүлдийг авмагц:
+`frontend/public/sdy/` — SDY Mongolia (est. 1997) тэмдэг, `sdyLogo.jpg`
+mockup-аас гаргаж авсан:
 
-1. `logo.svg` — толгойд нэрийн хажууд 36px-ээр харагдана; тунгалаг дэвсгэр.
-2. `icon-512.png` — tab, home screen, суулгасан апп; 512×512 квадрат, өөрийн
-   дэвсгэртэй.
-3. Android-д зориулж зах хүртэл зурсан хувилбар байвал
-   `BRAND_MASKABLE_ICON_URL=/mzh/icon-maskable-512.png`.
+| Файл | Хаана |
+| --- | --- |
+| `wordmark.png` | Тунгалаг мөнгөлөг wordmark — landing-ийн улаан толгой (`BRAND_WORDMARK_URL`) |
+| `logo.png` | Улаан квадрат дээрх тэмдэг — апп, консол, нэвтрэх дэлгэц (`BRAND_LOGO_URL`) |
+| `icon-512.png`, `icon-192.png` | Tab, home screen, суулгасан апп (`BRAND_ICON_URL`) |
+| `icon-maskable-512.png` | Android adaptive icon (`BRAND_MASKABLE_ICON_URL`) |
 
-Файлын нэрийг хадгалбал тохиргоо өөрчлөгдөхгүй. Өөр нэрээр эсвэл гадаад
-https хаягаар тавьбал `BRAND_LOGO_URL`, `BRAND_ICON_URL`-ийг өөрчилнө.
-`BRAND_THEME_COLOR` (одоо `#0b2a6f`) нь хөтчийн хүрээний өнгө; албан ёсны
-брэндийн өнгөөр солино.
+Өнгө: `BRAND_THEME_COLOR=#9c1d25` (логоны улаан), `BRAND_ACCENT_COLOR=#e4e7ec`
+(мөнгөлөг — hero-гийн онцлох үг, CTA товч). Landing, нэвтрэх, eID
+дэлгэцүүдийн палитр эдгээрээс гардаг (`app/layout.tsx` → `--brand-*` CSS
+хувьсагч → `globals.css`); тохируулаагүй суулгац Gerege Nexus-ийн navy/gold
+хэвээр.
 
 ## Үг хэллэг засах
 
@@ -102,20 +104,20 @@ https хаягаар тавьбал `BRAND_LOGO_URL`, `BRAND_ICON_URL`-ийг ө
 `{brand}` нь тухайн хэлний `brand.name`-ээр солигдоно. Файл эхлэхэд нэг удаа
 уншигдана — өөрчлөлт контейнер дахин асахад орно.
 
-Одоо давхардаж бичсэн түлхүүрүүд: `brand.*`, `website.*` (нүүр хуудас),
+Одоо давхардаж бичсэн түлхүүрүүд: `brand.*`, `website.*` (нүүр хуудас, `hero_eyebrow` орно),
 `sso_clients.view.empty_body`, `oauth.consent.lede`. Бусад бүх дэлгэц
 `{brand}`-ээр нэрээ авдаг тул нэмэлт override шаардлагагүй.
 
 ## Production-д гаргах
 
-[Ажиллагаа](OPERATIONS.md)-ийн дарааллыг дагана; МЗХ-ны хувьд нэмэлтээр:
+[Ажиллагаа](OPERATIONS.md)-ийн дарааллыг дагана; СДМЗХ-ны хувьд нэмэлтээр:
 
 1. `deploy/.env.prod.example`-ийн `BRAND_*`, `LANDING_SECTIONS` мөрүүд
    бэлэн — `PUBLIC_ORIGIN`, домэйнуудыг холбооныхоор солино.
 2. `brand/` хавтсыг compose файлын хажууд байлгана — `/brand:ro` гэж mount
    хийгддэг.
 3. `SEED_DEMO_DATA` production-д анхдагчаар унтраа. Анхны байгууллага
-   («Монголын Залуучуудын Холбоо») ба операторыг `cmd/tenant-bootstrap`, `cmd/operator-bootstrap`-аар үүсгэнэ
+   («Социал Демократ Монголын Залуучуудын Холбоо») ба операторыг `cmd/tenant-bootstrap`, `cmd/operator-bootstrap`-аар үүсгэнэ
    ([Ажиллагаа](OPERATIONS.md)). Салбар зөвлөл бүрийг тусдаа tenant болгож
    нээвэл салбарын өгөгдөл өгөгдлийн сангийн түвшинд тусгаарлагдана
    ([Архитектур](ARCHITECTURE.md#өгөгдлийн-тусгаарлалт--хоёр-давхарга)).
@@ -167,7 +169,7 @@ GitHub secret/variable-д орно ([Ажиллагаа](OPERATIONS.md)).
 
 **Анхны нэвтрэлт.** Production-д `SEED_DEMO_DATA` унтраа тул demo account
 байхгүй. `https://e-sdy.mn` анх нээхэд setup wizard гарч, анхны байгууллага
-(«Монголын Залуучуудын Холбоо») ба админ хэрэглэгчийг үүсгэнэ
+(«Социал Демократ Монголын Залуучуудын Холбоо») ба админ хэрэглэгчийг үүсгэнэ
 (`/api/v1/setup/*`). Операторыг `https://admin.e-sdy.mn` дээр мөн setup
 wizard-аар, эсвэл хост дээр `docker exec sdy_backend /app/operator-bootstrap`-аар үүсгэнэ.
 

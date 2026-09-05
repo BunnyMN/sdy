@@ -22,6 +22,11 @@ export const website = {
   "website.action.eid_sign_in": { mn: "eID-ээр нэвтрэх", en: "Sign in with eID" },
   "website.action.see_features": { mn: "Боломжийг үзэх", en: "See what it does" },
 
+  // The line above the headline. A translation key rather than a literal so a
+  // deployment can put its own words there through BRAND_COPY — a youth
+  // union's landing page is not making the open-source argument.
+  "website.view.hero_eyebrow": { mn: "OPEN SOURCE · APACHE 2.0 · GO", en: "OPEN SOURCE · APACHE 2.0 · GO" },
+
   // The hero headline is one sentence with a highlighted middle, so it is
   // stored in three parts rather than as markup inside a translation. The split
   // falls mid-phrase on purpose: what is highlighted is the claim, not a whole

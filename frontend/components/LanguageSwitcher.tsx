@@ -29,17 +29,21 @@ export default function LanguageSwitcher({ variant = "light" }: { variant?: "lig
   // brand hue in the header of every screen; the raised surface says the same
   // thing without spending an accent on it, and keeps working when the
   // deployment picks a different one.
+  // The dark variant sits on the landing header, which is painted in the
+  // deployment's own colour. Translucent white rather than slate so that it
+  // reads as part of whatever that colour is — a navy pill on a red header
+  // was the one element still wearing the platform's palette.
   const base =
     variant === "dark"
-      ? "border-slate-700 bg-slate-900/70"
+      ? "border-white/20 bg-black/15"
       : "border-line bg-surface-2";
   const activeStyle =
     variant === "dark"
-      ? "bg-slate-800 text-white"
+      ? "bg-white/20 text-white"
       : "bg-surface text-accent shadow-sm";
   const idleStyle =
     variant === "dark"
-      ? "text-slate-400 hover:text-slate-200"
+      ? "text-white/60 hover:text-white"
       : "text-muted hover:text-foreground";
 
   return (

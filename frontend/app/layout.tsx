@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { Geist } from "next/font/google";
 
 import Providers from "./providers";
-import { brandFromEnv } from "@/lib/brandEnv";
+import { brandCSSVariables, brandFromEnv } from "@/lib/brandEnv";
 import { brandCopyFromEnv } from "@/lib/brandCopy";
 import { localizedBrand } from "@/lib/brand";
 import { DEFAULT_LOCALE, LOCALE_KEY } from "@/lib/locale";
@@ -102,7 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // ачаалахаас өмнө `dark` ангийг нэмдэг тул сервер илгээсэн className
     // болон бодит DOM-ынх нэг байхаа болино. Энэ бол яг тэр хүлээгдэж буй
     // зөрүү — өөр юуг ч нуухгүй: зөвхөн энэ элементийн атрибутад үйлчилнэ.
-    <html lang="mn" className={geist.variable} suppressHydrationWarning>
+    <html lang="mn" className={geist.variable} style={brandCSSVariables(brandFromEnv()) as React.CSSProperties} suppressHydrationWarning>
       <head>
         {/*
           Read before anything is painted, so a reader who chose dark never

@@ -16,7 +16,9 @@ export default function SiteFooter() {
 
   return (
     <footer className="gp-footer">
-      <span>© 2026 Gerege Systems · {brand.name}</span>
+      {/* A deployment under its own name holds its own copyright line; the
+          platform is credited by the "powered by" line beside it. */}
+      <span>{rebranded ? `© ${new Date().getFullYear()} ${brand.name}` : `© 2026 Gerege Systems · ${brand.name}`}</span>
       <span>{t("website.message.footer_note")}</span>
       {rebranded && <span>{t("website.message.powered_by")}</span>}
     </footer>

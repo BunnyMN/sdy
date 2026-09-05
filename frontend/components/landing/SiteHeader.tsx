@@ -91,8 +91,11 @@ export default function SiteHeader({sections}: {sections: LandingSection[]}) {
 
   return (
     <header className="gp-nav" ref={header}>
-      <Link href="/" className="gp-brand">
-        <img src={brand.logoUrl} alt="" />
+      {/* A wordmark already says the name, so on a phone — where the name
+          would wrap to four lines beside it — the text is dropped and the
+          picture carries it. The alt text keeps it for a screen reader. */}
+      <Link href="/" className={brand.wordmarkUrl ? "gp-brand gp-brand--wordmark" : "gp-brand"}>
+        <img src={brand.wordmarkUrl || brand.logoUrl} alt={brand.wordmarkUrl ? brand.name : ""} />
         <span>{brand.name}</span>
       </Link>
       <nav>{items}</nav>
