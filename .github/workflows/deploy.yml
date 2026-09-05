@@ -342,7 +342,10 @@ jobs:
               fi
               sleep 5
             done
-            code=$(curl -s -o /dev/null -w '%{http_code}' "${PUBLIC_ORIGIN}/")
+            # Redirect-ийг дагана: шинэ суулгац нүүрээ /setup руу (307),
+            # www нь bare домэйн руу чиглүүлдэг — хоёулаа эрүүл хариу.
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "${PUBLIC_ORIGIN}/")
             echo "${PUBLIC_ORIGIN}/ → HTTP ${code}"
             [ "$code" = "200" ] || exit 1
+            curl -fsS "${PUBLIC_ORIGIN}/api/v1/setup/status" && echo
             docker compose -f docker-compose.prod.yml ps
