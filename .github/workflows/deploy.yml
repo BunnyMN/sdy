@@ -24,7 +24,7 @@ name: Deploy to Production (e-sdy.mn)
 #   SSO_DEFAULT_CLIENT_SECRET   built-in OAuth2 клиентийн нууц (заавал)
 #   INTEGRATION_ENCRYPTION_KEY  хадгалагдах итгэмжлэлийн шифр, `openssl rand -base64 32` (заавал)
 #   GEMINI_API_KEY              AI туслах (сонголттой)
-#   EID_RP_UUID / EID_RP_SECRET eID Mongolia relying party (сонголттой; байхгүй бол eID унтраа)
+#   EID_RP_UUID / EID_RP_SECRET eID Mongolia relying party «SDY Platform» (байхгүй бол eID унтраа)
 #   GEREGE_CORE_TOKEN           Gerege Core лавлагаа (сонголттой)
 #   GOOGLE_LOGIN_CLIENT_ID / _SECRET  Google нэвтрэлт (сонголттой)
 #
@@ -242,6 +242,8 @@ jobs:
             EID_RP_UUID=${EID_RP_UUID}
             EID_RP_SECRET=${EID_RP_SECRET}
             EID_BASE_URL=${EID_BASE_URL}
+            EID_RP_NAME=Монголын Залуучуудын Холбоо
+            EID_DISPLAY_TEXT=Монголын Залуучуудын Холбооны системд нэвтрэх
             GEREGE_CORE_TOKEN=${GEREGE_CORE_TOKEN}
             GOOGLE_LOGIN_CLIENT_ID=${GOOGLE_LOGIN_CLIENT_ID}
             GOOGLE_LOGIN_CLIENT_SECRET=${GOOGLE_LOGIN_CLIENT_SECRET}

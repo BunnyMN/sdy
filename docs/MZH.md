@@ -171,9 +171,12 @@ GitHub secret/variable-д орно ([Ажиллагаа](OPERATIONS.md)).
 (`/api/v1/setup/*`). Операторыг `https://admin.e-sdy.mn` дээр мөн setup
 wizard-аар, эсвэл хост дээр `docker exec sdy_backend /app/operator-bootstrap`-аар үүсгэнэ.
 
-**eID.** `EID_RP_UUID`/`EID_RP_SECRET` secret тавиагүй тул eID нэвтрэлт
-унтраа; нууц үг, урилга ажиллана. Холбоо eID Mongolia-аас RP авмагц хоёр
-secret-ийг нэмээд workflow-г дахин ажиллуулна.
+**eID.** eID Mongolia дээр «SDY Platform» нэртэй RP бүртгэлтэй; `EID_RP_UUID`,
+`EID_RP_SECRET` нь GitHub secret-д. Иргэнд eID апп дээр харагдах нэр
+`EID_RP_NAME` (deploy.yml). RP-ийн `callback_hosts`-д `e-sdy.mn` ба native
+аппын `gerege-nexus://` scheme бүртгэгдсэн байх ёстой — үгүй бол QR/push
+нэвтрэлт ажиллаж, утасны App2App буцалт чимээгүй унана
+([Танилт](IDENTITY.md#native-app2app-callback)).
 
 **Аюулгүй байдлын санамж.** Серверийн root нууц үг чатаар дамжсан тул түүнийг
 солих (`passwd`) эсвэл `PasswordAuthentication no` болгож зөвхөн SSH
