@@ -166,6 +166,10 @@ services:
       # with canned identities. Anyone can then sign in, so leave it false for
       # any instance holding real data.
       SEED_DEMO_DATA: ${DEMO_MODE:-false}
+      # Хаалттай (private, анхдагч) горимд зөвхөн урьдчилан бүртгэгдсэн хүн
+      # нэвтэрнэ; нээлттэй (public) горимд eID/ДАН/SSO-гоор анх нэвтэрсэн хүнд
+      # данс автоматаар үүснэ. Консолын тохиргоо үүнээс давуу.
+      PLATFORM_ACCESS_MODE: ${PLATFORM_ACCESS_MODE:-}
       # eID can use real RP credentials while the rest of the public showcase
       # keeps demo data and mock DAN/XYP connectors enabled.
       EID_MOCK_MODE: ${EID_MOCK_MODE:-false}
