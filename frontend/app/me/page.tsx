@@ -141,8 +141,8 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
   const [lookingFor, setLookingFor] = useState("");
   const [found, setFound] = useState<{ slug: string; name: string; code: string; title: string }[] | null>(null);
 
-  async function search(event: React.FormEvent) {
-    event.preventDefault();
+  async function search(event?: React.FormEvent) {
+    event?.preventDefault();
     setFailed("");
     try {
       setFound((await api.searchDirectory(lookingFor.trim())).providers || []);
@@ -150,6 +150,10 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
       setFailed(err instanceof Error ? err.message : "—");
     }
   }
+  // The list is the picker: it is shown before anybody has typed, so a member
+  // looking for their province chooses it rather than having to know a slug.
+  // The slug field stays for the person who was handed one.
+  useEffect(() => { void search(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -248,7 +252,9 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
               <li key={one.slug + one.code} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="min-w-0">
                   <strong className="block text-sm truncate">{one.name}</strong>
-                  <small className="text-xs text-muted">{one.title || one.code}</small>
+                  {/* An organisation listed on its own has no service line;
+                      its slug is what the field above will be given. */}
+                  <small className="text-xs text-muted">{one.title || one.code || one.slug}</small>
                 </span>
                 <button
                   type="button"

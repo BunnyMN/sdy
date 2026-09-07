@@ -191,15 +191,15 @@ export const auth = {
   // Лавлах: хэнд хандахаа мэдэхгүй хүнд зориулав. Богино нэрийг орлуулахгүй —
   // олсон нэрийг дээрх талбарт хийж өгнө.
   "me.view.lookup_hint": {
-    mn: "Хэнд хандахаа мэдэхгүй бол үйлчилгээгээрээ хайна уу.",
-    en: "If you do not know who to ask, look the service up.",
+    mn: "Байгууллагаа жагсаалтаас сонгоно уу, эсвэл нэр, үйлчилгээгээр нь хайна уу.",
+    en: "Choose your organisation from the list, or look it up by name or service.",
   },
-  "me.field.lookup_placeholder": { mn: "үйлчилгээний нэр эсвэл код", en: "service name or code" },
+  "me.field.lookup_placeholder": { mn: "байгууллагын нэр, үйлчилгээ", en: "organisation or service" },
   "me.action.lookup": { mn: "Хайх", en: "Look up" },
   "me.action.choose": { mn: "Сонгох", en: "Choose" },
   "me.message.no_providers": {
-    mn: "Ийм үйлчилгээг нийтэлсэн байгууллага алга.",
-    en: "No organisation has published that service.",
+    mn: "Ийм нэртэй байгууллага, үйлчилгээ олдсонгүй.",
+    en: "No organisation or service answers to that name.",
   },
   "profile.stat.organisations": { mn: "Байгууллага", en: "Organisations" },
   "profile.stat.identities": { mn: "Таних тэмдэг", en: "Identities" },

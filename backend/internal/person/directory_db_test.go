@@ -163,3 +163,55 @@ func TestAnOrganisationCannotPublishForAnother(t *testing.T) {
 		t.Errorf("the cross-organisation write was refused for an unexpected reason: %v", err)
 	}
 }
+
+// An organisation that has published nothing is still in the directory, found
+// by its name — a provincial branch of a union has no service to publish and a
+// member still has to be able to pick it. A personal workspace is not: it is
+// one person's own space, and nobody can ask to join it.
+func TestAnOrganisationIsFoundByItsNameWithoutAService(t *testing.T) {
+	pool := openPool(t)
+	store := person.New(pool)
+	ctx := context.Background()
+
+	orgID, slug := openOrganisation(t, pool)
+	name := "Лавлахын туршилт " + slug
+	if _, err := pool.Exec(ctx, `UPDATE registry.tenants SET name = $2 WHERE id = $1::uuid`, orgID, name); err != nil {
+		t.Fatal(err)
+	}
+	_, homeSlug := homeSlugOf(t, pool)
+
+	found, err := store.Directory(ctx, slug, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || found[0].Slug != slug || found[0].Name != name || found[0].Code != "" {
+		t.Errorf("looking the organisation up by slug returned %v", found)
+	}
+	found, err = store.Directory(ctx, "Лавлахын туршилт", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := false
+	for _, one := range found {
+		if one.Slug == homeSlug {
+			t.Errorf("a personal workspace is listed: %v", one)
+		}
+		if one.Slug == slug {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("looking the organisation up by name did not find it: %v", found)
+	}
+
+	// The blank query — the picker — lists it too, and never a home.
+	all, err := store.Directory(ctx, "", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, one := range all {
+		if one.Slug == homeSlug {
+			t.Errorf("the picker lists a personal workspace: %v", one)
+		}
+	}
+}
