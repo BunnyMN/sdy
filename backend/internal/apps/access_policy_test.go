@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/events"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
 
@@ -17,7 +18,14 @@ var corePolicies = map[string]struct {
 	module         nexus.Module
 	menu, prefix   string
 	whyNoRouteGate string
-}{}
+}{
+	"events": {
+		module: &events.Module{}, menu: events.PermRead, prefix: "",
+		whyNoRouteGate: "a member registers for an event (POST) with events.read — their own " +
+			"row — while creating one or marking attendance needs events.manage; the " +
+			"verb rule cannot say that, so every route names its permission itself",
+	},
+}
 
 func TestEveryCoreModuleDeclaresTheAccessPolicyWeThinkItDoes(t *testing.T) {
 	for name, want := range corePolicies {

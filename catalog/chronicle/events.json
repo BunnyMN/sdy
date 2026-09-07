@@ -1,0 +1,19 @@
+{
+  "app_id": "mn.sdy.events",
+  "entries": [
+    {
+      "version": "1.0.0",
+      "released_at": "2026-09-07",
+      "kind": "feature",
+      "summary": {
+        "mn": "Арга хэмжээ ба ирц — холбооны эхний апп.",
+        "en": "Events and attendance — the union's first app."
+      },
+      "details": {
+        "mn": "Байгууллага (төв аппарат эсвэл аймгийн салбар зөвлөл) арга хэмжээ зарлана: нэр, тайлбар, байршил, эхлэх/дуусах цаг, хүний дээд тоо. Гишүүн жагсаалтаас өөрөө бүртгүүлж, цуцалж чадна. Зохион байгуулагч (events.manage) оролцогч нэмж, хэн ирсэн, хэн ирээгүйг тэмдэглэнэ; арга хэмжээ бүр бүртгүүлсэн ба ирсэн тоогоо харуулна. Бүх мөр байгууллагаар тусгаарлагдана.",
+        "en": "An organisation — the secretariat or a provincial branch — announces an event: title, description, location, start and end, capacity. Members register themselves from the list and can withdraw. The organiser (events.manage) adds participants and marks who came and who did not; every event shows its registered and attended counts. Every row is isolated per organisation."
+      },
+      "authors": ["sdy"]
+    }
+  ]
+}

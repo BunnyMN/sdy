@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/events"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
 
@@ -20,9 +21,16 @@ import (
 // Өртөө's three were here until 2026-08-23 and are client-gerege-nexus's. The
 // tables stay for the next module that arrives, because a permission that
 // appears with nobody having stated its reach is exactly what this catches.
-var everyModule = map[string]nexus.Module{}
+var everyModule = map[string]nexus.Module{
+	"events": &events.Module{},
+}
 
-var defaultGrants = map[string]string{}
+var defaultGrants = map[string]string{
+	// Every member sees the events and registers; running one is the
+	// manager's (and, as always, the administrator's).
+	"events.read":   "manager,user",
+	"events.manage": "manager",
+}
 
 func TestEveryPermissionSaysWhoItReaches(t *testing.T) {
 	seen := map[string]bool{}

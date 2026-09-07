@@ -54,3 +54,4 @@ import "./reports";
 import "./storefront";
 import "./urtuu";
 import "./kiosk";
+import "./events";
