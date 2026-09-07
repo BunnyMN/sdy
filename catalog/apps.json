@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": "mn.sdy.events",
+    "slug": "events",
+    "name": "Events",
+    "description": "Announce the organisation's events, let members register and mark who came.",
+    "icon_url": "/icons/events.png",
+    "category": "Union",
+    "visibility": "public",
+    "version": "1.0.0",
+    "translations": {
+      "mn": {
+        "name": "Арга хэмжээ",
+        "description": "Байгууллагын арга хэмжээг зарлах, гишүүдийг бүртгэх, ирцийг тэмдэглэх.",
+        "category": "Холбоо"
+      },
+      "ru": { "name": "Мероприятия", "description": "Объявляйте мероприятия организации, регистрируйте участников и отмечайте явку.", "category": "Союз" },
+      "zh": { "name": "活动", "description": "发布组织的活动，让成员报名并记录出席情况。", "category": "联盟" },
+      "fr": { "name": "Événements", "description": "Annoncez les événements de l'organisation, inscrivez les membres et notez les présences.", "category": "Union" },
+      "es": { "name": "Eventos", "description": "Anuncie los eventos de la organización, inscriba a los miembros y registre la asistencia.", "category": "Unión" },
+      "ar": { "name": "الفعاليات", "description": "أعلن عن فعاليات المنظمة، وسجّل الأعضاء، ودوّن الحضور.", "category": "الاتحاد" }
+    }
+  }
+]

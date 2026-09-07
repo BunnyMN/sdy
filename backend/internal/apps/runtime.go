@@ -6,6 +6,7 @@ package apps
 import (
 	"context"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/events"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
 
@@ -51,5 +52,9 @@ type InstalledApps = nexus.InstalledApps
 // interfaces followed the app, and the core keeps nothing of Өртөө: no tables
 // (00087), no routes, no environment variables.
 func Bootstrap(p nexus.Platform) Runtime {
+	// The union's own apps, compiled into this binary. Each one registers
+	// itself with nexus in its constructor and arrives at the tenant through
+	// the catalogue (catalog/apps.json) like any distribution's module.
+	events.New(p)
 	return Runtime{}
 }

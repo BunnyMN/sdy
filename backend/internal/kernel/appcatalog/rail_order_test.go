@@ -73,14 +73,9 @@ func TestTheAppRailIsOrderedByTheManifests(t *testing.T) {
 	// actually draws is whatever its catalogue carries; what is asserted here
 	// is that the core contributes nothing to it.
 	wantRail := []string{
-		// No order declared, so id order among themselves — which is where the
-		// list this replaced also put them, by falling through to 999. egov,
-		// documents and the organisation were here until they moved to
-		// client-gerege-nexus on 2026-08-23.
-		// Өртөө and reports were here until 2026-08-23, when both left for
-		// client-gerege-nexus. The channel one ran on and the engine the other
-		// ran on did not: a deployment can be on the ring with no task board,
-		// and can mail a schedule with no screen to make one.
+		// The union's events app, order 10 in its manifest — the only app this
+		// catalogue carries since the platform's own left for the App Store.
+		"mn.sdy.events",
 	}
 	if len(rail) != len(wantRail) {
 		t.Fatalf("the rail holds %v, want %v", rail, wantRail)
