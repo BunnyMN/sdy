@@ -14,6 +14,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Box,
   Boxes,
+  CalendarDays,
   Code2,
   FileText,
   Grid,
@@ -33,6 +34,7 @@ import {
 export const ICONS: Record<string, LucideIcon> = {
   "box": Box,
   "boxes": Boxes,
+  "calendar-days": CalendarDays,
   "code-2": Code2,
   "file-text": FileText,
   "grid": Grid,

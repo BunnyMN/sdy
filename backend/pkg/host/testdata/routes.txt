@@ -217,3 +217,13 @@ TRACE /api/v1/core/organisation
 TRACE /cp/api
 TRACE /cp/api/*
 TRACE /metrics
+[app] DELETE /api/v1/events/{id}/register
+[app] GET /api/v1/events/
+[app] GET /api/v1/events/members
+[app] GET /api/v1/events/{id}/
+[app] GET /api/v1/events/{id}/attendance
+[app] POST /api/v1/events/
+[app] POST /api/v1/events/{id}/attendance
+[app] POST /api/v1/events/{id}/register
+[app] PUT /api/v1/events/{id}/
+[app] PUT /api/v1/events/{id}/attendance/{userID}
