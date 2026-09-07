@@ -120,7 +120,14 @@ services:
       # a separate host that nginx points at this same API container — the
       # backend stays single, the origins do not, and both CORS and the CSRF
       # origin check read this one list.
-      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://nexus.gerege.mn},${DEVICE_LINE_ORIGINS:-https://desktop.nexus.gerege.mn,https://mobile.nexus.gerege.mn,https://kiosk.nexus.gerege.mn,https://pos.nexus.gerege.mn}
+      #
+      # The console is a browser on its own hostname too, and every write it
+      # makes carries that Origin. Without it here the console signs in and
+      # then has every POST refused with "origin not allowed" — creating an
+      # organisation from admin.* was impossible on a stack laid out exactly
+      # like this file. CONTROL_PLANE_ORIGIN is https://${CONTROL_PLANE_HOST};
+      # the deploy writes it, and empty (no console) adds nothing.
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://nexus.gerege.mn},${DEVICE_LINE_ORIGINS:-https://desktop.nexus.gerege.mn,https://mobile.nexus.gerege.mn,https://kiosk.nexus.gerege.mn,https://pos.nexus.gerege.mn},${CONTROL_PLANE_ORIGIN:-}
       # Nginx terminates TLS in front of the API, so the forwarded client
       # address can be trusted here.
       TRUST_PROXY_HEADERS: "true"

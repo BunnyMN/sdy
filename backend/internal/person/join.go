@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
@@ -62,7 +63,13 @@ func (s *Store) Ask(ctx context.Context, userID, slug, message string) (Outcome,
 		   FROM registry.request_to_join($1::uuid, $2::text, $3::text)`,
 		userID, slug, message).Scan(&requestID, &tenantID, &tenantName, &joined)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		// The function raises no_data_found for a slug that names nothing —
+		// an exception, not an empty result — so it arrives as a PgError
+		// rather than as pgx.ErrNoRows. Both mean the same thing here, and
+		// neither is the caller's business beyond "no such organisation":
+		// the raw message named the slug and the SQLSTATE, which is plumbing.
+		var pgErr *pgconn.PgError
+		if errors.Is(err, pgx.ErrNoRows) || (errors.As(err, &pgErr) && pgErr.Code == "P0002" /* no_data_found */) {
 			return Outcome{}, ErrNotAsked
 		}
 		return Outcome{}, fmt.Errorf("ask %q to let this person in: %w", slug, err)

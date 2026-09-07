@@ -15,6 +15,7 @@ package person_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -233,7 +234,10 @@ func TestTheDoorRefusesWhatItShould(t *testing.T) {
 		if err == nil {
 			t.Fatal("asking to join somebody's home succeeded")
 		}
-		if !strings.Contains(err.Error(), "no organisation with slug") {
+		// The function raises no_data_found, and the store turns that into
+		// the same answer a made-up name gets: a home is not an organisation
+		// anybody can ask, and saying so in more words would say whose it is.
+		if !errors.Is(err, person.ErrNotAsked) {
 			t.Errorf("refused for an unexpected reason: %v", err)
 		}
 	})

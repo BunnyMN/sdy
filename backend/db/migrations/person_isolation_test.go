@@ -358,3 +358,138 @@ func TestTheConsoleStillWorksWithPeople(t *testing.T) {
 		t.Error("the console can set somebody's password; 00049 gave it two columns and this is not one")
 	}
 }
+
+// Somebody asking to join is visible to the organisation they asked — and to
+// nobody else.
+//
+// 00089 put the request row in the organisation's own workspace; 00102 then
+// hid every account except colleagues, and the queue's JOIN on registry.users
+// came back empty — an administrator could not see who was at the door. 00107
+// widened the read half of person_isolation by exactly that case. This test
+// is the case, both halves: the door sees the person; the neighbour's door
+// does not; and once the request is answered the person is visible only if
+// they became a colleague.
+func TestSomebodyAskingToJoinIsVisibleToTheDoorTheyKnocked(t *testing.T) {
+	pool := personPool(t)
+	ctx := context.Background()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	stamp := time.Now().UnixNano()
+	var tenantA, tenantB, adminA, adminB, asker string
+	for _, step := range []struct {
+		sql  string
+		args []any
+		into *string
+	}{
+		{`INSERT INTO registry.tenants (slug, name) VALUES ($1, $1) RETURNING id::text`,
+			[]any{fmt.Sprintf("door-a-%d", stamp)}, &tenantA},
+		{`INSERT INTO registry.tenants (slug, name) VALUES ($1, $1) RETURNING id::text`,
+			[]any{fmt.Sprintf("door-b-%d", stamp)}, &tenantB},
+		{`INSERT INTO registry.users (email, password_hash, name) VALUES ($1, 'x', 'Admin A') RETURNING id::text`,
+			[]any{fmt.Sprintf("door-admin-a-%d@isolation.test", stamp)}, &adminA},
+		{`INSERT INTO registry.users (email, password_hash, name) VALUES ($1, 'x', 'Admin B') RETURNING id::text`,
+			[]any{fmt.Sprintf("door-admin-b-%d@isolation.test", stamp)}, &adminB},
+		{`INSERT INTO registry.users (email, password_hash, name) VALUES ($1, 'x', 'Asker') RETURNING id::text`,
+			[]any{fmt.Sprintf("door-asker-%d@isolation.test", stamp)}, &asker},
+	} {
+		if err := tx.QueryRow(ctx, step.sql, step.args...).Scan(step.into); err != nil {
+			t.Fatalf("set up: %v", err)
+		}
+	}
+	for _, member := range []struct{ tenant, person string }{{tenantA, adminA}, {tenantB, adminB}} {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO workspace.memberships (tenant_id, user_id) VALUES ($1::uuid, $2::uuid)`,
+			member.tenant, member.person); err != nil {
+			t.Fatalf("make a membership: %v", err)
+		}
+	}
+	// The asker knocks on A's door only. Written as the owner, the way
+	// registry.request_to_join does it from behind the policy.
+	var request string
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO workspace.join_requests (tenant_id, user_id, message) VALUES ($1::uuid, $2::uuid, 'let me in')
+		 RETURNING id::text`, tenantA, asker).Scan(&request); err != nil {
+		t.Fatalf("knock: %v", err)
+	}
+
+	if _, err := tx.Exec(ctx, `SET LOCAL ROLE gerege_nexus_tenant`); err != nil {
+		t.Fatalf("become the tenant role: %v", err)
+	}
+	bind := func(t *testing.T, tenant, person string) {
+		t.Helper()
+		if _, err := tx.Exec(ctx,
+			`SELECT set_config('app.current_tenant', $1, true), set_config('app.allowed_tenants', $2, true),
+			        set_config('app.current_user', $3, true)`,
+			tenant, "{"+tenant+"}", person); err != nil {
+			t.Fatalf("bind: %v", err)
+		}
+	}
+	visible := func(t *testing.T, id string) bool {
+		t.Helper()
+		var n int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM registry.users WHERE id = $1::uuid`, id).Scan(&n); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		return n == 1
+	}
+	// The queue exactly as the console reads it — the JOIN is the thing that
+	// used to lose the row.
+	queued := func(t *testing.T) int {
+		t.Helper()
+		var n int
+		if err := tx.QueryRow(ctx,
+			`SELECT count(*) FROM workspace.join_requests j JOIN registry.users u ON u.id = j.user_id
+			  WHERE j.status = 'PENDING'`).Scan(&n); err != nil {
+			t.Fatalf("read the queue: %v", err)
+		}
+		return n
+	}
+
+	bind(t, tenantA, adminA)
+	if !visible(t, asker) {
+		t.Error("the organisation that was asked cannot see the person asking")
+	}
+	if queued(t) != 1 {
+		t.Error("the person asking is missing from the organisation's queue")
+	}
+	// Still not somebody A may write. Inside a savepoint: a refused UPDATE
+	// aborts the transaction, and the test has more to ask after it.
+	if _, err := tx.Exec(ctx, `SAVEPOINT at_the_door`); err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE registry.users SET name = 'renamed at the door' WHERE id = $1::uuid`, asker); err == nil {
+		var renamed int
+		if err := tx.QueryRow(ctx,
+			`SELECT count(*) FROM registry.users WHERE name = 'renamed at the door'`).Scan(&renamed); err == nil && renamed > 0 {
+			t.Error("an organisation renamed somebody who only asked to join it")
+		}
+	}
+	if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT at_the_door`); err != nil {
+		t.Fatalf("rollback to savepoint: %v", err)
+	}
+
+	bind(t, tenantB, adminB)
+	if visible(t, asker) {
+		t.Error("an organisation that was not asked can see the person asking elsewhere")
+	}
+	if queued(t) != 0 {
+		t.Error("another organisation's queue shows somebody who did not ask it")
+	}
+
+	// Declined: the door closes again.
+	bind(t, tenantA, adminA)
+	if _, err := tx.Exec(ctx,
+		`UPDATE workspace.join_requests SET status = 'DECLINED', decided_by = $2::uuid, decided_at = NOW()
+		  WHERE id = $1::uuid`, request, adminA); err != nil {
+		t.Fatalf("decline: %v", err)
+	}
+	if visible(t, asker) {
+		t.Error("a declined person is still visible to the organisation that declined them")
+	}
+}
