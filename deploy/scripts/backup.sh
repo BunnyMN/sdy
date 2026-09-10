@@ -44,6 +44,10 @@
 
 set -euo pipefail
 
+# Dumps contain personal data and credential hashes. Cron's default umask
+# must not make a newly created backup readable by other host users.
+umask 077
+
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/gerege-nexus}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-gerege_nexus_postgres}"

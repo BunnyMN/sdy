@@ -9,16 +9,20 @@
  * it back in both — this page is a child of the root layout, so the shell draws
  * its navigation around it and the reader can leave without the Back button.
  *
- * A client component because the copy comes from the i18n provider, which is
- * where the reader's language lives.
+ * Unknown Server Actions can render this without the layout. In that case
+ * the fallback supplies its own translations instead of throwing another error.
  */
 
 import Link from "next/link";
 import { FileQuestion } from "lucide-react";
 
-import { useI18n } from "@/lib/i18n";
+import { I18nFallback, useI18n } from "@/lib/i18n";
 
 export default function NotFound() {
+  return <I18nFallback><NotFoundContent /></I18nFallback>;
+}
+
+function NotFoundContent() {
   const { t } = useI18n();
   return (
     <main className="mx-auto flex max-w-[46rem] flex-col items-start gap-4 py-16">

@@ -2,6 +2,20 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.0.1",
+      "released_at": "2026-09-10",
+      "kind": "fix",
+      "summary": {
+        "mn": "Багтаамж, бүртгэл цуцлах болон ирцийн найдвартай байдлын засвар.",
+        "en": "Reliable capacity, withdrawal and attendance updates."
+      },
+      "details": {
+        "mn": "Зэрэг ирсэн бүртгэл болон менежерийн өөрчлөлт хүний дээд тоог хэтрүүлэхгүй. Гишүүн зөвхөн товлогдсон арга хэмжээний бүртгэлээ цуцална; тэмдэглэгдсэн ирц хадгалагдана. Багтаамжийг одоо бүртгэлтэй хүний тооноос багасгахгүй. Нэр 200, тайлбар 10000, байршил ба ирцийн тэмдэглэл тус бүр 500 тэмдэгтийн хязгаартай.",
+        "en": "Concurrent registrations and organiser updates respect capacity. Members may withdraw only a registration for a planned event; recorded attendance is preserved. Capacity cannot be reduced below occupied seats. Titles allow 200 characters, descriptions 10000, and locations and attendance notes 500 each."
+      },
+      "authors": ["sdy"]
+    },
+    {
       "version": "1.0.0",
       "released_at": "2026-09-07",
       "kind": "feature",

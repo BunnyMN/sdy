@@ -1,7 +1,7 @@
 {
   "id": "mn.sdy.events",
   "name": "Events",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "platform": ">=1.0.0",
   "order": 10,
   "publisher": "sdy",

@@ -34,8 +34,17 @@
 # itself would otherwise come up healthy on an empty database. Set it once,
 # then treat it the way the note at the bottom of this file describes.
 
+# Bound each container's local logs so scanners or repeated errors cannot fill
+# the same disk PostgreSQL uses. Applied when a container is recreated.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
+    logging: *bounded-logging
     image: postgres:16-alpine
     container_name: ${STACK:-gerege_nexus}_postgres
     restart: unless-stopped
@@ -58,6 +67,7 @@ services:
   # without a user noticing, so it needs no volume and no backup. What is lost
   # is the fan-out, and the caches it feeds all expire on their own.
   redis:
+    logging: *bounded-logging
     image: redis:7-alpine
     container_name: ${STACK:-gerege_nexus}_redis
     restart: unless-stopped
@@ -74,6 +84,7 @@ services:
   # One-shot migration runner. `up -d` waits for it to exit successfully before
   # starting the API, so the schema is never behind the binary.
   migrate:
+    logging: *bounded-logging
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
     container_name: ${STACK:-gerege_nexus}_migrate
     pull_policy: always
@@ -86,6 +97,7 @@ services:
     restart: "no"
 
   backend:
+    logging: *bounded-logging
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
     container_name: ${STACK:-gerege_nexus}_backend
     restart: unless-stopped
@@ -338,6 +350,7 @@ services:
       retries: 5
 
   frontend:
+    logging: *bounded-logging
     image: ${IMAGE_FRONTEND}:${IMAGE_TAG:-latest}
     container_name: ${STACK:-gerege_nexus}_frontend
     restart: unless-stopped

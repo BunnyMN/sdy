@@ -202,8 +202,8 @@ export default function EventPage() {
         <Modal onClose={() => setAdding(false)}>
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-foreground">{t("events.view.add_participant")}</h2>
-            <label className="block text-xs font-semibold text-muted">{t("events.field.member")}</label>
-            <select value={pick} onChange={(e) => setPick(e.target.value)} className={selectClass}>
+            <label htmlFor="event-participant" className="block text-xs font-semibold text-muted">{t("events.field.member")}</label>
+            <select id="event-participant" value={pick} onChange={(e) => setPick(e.target.value)} className={selectClass}>
               <option value="">—</option>
               {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.email} · {m.email}</option>)}
             </select>
