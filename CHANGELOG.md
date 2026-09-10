@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — SDY гишүүний PWA (2026-09-10)
 
-- `/member` нүүр, 21 салбарт элсэх хүсэлт, manager/admin-ийн шийдвэрлэх
+- `/member` нүүр, Дархан-Уул ба дөрвөн сумд элсэх хүсэлт, manager/admin-ийн шийдвэрлэх
   тусдаа эрх ба гар утасны цэс. eID нэвтэрсний дараа гишүүний нүүр нээгдэнэ.
 - Events 1.1.0: 5 минутын QR ирц, давхар оноо үүсгэхгүй түүх, өөрийн ирц ба
   оноо, салбарын сарын оролцооны тайлан.
@@ -26,8 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Хураамжийн дүн ба данс тохируулахаас өмнө төлбөр идэвхгүй.
 - Offline дахин ачаалахад нийтийн offline мэдэгдэл гарна; API болон хувийн
   хуудсууд кэшлэгдэхгүй. Нэвтрэх шаардлагатай QR холбоос үргэлжилнэ.
-- Core migration 109, Events schema 3, Membership schema 1. Одоо байгаа
-  21 салбарт апп суулгах `sdy-provision` команд; identity шинээр үүсгэхгүй.
+- Core migration 110, Events schema 3, Membership schema 1. Дархан-Уулын
+  таван байгууллагад апп суулгах `sdy-provision` команд; identity шинээр үүсгэхгүй.
+- Салбарын нийтэд харагдах parent холбоос нь хувийн профайл, RLS эрх нээхгүй.
+  Нэвтрэх болон байгууллага солихдоо идэвхгүй байгууллага/гишүүнчлэлийг хасна.
 - Ашиглалт, суулгалт, rollback болон эхний хувилбарын хүрээ:
   [SDY PWA](docs/SDY_PWA.md).
 

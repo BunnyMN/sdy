@@ -5,7 +5,13 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 const base = (url: string) => `http://nexus.localhost:${new URL(url).port}`;
-const branches = Array.from({ length: 21 }, (_, i) => ({ slug: `sdy-branch-${i}`, name: `Салбар ${i + 1}` }));
+const branches = [
+  { slug: "sdy-darkhan-uul", name: "Дархан-Уул аймгийн СДМЗХ" },
+  ...[
+    ["darkhan", "Дархан сумын SDY"], ["orkhon", "Орхон сумын SDY"],
+    ["shariin-gol", "Шарын гол сумын SDY"], ["khongor", "Хонгор сумын SDY"],
+  ].map(([slug, name]) => ({ slug: `sdy-darkhan-uul-${slug}`, name, parent_slug: "sdy-darkhan-uul" })),
+];
 
 async function memberAPI(page: Page, role: "applicant" | "member" | "manager" = "member") {
   const state = { approved: false, requested: false, checked: false, payment: false, signedIn: true, calls: [] as string[] };
@@ -42,11 +48,12 @@ async function memberAPI(page: Page, role: "applicant" | "member" | "manager" = 
   return state;
 }
 
-test("утсан дээр 21 салбараас элсэх хүсэлт өгч шийдвэрээ харна", async ({ page, baseURL }) => {
+test("утсан дээр Дархан-Уул ба дөрвөн сумын бүтцээс элсэх хүсэлт өгнө", async ({ page, baseURL }) => {
   const state = await memberAPI(page, "applicant");
   await page.goto(`${base(baseURL!)}/member`);
   await expect(page.getByRole("heading", { name: /Сайн байна уу/ })).toBeVisible();
-  await expect(page.getByRole("combobox").locator("option")).toHaveCount(22);
+  await expect(page.getByRole("combobox").locator("option")).toHaveCount(6);
+  await expect(page.locator('optgroup[label="Дархан-Уул аймгийн СДМЗХ"] option')).toHaveCount(5);
   await page.getByRole("combobox", { name: "Салбар байгууллага", exact: true }).selectOption(branches[0].slug);
   await page.getByLabel("Нэмэлт тайлбар").fill("Өөрийн салбарт элсэх хүсэлттэй.");
   await page.getByRole("button", { name: "Элсэх хүсэлт илгээх" }).click();

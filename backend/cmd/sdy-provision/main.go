@@ -1,4 +1,4 @@
-// sdy-provision installs SDY's member apps into existing provincial branches.
+// sdy-provision installs SDY's member apps into Darkhan-Uul and its four soums.
 // It creates no organisation or identity and does not change member roles.
 package main
 
@@ -44,7 +44,12 @@ func run(ctx context.Context, path string, apply bool) error {
 		return err
 	}
 	installer := appinstall.NewAppInstaller(db, catalog, config.PlatformVersion)
-	rows, err := db.Query(ctx, `SELECT id::text,slug FROM registry.tenants WHERE membership_branch AND kind='organisation' AND suspended_at IS NULL AND deletion_scheduled_at IS NULL ORDER BY slug`)
+	rows, err := db.Query(ctx, `SELECT t.id::text,t.slug FROM registry.tenants t
+		JOIN workspace.tenant_profiles p ON p.tenant_id=t.id
+		JOIN registry.tenants root ON root.slug='sdy-darkhan-uul'
+		WHERE (t.id=root.id OR p.parent_tenant_id=root.id)
+		AND root.kind='organisation' AND root.suspended_at IS NULL AND root.deletion_scheduled_at IS NULL
+		AND t.kind='organisation' AND t.suspended_at IS NULL AND t.deletion_scheduled_at IS NULL ORDER BY t.slug`)
 	if err != nil {
 		return err
 	}
@@ -62,10 +67,25 @@ func run(ctx context.Context, path string, apply bool) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if len(branches) != 21 {
-		return fmt.Errorf("expected 21 active provincial branches, found %d; no installations applied", len(branches))
+	expected := map[string]bool{
+		"sdy-darkhan-uul": true, "sdy-darkhan-uul-darkhan": true,
+		"sdy-darkhan-uul-orkhon": true, "sdy-darkhan-uul-shariin-gol": true,
+		"sdy-darkhan-uul-khongor": true,
+	}
+	if len(branches) != len(expected) {
+		return fmt.Errorf("expected Darkhan-Uul and four active soums, found %d; no changes applied", len(branches))
+	}
+	ids := make([]string, 0, len(branches))
+	for _, b := range branches {
+		if !expected[b.slug] {
+			return fmt.Errorf("unexpected branch %s; no changes applied", b.slug)
+		}
+		ids = append(ids, b.id)
 	}
 	if apply {
+		if _, err := db.Exec(ctx, `UPDATE registry.tenants SET membership_branch=(id=ANY($1::uuid[])) WHERE kind='organisation'`, ids); err != nil {
+			return err
+		}
 		if err := installer.SyncCatalog(ctx); err != nil {
 			return err
 		}

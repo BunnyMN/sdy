@@ -10,7 +10,7 @@ import { Banner, fieldClass, Loading } from "@/components/ui";
 type Profile = Awaited<ReturnType<typeof api.profile>>;
 type Identity = Awaited<ReturnType<typeof api.getMe>>;
 type Item = Awaited<ReturnType<typeof api.getMyItems>>["items"][number];
-type Branch = { slug: string; name: string };
+type Branch = Awaited<ReturnType<typeof api.getBranches>>["branches"][number];
 
 export default function MemberHome() {
   const { t } = useI18n();
@@ -79,7 +79,14 @@ export default function MemberHome() {
     </div>)}</section>}
     {memberships.length === 0 && <form onSubmit={ask} className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <div><h2 className="text-lg font-semibold">{t("membership.branch_pick")}</h2><p className="mt-2 text-sm text-muted">{t("membership.branch_hint")}</p></div>
-      <label className="block space-y-2"><span className="text-sm font-medium">{t("membership.branch")}</span><select required value={slug} onChange={event => setSlug(event.target.value)} className={`${fieldClass} w-full min-h-12`}><option value="">{t("membership.branch_pick")}</option>{branches.map(branch => <option key={branch.slug} value={branch.slug}>{branch.name}</option>)}</select></label>
+      <label className="block space-y-2"><span className="text-sm font-medium">{t("membership.branch")}</span><select required value={slug} onChange={event => setSlug(event.target.value)} className={`${fieldClass} w-full min-h-12`}>
+        <option value="">{t("membership.branch_pick")}</option>
+        {branches.filter(branch => !branch.parent_slug).map(parent => <optgroup key={parent.slug} label={parent.name}>
+          <option value={parent.slug}>{parent.name}</option>
+          {branches.filter(branch => branch.parent_slug === parent.slug).map(branch => <option key={branch.slug} value={branch.slug}>{branch.name}</option>)}
+        </optgroup>)}
+        {branches.filter(branch => branch.parent_slug && !branches.some(parent => parent.slug === branch.parent_slug && !parent.parent_slug)).map(branch => <option key={branch.slug} value={branch.slug}>{branch.name}</option>)}
+      </select></label>
       <label className="block space-y-2"><span className="text-sm font-medium">{t("membership.message")}</span><textarea value={message} onChange={event => setMessage(event.target.value)} maxLength={500} rows={3} className={`${fieldClass} w-full`} /></label>
       <button disabled={busy || !slug} className="min-h-12 w-full rounded-xl bg-accent px-4 font-semibold text-on-accent disabled:opacity-50">{t("membership.submit")}</button>
       {branches.length === 0 && <p className="text-sm text-muted">{t("membership.empty_branches")}</p>}

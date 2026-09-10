@@ -27,10 +27,11 @@ import (
 // Provider is one organisation's published offer.
 type Provider struct {
 	// Slug is what the asking screen needs, and the reason this exists.
-	Slug  string `json:"slug"`
-	Name  string `json:"name"`
-	Code  string `json:"code"`
-	Title string `json:"title"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	Code       string `json:"code"`
+	Title      string `json:"title"`
+	ParentSlug string `json:"parent_slug,omitempty"`
 }
 
 // Directory answers "who does this" — and, since the same screen is where a
@@ -91,19 +92,17 @@ func (s *Store) Directory(ctx context.Context, code string, limit int) ([]Provid
 }
 
 // Branches is the approved membership directory, separate from the general
-// service directory. Personal workspaces and the central office are excluded.
+// service directory. Only explicitly published, active organisations appear.
 func (s *Store) Branches(ctx context.Context) ([]Provider, error) {
-	rows, err := s.db.Query(ctx, `SELECT slug, name FROM registry.tenants
-		WHERE kind = 'organisation' AND membership_branch
-		AND suspended_at IS NULL AND deletion_scheduled_at IS NULL ORDER BY name`)
+	rows, err := s.db.Query(ctx, `SELECT slug,name,COALESCE(parent_slug,'') FROM registry.membership_branches()`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	branches := make([]Provider, 0, 21)
+	branches := make([]Provider, 0, 5)
 	for rows.Next() {
 		var branch Provider
-		if err := rows.Scan(&branch.Slug, &branch.Name); err != nil {
+		if err := rows.Scan(&branch.Slug, &branch.Name, &branch.ParentSlug); err != nil {
 			return nil, err
 		}
 		branches = append(branches, branch)

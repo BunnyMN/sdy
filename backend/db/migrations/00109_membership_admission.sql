@@ -1,13 +1,10 @@
--- SDY-ийн 21 салбарын элсэлт. Элсэлт шийдэх эрх нь role өөрчлөх эрхээс тусдаа.
+-- SDY-ийн салбарын элсэлт. Элсэлт шийдэх эрх нь role өөрчлөх эрхээс тусдаа.
 -- +goose Up
 ALTER TABLE registry.tenants ADD COLUMN membership_branch boolean NOT NULL DEFAULT false;
 UPDATE registry.tenants SET membership_branch = true
 WHERE kind = 'organisation' AND slug IN (
-    'sdy-arkhangai', 'sdy-bayan-ulgii', 'sdy-bayankhongor', 'sdy-bulgan',
-    'sdy-darkhan-uul', 'sdy-dornod', 'sdy-dornogovi', 'sdy-dundgovi',
-    'sdy-govi-altai', 'sdy-govisumber', 'sdy-khentii', 'sdy-khovd',
-    'sdy-khuvsgul', 'sdy-orkhon', 'sdy-selenge', 'sdy-sukhbaatar',
-    'sdy-tuv', 'sdy-umnugovi', 'sdy-uvs', 'sdy-uvurkhangai', 'sdy-zavkhan'
+    'sdy-darkhan-uul', 'sdy-darkhan-uul-darkhan', 'sdy-darkhan-uul-orkhon',
+    'sdy-darkhan-uul-shariin-gol', 'sdy-darkhan-uul-khongor'
 );
 
 INSERT INTO registry.permissions (code, name, description)
