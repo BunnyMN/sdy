@@ -16,7 +16,7 @@ import { currentDeviceLine, type DeviceLine } from "@/lib/deviceLine";
 import { MenuIcon } from "@/lib/icons";
 import { isPublicPath } from "@/lib/publicRoutes";
 import { homeScreensVisible, organisationScreensVisible } from "@/lib/workspaceKind.mjs";
-import { LayoutGrid, Settings, Menu as HamburgerIcon, Palette, Building2, Megaphone, Search, Ellipsis, ShieldCheck, RefreshCw, MailCheck, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, Sparkles, Inbox} from "lucide-react";
+import { LayoutGrid, Settings, Menu as HamburgerIcon, Palette, Building2, Megaphone, Search, Ellipsis, ShieldCheck, RefreshCw, MailCheck, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, Sparkles, Inbox, CheckCircle2} from "lucide-react";
 
 // app_order and app_chrome describe the app rather than the entry: where its
 // tile sits in the rail, and whether it has a tile at all. Both come from the
@@ -224,19 +224,19 @@ export default function Layout({children}:{children:React.ReactNode}){
   // тийш нь илгээнэ — провайдер өөрийнхөө session-ийг хааж, бүртгэлтэй
   // post-logout хаягаар нь энэ суулгац руу буцаана.
   async function logout(){let endSession="";try{const res=await api.logout();endSession=res.end_session_url||""}catch{}resetAccess();forgetTenants();if(endSession)window.location.assign(endSession);else router.replace("/")}
-  const brandTitle=selected?.name||(t("web.label.platform"));
+  const memberArea=pathname.startsWith("/member")||pathname.startsWith("/module/events")||pathname==="/profile";
+  const brandTitle=selected?.name||(memberArea?t("membership.home"):t("web.label.platform"));
   // A home is a workspace and gets this shell, minus the screens that are about
   // being a company. See lib/workspaceKind.mjs for why the rule lives there
   // rather than as the same condition written out four times here.
   const company=organisationScreensVisible(user?.workspace_kind);
   const ownHome=homeScreensVisible(user?.workspace_kind);
-  const memberArea=pathname.startsWith("/member")||pathname.startsWith("/module/events")||pathname==="/profile";
   const mobileAppTabs=memberArea?[
     {id:"member-home",href:"/member",external:false,active:pathname==="/member",label:t("membership.nav_home"),icon:<Building2 className="w-5 h-5"/>},
     ...(company?[{id:"member-events",href:"/module/events",external:false,active:pathname.startsWith("/module/events"),label:t("membership.events"),icon:<MenuIcon name="calendar-days" className="w-5 h-5"/>}]:[]),
-    ...(company?[{id:"member-participation",href:"/member/participation",external:false,active:pathname==="/member/participation"||pathname==="/member/check-in",label:t("events.checkin.title"),icon:<MenuIcon name="check" className="w-5 h-5"/>},
+    ...(company?[{id:"member-participation",href:"/member/participation",external:false,active:pathname==="/member/participation"||pathname==="/member/check-in",label:t("membership.nav_attendance"),icon:<CheckCircle2 className="w-5 h-5"/>},
     {id:"member-dues",href:"/member/dues",external:false,active:pathname==="/member/dues"||pathname==="/member/finance",label:t("dues.nav"),icon:<MenuIcon name="wallet" className="w-5 h-5"/>}]:[]),
-    {id:"member-profile",href:"/profile",external:false,active:pathname==="/profile",label:t("membership.profile"),icon:<ShieldCheck className="w-5 h-5"/>},
+    {id:"member-profile",href:"/profile",external:false,active:pathname==="/profile",label:t("membership.nav_profile"),icon:<ShieldCheck className="w-5 h-5"/>},
   ]:[
     // The platform tab is the way back out of an app on a phone, so it always
     // exists — it is where it goes that changes. The app store is the shelf a

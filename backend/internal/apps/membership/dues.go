@@ -379,7 +379,8 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	delta := int64(0)
-	if input.Action == "approve" {
+	switch input.Action {
+	case "approve":
 		err = tx.QueryRow(r.Context(), `SELECT `+paidSQL+` FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.id=$2`, c.WorkspaceID, charge).Scan(&paid)
 		if fail(w, err) {
 			return
@@ -389,7 +390,7 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delta = amount
-	} else if input.Action == "reverse" {
+	case "reverse":
 		delta = -amount
 	}
 	_, err = tx.Exec(r.Context(), `UPDATE membership_dues_payments SET status=$3,review_note=$4,reviewed_by=$5,reviewed_at=now() WHERE tenant_id=$1 AND id=$2`, c.WorkspaceID, id, target, input.Reason, c.UserID)

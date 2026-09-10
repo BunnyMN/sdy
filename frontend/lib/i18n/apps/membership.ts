@@ -24,6 +24,8 @@ registerDictionary("membership", source({
   "membership.no_access": { mn: "Энэ үйлдэлд салбарын менежер эсвэл админы эрх шаардлагатай.", en: "This action requires branch manager or administrator permission." },
   "membership.events": { mn: "Арга хэмжээ", en: "Events" },
   "membership.profile": { mn: "Миний бүртгэл", en: "Profile" },
+  "membership.nav_attendance": { mn: "Ирц", en: "Attendance" },
+  "membership.nav_profile": { mn: "Бүртгэл", en: "Profile" },
   "membership.nav_home": { mn: "Нүүр", en: "Home" },
   "membership.empty_branches": { mn: "Салбарын жагсаалтыг одоогоор авах боломжгүй байна. Дахин шинэчилнэ үү.", en: "No branches are available. Please refresh." },
 }));
