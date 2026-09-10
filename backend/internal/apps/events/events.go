@@ -66,7 +66,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.0.1" }
+func (m *Module) Version() string { return "1.1.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -107,11 +107,16 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.With(read).Get("/", m.list)
 		er.With(manage).Post("/", m.create)
 		er.With(manage).Get("/members", m.members)
+		er.With(read).Get("/mine", m.myParticipation)
+		er.With(read).Get("/points", m.myPoints)
+		er.With(manage).Get("/summary", m.summary)
 		er.Route("/{id}", func(one chi.Router) {
 			one.With(read).Get("/", m.get)
 			one.With(manage).Put("/", m.update)
 			one.With(read).Post("/register", m.register)
 			one.With(read).Delete("/register", m.withdraw)
+			one.With(manage).Post("/check-in-code", m.issueCheckin)
+			one.With(read, nexus.RateLimit(10, 2)).Post("/check-in", m.checkIn)
 			one.With(read).Get("/attendance", m.attendance)
 			one.With(manage).Post("/attendance", m.addParticipant)
 			one.With(manage).Put("/attendance/{userID}", m.mark)
@@ -137,7 +142,8 @@ type Event struct {
 	Registered int `json:"registered"`
 	Attended   int `json:"attended"`
 	// MyStatus is the caller's own row, or "" when they have none.
-	MyStatus string `json:"my_status"`
+	MyStatus    string `json:"my_status"`
+	PointsValue int    `json:"points_value"`
 }
 
 type Participant struct {
@@ -158,9 +164,13 @@ type eventInput struct {
 	EndsAt      *string `json:"ends_at"`
 	Capacity    *int    `json:"capacity"`
 	Status      string  `json:"status"`
+	PointsValue *int    `json:"points_value,omitempty"`
 }
 
 func (in *eventInput) validate() (start time.Time, end *time.Time, err error) {
+	if in.PointsValue != nil && (*in.PointsValue < 0 || *in.PointsValue > 100000) {
+		return start, nil, errors.New("points must be between 0 and 100000")
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Title == "" {
 		return start, nil, errors.New("title is required")
@@ -222,7 +232,7 @@ const eventColumns = `
 	       e.status, e.created_by::text, e.created_at,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status <> 'absent')::int,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status = 'attended')::int,
-	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), '')
+	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), ''), e.points_value
 	  FROM events_events e
 	 WHERE e.tenant_id = $1::uuid`
 
@@ -231,7 +241,7 @@ func scanEvent(row pgx.Row) (Event, error) {
 	var starts, created time.Time
 	var ends *time.Time
 	if err := row.Scan(&e.ID, &e.Title, &e.Description, &e.Location, &starts, &ends, &e.Capacity,
-		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus); err != nil {
+		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus, &e.PointsValue); err != nil {
 		return e, err
 	}
 	e.StartsAt, e.EndsAt, e.CreatedAt = stamp(starts), stampPtr(ends), stamp(created)
@@ -375,11 +385,11 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 	}
 	var id string
 	if err := m.db.QueryRow(r.Context(), `
-		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid)
+		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by, points_value)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, COALESCE($10,0))
 		RETURNING id::text`,
 		claims.WorkspaceID, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status, claims.UserID).Scan(&id); err != nil {
+		start, end, in.Capacity, in.Status, claims.UserID, in.PointsValue).Scan(&id); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not create the event")
 		return
 	}
@@ -422,13 +432,17 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "capacity is below the number of participants")
 		return
 	}
+	if in.PointsValue != nil && *in.PointsValue != current.PointsValue && current.Attended > 0 {
+		nexus.Error(w, http.StatusConflict, "points cannot change after attendance has been recorded")
+		return
+	}
 	tag, err := tx.Exec(r.Context(), `
 		UPDATE events_events
 		   SET title = $3, description = $4, location = $5, starts_at = $6, ends_at = $7,
-		       capacity = $8, status = $9, updated_at = NOW()
+		       capacity = $8, status = $9, points_value = COALESCE($10, points_value), updated_at = NOW()
 		 WHERE tenant_id = $1::uuid AND id = $2::uuid`,
 		claims.WorkspaceID, id, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status)
+		start, end, in.Capacity, in.Status, in.PointsValue)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not update the event")
 		return
@@ -644,6 +658,10 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusNotFound, "no such event")
 		return
 	}
+	if err := syncPoints(r.Context(), tx, e, claims.WorkspaceID, in.UserID, claims.UserID, in.Status, "attendance.add"); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record participation points")
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not add the participant")
 		return
@@ -704,6 +722,10 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 	}
 	if tag.RowsAffected() == 0 {
 		nexus.Error(w, http.StatusNotFound, "that person is not on this event's list")
+		return
+	}
+	if err := syncPoints(r.Context(), tx, e, claims.WorkspaceID, userID, claims.UserID, in.Status, "attendance.mark"); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record participation points")
 		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {

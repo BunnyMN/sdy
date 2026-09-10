@@ -36,7 +36,7 @@ const SSO_ERRORS:Record<string,TranslationKey>={no_account:"auth.sso.error_no_ac
  * Демо суулгацад тохирох байсан ч бүх суулгацад тохирохгүй, мөн демо гэдгийг
  * энэ дэлгэц мэдэх ч аргагүй.
  */
-export default function LoginPage(){const router=useRouter();const {t}=useI18n();const brand=useBrand();const [next,setNext]=useState("/profile"),[admin,setAdmin]=useState(false),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");
+export default function LoginPage(){const router=useRouter();const {t}=useI18n();const brand=useBrand();const [next,setNext]=useState("/member"),[admin,setAdmin]=useState(false),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");
   // undefined = хараахан асуугаагүй. Энэ ялгаа чухал: асуухаас өмнө eID
   // хэлбэрийг зурчихвал холбоосон суулгац дээр хүн энд нэвтэрч болно гэж
   // хэсэг хугацаанд итгэж, дараа нь өөр рүү шилжсэн нь будлиантай.
@@ -46,7 +46,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
   // дэлгэц дээр гарах нэрийг хаяг тодорхойлохыг зөвшөөрөхгүй.
   const [asker,setAsker]=useState<{client_name:string}|null>(null);
 
-  useEffect(()=>{const requested=new URLSearchParams(location.search).get("next");setNext(safeReturnPath(requested));
+  useEffect(()=>{const requested=new URLSearchParams(location.search).get("next");setNext(safeReturnPath(requested,"/member"));
     const failed=new URLSearchParams(location.search).get("sso_error");if(failed)setError(t(SSO_ERRORS[failed]||"auth.sso.error_generic"));
     // Алдаагаа өөрөө барина: тохиргоо ирэхгүй бол энэ суулгац өөрөө нэвтрүүлдэг
     // гэж үзнэ — эс бөгөөс API-гийн түр саатал нэвтрэх дэлгэцийг хоослоно.

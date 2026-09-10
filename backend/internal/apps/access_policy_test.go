@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/events"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/membership"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
 
@@ -19,6 +20,7 @@ var corePolicies = map[string]struct {
 	menu, prefix   string
 	whyNoRouteGate string
 }{
+	"membership": {module: &membership.Module{}, menu: membership.PermRead, prefix: "", whyNoRouteGate: "members report their own transfers with membership.read; finance mutations require membership.finance on each route"},
 	"events": {
 		module: &events.Module{}, menu: events.PermRead, prefix: "",
 		whyNoRouteGate: "a member registers for an event (POST) with events.read — their own " +

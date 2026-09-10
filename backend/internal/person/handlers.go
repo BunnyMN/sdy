@@ -33,7 +33,18 @@ func (s *Store) Routes(r chi.Router, gate func(http.Handler) http.Handler) {
 		mr.Get("/items", s.HandleItems)
 		mr.Post("/join-requests", s.HandleAsk)
 		mr.Get("/directory", s.HandleDirectory)
+		mr.Get("/branches", s.HandleBranches)
+		mr.Post("/branch-requests", s.HandleAskBranch)
 	})
+}
+
+func (s *Store) HandleBranches(w http.ResponseWriter, r *http.Request) {
+	branches, err := s.Branches(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "could not load the branches")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"branches": branches})
 }
 
 // HandleItems answers "what did I ask for, and where has it got to".
@@ -65,6 +76,14 @@ func (s *Store) HandleItems(w http.ResponseWriter, r *http.Request) {
 // directory, and a directory is a decision about what a citizen may enumerate
 // rather than a detail of this endpoint.
 func (s *Store) HandleAsk(w http.ResponseWriter, r *http.Request) {
+	s.handleAsk(w, r, false)
+}
+
+func (s *Store) HandleAskBranch(w http.ResponseWriter, r *http.Request) {
+	s.handleAsk(w, r, true)
+}
+
+func (s *Store) handleAsk(w http.ResponseWriter, r *http.Request, branchOnly bool) {
 	claims, err := nexus.UserFromContext(r.Context())
 	if err != nil {
 		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
@@ -79,7 +98,11 @@ func (s *Store) HandleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, err := s.Ask(r.Context(), claims.UserID, body.Slug, body.Message)
+	ask := s.Ask
+	if branchOnly {
+		ask = s.AskBranch
+	}
+	outcome, err := ask(r.Context(), claims.UserID, body.Slug, body.Message)
 	switch {
 	case err == nil:
 		// `joined` rather than a second endpoint: the person pressed one

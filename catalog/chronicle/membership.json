@@ -1,0 +1,21 @@
+{
+  "app_id": "mn.sdy.membership",
+  "entries": [
+    {
+      "version": "1.0.0",
+      "released_at": "2026-09-10",
+      "kind": "feature",
+      "summary": {
+        "mn": "Сарын хураамж ба баталгаажсан төлөлтийн бүртгэл.",
+        "en": "Monthly dues and reviewed payments."
+      },
+      "details": {
+        "mn": "Салбарын админ дүн, данс, төлөх өдрөө тохируулж сараар хураамж ногдуулна. Гишүүн шилжүүлгээ мэдээлж, санхүүгийн эрхтэй хүн банкны хуулгатай тулган батална. Татгалзах, залруулах, чөлөөлөх үйлдэл түүхтэй.",
+        "en": "Branch finance configures amounts, bank instructions and due day, then issues monthly charges. Members report transfers for review against bank statements. Rejections, reversals and exemptions retain history."
+      },
+      "authors": [
+        "sdy"
+      ]
+    }
+  ]
+}

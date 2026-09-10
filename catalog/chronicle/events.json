@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.1.0",
+      "released_at": "2026-09-10",
+      "kind": "feature",
+      "summary": {
+        "mn": "PWA ирц, хугацаатай QR ба оролцооны оноо.",
+        "en": "PWA check-in, expiring QR codes and participation points."
+      },
+      "details": {
+        "mn": "Менежер 5 минутын QR үүсгэнэ. Гишүүн ирцээ баталж, тохируулсан оноогоо нэг удаа авна. Залруулга бүр онооны түүхэнд үлдэнэ. Өөрийн оролцоо ба салбарын тайлан нэмэгдэв.",
+        "en": "Managers issue five-minute check-in codes. Members confirm attendance and receive configured points once. Corrections remain in the ledger. Adds personal participation and branch activity summaries."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.0.1",
       "released_at": "2026-09-10",
       "kind": "fix",
@@ -13,7 +29,9 @@
         "mn": "Зэрэг ирсэн бүртгэл болон менежерийн өөрчлөлт хүний дээд тоог хэтрүүлэхгүй. Гишүүн зөвхөн товлогдсон арга хэмжээний бүртгэлээ цуцална; тэмдэглэгдсэн ирц хадгалагдана. Багтаамжийг одоо бүртгэлтэй хүний тооноос багасгахгүй. Нэр 200, тайлбар 10000, байршил ба ирцийн тэмдэглэл тус бүр 500 тэмдэгтийн хязгаартай.",
         "en": "Concurrent registrations and organiser updates respect capacity. Members may withdraw only a registration for a planned event; recorded attendance is preserved. Capacity cannot be reduced below occupied seats. Titles allow 200 characters, descriptions 10000, and locations and attendance notes 500 each."
       },
-      "authors": ["sdy"]
+      "authors": [
+        "sdy"
+      ]
     },
     {
       "version": "1.0.0",
@@ -27,7 +45,9 @@
         "mn": "Байгууллага (төв аппарат эсвэл аймгийн салбар зөвлөл) арга хэмжээ зарлана: нэр, тайлбар, байршил, эхлэх/дуусах цаг, хүний дээд тоо. Гишүүн жагсаалтаас өөрөө бүртгүүлж, цуцалж чадна. Зохион байгуулагч (events.manage) оролцогч нэмж, хэн ирсэн, хэн ирээгүйг тэмдэглэнэ; арга хэмжээ бүр бүртгүүлсэн ба ирсэн тоогоо харуулна. Бүх мөр байгууллагаар тусгаарлагдана.",
         "en": "An organisation — the secretariat or a provincial branch — announces an event: title, description, location, start and end, capacity. Members register themselves from the list and can withdraw. The organiser (events.manage) adds participants and marks who came and who did not; every event shows its registered and attended counts. Every row is isolated per organisation."
       },
-      "authors": ["sdy"]
+      "authors": [
+        "sdy"
+      ]
     }
   ]
 }

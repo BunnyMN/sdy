@@ -1,0 +1,57 @@
+{
+  "id": "mn.sdy.membership",
+  "name": "Membership dues",
+  "version": "1.0.0",
+  "platform": ">=1.0.0",
+  "order": 20,
+  "publisher": "sdy",
+  "authors": [
+    {
+      "name": "Социал Демократ Монголын Залуучуудын Холбоо"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "Социал Демократ Монголын Залуучуудын Холбоо"
+    }
+  ],
+  "repository": "https://github.com/BunnyMN/sdy",
+  "homepage": "https://e-sdy.mn",
+  "license": "Apache-2.0",
+  "dependencies": [],
+  "permissions": [
+    {
+      "code": "membership.read",
+      "name": "My dues",
+      "description": "Read own dues and report a transfer",
+      "default_roles": [
+        "manager",
+        "user"
+      ]
+    },
+    {
+      "code": "membership.finance",
+      "name": "Dues finance",
+      "description": "Configure dues and review payments",
+      "admin_only": true
+    }
+  ],
+  "menus": [
+    {
+      "id": "membership",
+      "label": "Membership dues",
+      "path": "/member/dues",
+      "icon": "wallet",
+      "order": 20,
+      "labels": {
+        "mn": "Гишүүний хураамж",
+        "en": "Membership dues",
+        "ar": "رسوم العضوية",
+        "zh": "会费",
+        "fr": "Cotisations",
+        "ru": "Членские взносы",
+        "es": "Cuotas"
+      }
+    }
+  ]
+}

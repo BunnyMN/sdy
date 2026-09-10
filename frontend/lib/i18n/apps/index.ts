@@ -55,3 +55,5 @@ import "./storefront";
 import "./urtuu";
 import "./kiosk";
 import "./events";
+import "./membership";
+import "./dues";

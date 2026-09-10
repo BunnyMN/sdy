@@ -29,6 +29,7 @@ import {
   Share2,
   ShieldCheck,
   Users,
+  Wallet,
 } from "lucide-react";
 
 export const ICONS: Record<string, LucideIcon> = {
@@ -49,4 +50,5 @@ export const ICONS: Record<string, LucideIcon> = {
   "share-2": Share2,
   "shield-check": ShieldCheck,
   "users": Users,
+  "wallet": Wallet,
 };

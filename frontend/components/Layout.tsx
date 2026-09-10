@@ -110,7 +110,10 @@ export default function Layout({children}:{children:React.ReactNode}){
         // Төхөөрөмжийн шугам дээр `/login` нь шугамын нүүр рүү эргэж
         // шилжүүлэгддэг тул энд түлхвэл мөчлөг үүснэ.
         if(currentDeviceLine())return;
-        router.push("/login");
+        if(pathname==="/member/check-in"&&location.hash){
+          try{sessionStorage.setItem("sdy.checkin",JSON.stringify({fragment:location.hash,expires:Date.now()+5*60*1000}))}catch{/* Storage may be disabled. */}
+        }
+        router.push(`/login?next=${encodeURIComponent(pathname)}`);
       }finally{
         if(!cancelled)setLoading(false);
       }
@@ -227,7 +230,14 @@ export default function Layout({children}:{children:React.ReactNode}){
   // rather than as the same condition written out four times here.
   const company=organisationScreensVisible(user?.workspace_kind);
   const ownHome=homeScreensVisible(user?.workspace_kind);
-  const mobileAppTabs=[
+  const memberArea=pathname.startsWith("/member")||pathname.startsWith("/module/events")||pathname==="/profile";
+  const mobileAppTabs=memberArea?[
+    {id:"member-home",href:"/member",external:false,active:pathname==="/member",label:t("membership.nav_home"),icon:<Building2 className="w-5 h-5"/>},
+    ...(company?[{id:"member-events",href:"/module/events",external:false,active:pathname.startsWith("/module/events"),label:t("membership.events"),icon:<MenuIcon name="calendar-days" className="w-5 h-5"/>}]:[]),
+    ...(company?[{id:"member-participation",href:"/member/participation",external:false,active:pathname==="/member/participation"||pathname==="/member/check-in",label:t("events.checkin.title"),icon:<MenuIcon name="check" className="w-5 h-5"/>},
+    {id:"member-dues",href:"/member/dues",external:false,active:pathname==="/member/dues"||pathname==="/member/finance",label:t("dues.nav"),icon:<MenuIcon name="wallet" className="w-5 h-5"/>}]:[]),
+    {id:"member-profile",href:"/profile",external:false,active:pathname==="/profile",label:t("membership.profile"),icon:<ShieldCheck className="w-5 h-5"/>},
+  ]:[
     // The platform tab is the way back out of an app on a phone, so it always
     // exists — it is where it goes that changes. The app store is the shelf a
     // company buys from; a home has nothing to buy, and the person's own record
@@ -240,9 +250,11 @@ export default function Layout({children}:{children:React.ReactNode}){
   const remainingMobileTabs=hasMobileMore?mobileAppTabs.slice(4):[];
 
   if(isPublic)return <>{children}</>;
-  if(loading)return <div className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
+  if(loading||!user)return <div className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
 
   const platformMenus=<><MenuGroup id={PLATFORM_GROUPS.modules} title={t("web.group.modules")} closed={closedGroups.includes(PLATFORM_GROUPS.modules)} onToggle={toggleGroup}>
+    <NavLink href="/member" active={pathname==="/member"} icon={<Building2 className="w-5 h-5"/>} label={t("membership.home")}/>
+    {company&&(user?.is_admin||user?.permissions?.includes("membership.manage"))&&<NavLink href="/member/requests" active={pathname==="/member/requests"} icon={<Inbox className="w-5 h-5"/>} label={t("membership.requests")}/>}
     {/* The mirror of the two lines below: an organisation's screens are hidden
         in a home, and the home's own screen is hidden in an organisation. A
         member of a company asks for things through the company, so this list

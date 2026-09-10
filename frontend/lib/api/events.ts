@@ -21,6 +21,7 @@ export type EventRecord = {
   registered: number;
   attended: number;
   my_status: AttendanceStatus | "";
+  points_value?: number;
 };
 
 export type EventInput = {
@@ -31,6 +32,7 @@ export type EventInput = {
   ends_at: string | null;
   capacity: number | null;
   status: EventStatus;
+  points_value?: number;
 };
 
 export type Participant = {
@@ -44,6 +46,11 @@ export type Participant = {
 };
 
 export const eventsApi = {
+  issueCheckin: (id: string) => request<{ event_id: string; token: string; expires_at: string }>(`/events/${encodeURIComponent(id)}/check-in-code`, { method: "POST" }),
+  checkIn: (id: string, token: string) => request<{ status: string; changed: boolean; points?: number }>(`/events/${encodeURIComponent(id)}/check-in`, { method: "POST", body: JSON.stringify({ token }) }),
+  mine: (offset = 0) => request<{ items: Array<{ event_id: string; title: string; starts_at: string; status: AttendanceStatus; points: number }>; has_more: boolean; next_offset: number }>(`/events/mine?offset=${offset}`),
+  points: (offset = 0) => request<{ total: number; entries: Array<{ id: string; event_id: string; title: string; delta: number; reason: string; created_at: string }>; has_more: boolean; next_offset: number }>(`/events/points?offset=${offset}`),
+  summary: (period = "") => request<{ events: number; registrations: number; attended: number; active_members: number; points: number }>(`/events/summary?period=${encodeURIComponent(period)}`),
   list: (status?: EventStatus) =>
     request<{ events: EventRecord[] }>(`/events${status ? `?status=${status}` : ""}`),
   get: (id: string) => request<EventRecord>(`/events/${encodeURIComponent(id)}`),

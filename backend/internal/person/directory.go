@@ -89,3 +89,24 @@ func (s *Store) Directory(ctx context.Context, code string, limit int) ([]Provid
 	}
 	return found, rows.Err()
 }
+
+// Branches is the approved membership directory, separate from the general
+// service directory. Personal workspaces and the central office are excluded.
+func (s *Store) Branches(ctx context.Context) ([]Provider, error) {
+	rows, err := s.db.Query(ctx, `SELECT slug, name FROM registry.tenants
+		WHERE kind = 'organisation' AND membership_branch
+		AND suspended_at IS NULL AND deletion_scheduled_at IS NULL ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	branches := make([]Provider, 0, 21)
+	for rows.Next() {
+		var branch Provider
+		if err := rows.Scan(&branch.Slug, &branch.Name); err != nil {
+			return nil, err
+		}
+		branches = append(branches, branch)
+	}
+	return branches, rows.Err()
+}

@@ -50,16 +50,15 @@ var ErrNoSuchRequest = errors.New("no open request with that id")
 
 // PendingJoinRequests is the queue, oldest first.
 //
-// No tenant_id in the WHERE clause: the policy is what limits this to the
-// workspace being acted in, and repeating the condition here would be a second
-// answer to the same question — one of which somebody could edit.
-func (h *Handlers) PendingJoinRequests(ctx context.Context) ([]JoinRequest, error) {
+// The active organisation is explicit even when a multi-workspace session
+// may read more than one tenant through RLS.
+func (h *Handlers) PendingJoinRequests(ctx context.Context, tenantID string) ([]JoinRequest, error) {
 	rows, err := h.db.Query(ctx, `
 		SELECT j.id::text, j.user_id::text, u.name, u.email, j.message, j.status, j.created_at
 		  FROM workspace.join_requests j
 		  JOIN registry.users u ON u.id = j.user_id
-		 WHERE j.status = 'PENDING'
-		 ORDER BY j.created_at, j.id`)
+		 WHERE j.status = 'PENDING' AND j.tenant_id = $1::uuid
+		 ORDER BY j.created_at, j.id`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list the people asking to join: %w", err)
 	}
@@ -85,20 +84,20 @@ func (h *Handlers) PendingJoinRequests(ctx context.Context) ([]JoinRequest, erro
 // request, so the quota is checked at the moment it is spent and the failure
 // arrives as an error the administrator can read instead of a row that was
 // silently not created.
-func (h *Handlers) Decide(ctx context.Context, requestID, actorUserID string, accept bool) error {
+func (h *Handlers) Decide(ctx context.Context, tenantID, requestID, actorUserID string, accept bool) error {
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var tenantID, userID string
+	var requestTenantID, userID string
 	// FOR UPDATE, so two administrators pressing accept at the same moment do
 	// not both write a membership: the second one finds the row already
 	// decided and stops at the status check below.
 	err = tx.QueryRow(ctx,
 		`SELECT tenant_id::text, user_id::text FROM workspace.join_requests
-		  WHERE id = $1::uuid AND status = 'PENDING' FOR UPDATE`, requestID).Scan(&tenantID, &userID)
+		  WHERE id = $1::uuid AND tenant_id = $2::uuid AND status = 'PENDING' FOR UPDATE`, requestID, tenantID).Scan(&requestTenantID, &userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNoSuchRequest
 	}

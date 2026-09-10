@@ -95,7 +95,7 @@ func TestAcceptingAJoinRequestAddsTheMemberAndAnswersThem(t *testing.T) {
 	ctx := context.Background()
 	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, requestID, userID, true); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, true); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestDecliningAddsNobodyAndStillAnswers(t *testing.T) {
 	ctx := context.Background()
 	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, requestID, userID, false); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, false); err != nil {
 		t.Fatalf("decline: %v", err)
 	}
 
@@ -164,13 +164,13 @@ func TestDecliningAddsNobodyAndStillAnswers(t *testing.T) {
 func TestARequestIsAnsweredOnlyOnce(t *testing.T) {
 	pool := joinPool(t)
 	ctx := context.Background()
-	userID, _, requestID := asker(t, pool)
+	userID, orgID, requestID := asker(t, pool)
 	handlers := handlersFor(pool)
 
-	if err := handlers.Decide(ctx, requestID, userID, true); err != nil {
+	if err := handlers.Decide(ctx, orgID, requestID, userID, true); err != nil {
 		t.Fatal(err)
 	}
-	err := handlers.Decide(ctx, requestID, userID, false)
+	err := handlers.Decide(ctx, orgID, requestID, userID, false)
 	if err == nil {
 		t.Fatal("the same request was answered twice")
 	}
@@ -189,9 +189,9 @@ func TestARequestIsAnsweredOnlyOnce(t *testing.T) {
 func TestAnApprovedRequestGrantsOnlyTheSmallestRole(t *testing.T) {
 	pool := joinPool(t)
 	ctx := context.Background()
-	userID, tenantID, requestID := asker(t, pool)
+	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, requestID, userID, true); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, true); err != nil {
 		t.Fatalf("approve the request: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestAnApprovedRequestGrantsOnlyTheSmallestRole(t *testing.T) {
 		  JOIN workspace.membership_roles mr ON mr.membership_id = m.id
 		  JOIN workspace.roles r ON r.id = mr.role_id
 		 WHERE m.tenant_id = $1::uuid AND m.user_id = $2::uuid
-		 ORDER BY r.code`, tenantID, userID)
+		 ORDER BY r.code`, orgID, userID)
 	if err != nil {
 		t.Fatalf("read the roles: %v", err)
 	}

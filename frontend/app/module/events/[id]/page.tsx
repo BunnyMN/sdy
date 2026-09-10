@@ -18,6 +18,7 @@ import { useI18n } from "@/lib/i18n";
 import { Screen, Panel, Loading, ErrorNote, Chip, useAccess } from "@/components/module/kit";
 import { Modal, selectClass } from "@/components/ui";
 import { EventForm, eventStatusTone, formatWhen } from "../shared";
+import CheckinCode from "@/components/membership/CheckinCode";
 
 const attendanceTone: Record<AttendanceStatus, "slate" | "emerald" | "amber" | "rose" | "blue"> = {
   registered: "blue",
@@ -148,6 +149,8 @@ export default function EventPage() {
       </Panel>
 
       {failed && <ErrorNote>{failed}</ErrorNote>}
+
+      {canManage && open && <CheckinCode eventID={id} />}
 
       <Panel>
         <header className="flex items-center justify-between px-4 py-3 border-b border-line">

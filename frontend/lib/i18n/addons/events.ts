@@ -3,6 +3,13 @@
  * зарлана, гишүүд бүртгүүлнэ, зохион байгуулагч хэн ирснийг тэмдэглэнэ.
  */
 export const events = {
+  "events.activity.title": { mn: "Салбарын оролцооны тайлан", en: "Branch participation" },
+  "events.activity.hint": { mn: "Одоогийн салбарын сонгосон сард эхэлсэн арга хэмжээний дүн. Сарын заагийг Улаанбаатарын цагаар тооцно.", en: "Current branch totals for events starting in the selected month, using Ulaanbaatar time." },
+  "events.activity.events": { mn: "Арга хэмжээ", en: "Events" },
+  "events.activity.registrations": { mn: "Бүртгэл", en: "Registrations" },
+  "events.activity.attended": { mn: "Ирц", en: "Attendances" },
+  "events.activity.active_members": { mn: "Оролцсон гишүүд", en: "Participating members" },
+  "events.activity.points": { mn: "Оролцооны оноо", en: "Participation points" },
   "events.view.title": { mn: "Арга хэмжээ", en: "Events" },
   "events.view.subtitle": {
     mn: "Байгууллагын арга хэмжээ, бүртгэл ба ирц. Гишүүн өөрөө бүртгүүлнэ, зохион байгуулагч ирцийг тэмдэглэнэ.",
@@ -25,6 +32,20 @@ export const events = {
   "events.field.status": { mn: "Төлөв", en: "Status" },
   "events.field.note": { mn: "Тэмдэглэл", en: "Note" },
   "events.field.member": { mn: "Гишүүн", en: "Member" },
+  "events.field.points": { mn: "Батлагдсан ирцийн оноо", en: "Points for confirmed attendance" },
+  "events.field.points_hint": { mn: "0 бол оноо тооцохгүй. Ирц батлагдсаны дараа энэ хэмжээг өөрчлөхгүй.", en: "Zero awards no points. This value is fixed once attendance is recorded." },
+  "events.checkin.issue": { mn: "Ирц бүртгүүлэх QR гаргах", en: "Create check-in QR" },
+  "events.checkin.hint": { mn: "Гишүүн утасныхаа камераар QR уншуулж ирцээ батална. Код 5 минут хүчинтэй; шинээр гаргахад өмнөх нь хүчингүй болно.", en: "Members scan this QR with their phone camera. It expires in five minutes; generating another replaces it." },
+  "events.checkin.title": { mn: "Ирцээ бүртгүүлэх", en: "Check in" },
+  "events.checkin.confirm": { mn: "Би ирсэн — батлах", en: "Confirm my attendance" },
+  "events.checkin.success": { mn: "Таны ирц баталгаажлаа.", en: "Your attendance is confirmed." },
+  "events.checkin.missing": { mn: "Зохион байгуулагчийн үзүүлсэн QR-ийг утасныхаа камераар уншуулна уу.", en: "Scan the organiser’s QR with your phone camera." },
+  "events.checkin.expires": { mn: "Хүчинтэй хугацаа", en: "Expires" },
+  "events.participation": { mn: "Миний ирц ба оноо", en: "My attendance and points" },
+  "events.points.total": { mn: "Нийт оноо", en: "Total points" },
+  "events.points.history": { mn: "Онооны түүх", en: "Point history" },
+  "events.points.empty": { mn: "Одоогоор оролцооны бүртгэл алга.", en: "No participation recorded yet." },
+  "events.more": { mn: "Цааш үзэх", en: "Load more" },
 
   "events.status.planned": { mn: "Товлогдсон", en: "Planned" },
   "events.status.done": { mn: "Болсон", en: "Done" },

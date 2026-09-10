@@ -65,9 +65,9 @@ function clock(seconds:number){return `${Math.floor(seconds/60)}:${String(second
  * зөвхөн дуусгах нь өөр: хариу нь session-ий эзэнд бичигдэнэ, шинэ session
  * нээхгүй. Тиймээс энд ялгаа нь ганц мөр, нэг бүрэн component биш.
  */
-export default function EIDLogin({next="/profile",compact=false,variant="card",binding,link=false,onLinked}:{next?:string;compact?:boolean;variant?:"card"|"signin";binding?:string;link?:boolean;onLinked?:()=>void}){
+export default function EIDLogin({next="/member",compact=false,variant="card",binding,link=false,onLinked}:{next?:string;compact?:boolean;variant?:"card"|"signin";binding?:string;link?:boolean;onLinked?:()=>void}){
   const {t}=useI18n();
-  const returnTo=safeReturnPath(next);
+  const returnTo=safeReturnPath(next,"/member");
   const [method,setMethod]=useState<Method>("id"),[phase,setPhase]=useState<Phase>("idle"),[nationalId,setNationalId]=useState(""),[start,setStart]=useState<Start|null>(null),[error,setError]=useState(""),[left,setLeft]=useState(0);
   // Each attempt takes a ticket. Anything asynchronous compares its ticket
   // before touching state, so a cancelled or superseded attempt cannot revive

@@ -24,7 +24,7 @@
  */
 
 // Bumping this name is what retires everything cached by the previous worker.
-const CACHE = "gerege-nexus-shell-v3";
+const CACHE = "gerege-nexus-shell-v4";
 
 // The offline page is plain HTML with no bundle behind it. It has to render
 // when nothing else can, which rules out anything that needs the app to boot.
@@ -89,9 +89,11 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest")
     return;
 
-  // A request that opts out of the HTTP cache is asking for the network, and a
-  // service worker answering it from storage would be overruling that.
-  if (request.cache === "no-store" || request.cache === "reload") return;
+  // Assets opting out of caching go directly to the network. Navigations
+  // still try the network first and may display the public offline notice:
+  // reloading an installed app without a connection must not lose that page.
+  // No authenticated navigation response is stored or replayed.
+  if (request.mode !== "navigate" && (request.cache === "no-store" || request.cache === "reload")) return;
 
   if (isImmutableAsset(url)) {
     event.respondWith(
