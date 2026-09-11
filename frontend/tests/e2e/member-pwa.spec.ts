@@ -148,7 +148,7 @@ test("гишүүн шилжих хүсэлт илгээж, хүлээгдэж б
   const state = await memberAPI(page);
   await page.goto(`${base(baseURL!)}/member`);
   await page.getByRole("button", { name: "Өөр салбарт шилжих", exact: true }).click();
-  await page.getByLabel("Шилжиж очих байгууллага", { exact: true }).selectOption(branches[1].slug);
+  await page.getByRole("combobox", { name: "Шилжиж очих байгууллага", exact: true }).selectOption(branches[1].slug);
   await page.getByLabel("Шилжих шалтгаан", { exact: true }).fill("Хаяг өөрчлөгдсөн");
   await page.getByRole("button", { name: "Шилжих хүсэлт илгээх", exact: true }).click();
   await expect(page.getByText("Очих байгууллагын админы шийдвэр хүлээж байна", { exact: true })).toBeVisible();
