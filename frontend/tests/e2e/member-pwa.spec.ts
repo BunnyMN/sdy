@@ -13,20 +13,26 @@ const branches = [
   ].map(([slug, name]) => ({ slug: `sdy-darkhan-uul-${slug}`, name, parent_slug: "sdy-darkhan-uul" })),
 ];
 
-async function memberAPI(page: Page, role: "applicant" | "member" | "manager" = "member") {
-  const state = { approved: false, requested: false, checked: false, payment: false, signedIn: true, calls: [] as string[] };
+async function memberAPI(page: Page, role: "applicant" | "member" | "manager" | "admin" = "member") {
+  const state = { transferStatus: "" as string, approved: false, requested: false, checked: false, payment: false, signedIn: true, calls: [] as string[] };
   await page.route("**/api/v1/**", async route => {
     const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
     const method = route.request().method(); state.calls.push(`${method} ${path}`);
     const joined = role !== "applicant" || state.approved;
     if (path === "/auth/me") return state.signedIn ? json(route, {
       id: "member-1", tenant_id: joined ? "branch-1" : "home-1", tenant_name: "Салбар 1", name: "Тест Гишүүн", email: "test@example.test",
-      workspace_kind: joined ? "organisation" : "personal", is_admin: false,
+      workspace_kind: joined ? "organisation" : "personal", is_admin: role === "admin",
       permissions: joined ? ["events.read", "membership.read", ...(role === "manager" ? ["events.manage", "membership.manage"] : [])] : [],
     }) : json(route, { error: "unauthorized" }, 401);
     if (path === "/menus") return json(route, []);
     if (path === "/profile") return json(route, { id: "member-1", name: "Тест Гишүүн", email: "test@example.test", identities: [], organisations: joined ? [{ id: "branch-1", slug: branches[0].slug, name: branches[0].name }] : [], active_sessions: 1 });
     if (path === "/auth/tenants") return json(route, { current: joined ? "branch-1" : "home-1", active: [], tenants: [] });
+    const transfer = { id: "transfer-1", from_tenant_id: "branch-1", from_name: branches[0].name, tenant_id: "branch-2", to_name: branches[1].name, name: "Шилжих Гишүүн", email: "transfer@example.test", message: "Хаяг өөрчлөгдсөн", status: state.transferStatus, created_at: "2026-09-11T01:00:00Z" };
+    if (path === "/me/transfers" && method === "POST") { expect(route.request().postDataJSON()).toMatchObject({ from_tenant_id: "branch-1", slug: branches[1].slug, message: "Хаяг өөрчлөгдсөн" }); state.transferStatus = "PENDING"; return json(route, { ok: true, id: "transfer-1" }); }
+    if (path === "/me/transfers") return json(route, { requests: state.transferStatus ? [transfer] : [] });
+    if (path === "/me/transfers/transfer-1/cancel") { state.transferStatus = "CANCELLED"; return json(route, { ok: true }); }
+    if (path === "/membership/transfers") return json(route, { requests: state.transferStatus === "PENDING" ? [transfer] : [] });
+    if (path === "/membership/transfers/transfer-1") { state.transferStatus = route.request().postDataJSON().accept ? "ACCEPTED" : "DECLINED"; return json(route, { ok: true }); }
     if (path === "/me/branches") return json(route, { branches });
     if (path === "/me/items") return json(route, { items: state.requested ? [{ id: "request-1", provider: branches[0].name, code: "join_request", status: state.approved ? "accepted" : "pending", answer: "" }] : [] });
     if (path === "/me/branch-requests") { expect(route.request().postDataJSON().slug).toBe(branches[0].slug); state.requested = true; return json(route, { ok: true, joined: false }); }
@@ -135,4 +141,41 @@ test("PWA нь гишүүний нүүрээр эхэлж, хувийн мэдэ
   await context.setOffline(true);
   await page.goto(`${origin}/member/participation`);
   await expect(page.locator("body")).toContainText(/сүлжээ|offline|интернет/i);
+});
+
+
+test("гишүүн шилжих хүсэлт илгээж, хүлээгдэж байхад цуцалж чадна", async ({ page, baseURL }) => {
+  const state = await memberAPI(page);
+  await page.goto(`${base(baseURL!)}/member`);
+  await page.getByRole("button", { name: "Өөр салбарт шилжих", exact: true }).click();
+  await page.getByLabel("Шилжиж очих байгууллага", { exact: true }).selectOption(branches[1].slug);
+  await page.getByLabel("Шилжих шалтгаан", { exact: true }).fill("Хаяг өөрчлөгдсөн");
+  await page.getByRole("button", { name: "Шилжих хүсэлт илгээх", exact: true }).click();
+  await expect(page.getByText("Очих байгууллагын админы шийдвэр хүлээж байна", { exact: true })).toBeVisible();
+  await expect(page.getByText("Идэвхтэй салбар", { exact: true })).toBeVisible();
+  expect(state.transferStatus).toBe("PENDING");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Хүсэлтээ цуцлах", exact: true }).click();
+  await expect(page.getByText("Шилжих хүсэлт цуцлагдсан", { exact: true })).toBeVisible();
+  expect(state.transferStatus).toBe("CANCELLED");
+});
+
+test("очих байгууллагын админ шилжих хүсэлтийг утаснаас батална", async ({ page, baseURL }) => {
+  const state = await memberAPI(page, "admin"); state.transferStatus = "PENDING";
+  await page.goto(`${base(baseURL!)}/member`);
+  await page.getByRole("link", { name: "Шилжих хүсэлтүүд", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Шилжих Гишүүн" })).toBeVisible();
+  await page.getByRole("button", { name: "Батлах", exact: true }).click();
+  await expect(page.getByText("Хүлээгдэж буй хүсэлт алга.")).toBeVisible();
+  expect(state.transferStatus).toBe("ACCEPTED");
+});
+
+test("менежерт шилжилт шийдвэрлэх дэлгэц нээгдэхгүй", async ({ page, baseURL }) => {
+  const state = await memberAPI(page, "manager");
+  await page.goto(`${base(baseURL!)}/member`);
+  await expect(page.getByRole("link", { name: "Элсэх хүсэлтүүд", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Шилжих хүсэлтүүд", exact: true })).toHaveCount(0);
+  await page.goto(`${base(baseURL!)}/member/transfers`);
+  await expect(page.getByText("Зөвхөн очих байгууллагын админ шийдвэр гаргана.")).toBeVisible();
+  expect(state.calls.some(call => call.includes("/membership/transfers"))).toBe(false);
 });

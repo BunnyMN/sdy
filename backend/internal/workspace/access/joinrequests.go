@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
@@ -47,6 +48,8 @@ type JoinRequest struct {
 // already answered. The two are one error on purpose: an administrator poking
 // at ids should not learn which of the two it was.
 var ErrNoSuchRequest = errors.New("no open request with that id")
+
+var ErrBranchTransferRequired = errors.New("branch_transfer_required")
 
 // PendingJoinRequests is the queue, oldest first.
 //
@@ -92,6 +95,22 @@ func (h *Handlers) Decide(ctx context.Context, tenantID, requestID, actorUserID 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var requestTenantID, userID string
+	if accept {
+		err = tx.QueryRow(ctx, `SELECT user_id::text FROM workspace.join_requests WHERE id=$1 AND tenant_id=$2 AND status='PENDING'`, requestID, tenantID).Scan(&userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNoSuchRequest
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT registry.guard_branch_admission($1,$2)`, tenantID, userID); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Message == "branch_transfer_required" {
+				return ErrBranchTransferRequired
+			}
+			return err
+		}
+	}
 	// FOR UPDATE, so two administrators pressing accept at the same moment do
 	// not both write a membership: the second one finds the row already
 	// decided and stops at the status check below.

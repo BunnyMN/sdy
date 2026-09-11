@@ -164,6 +164,7 @@ var platformTables = map[string]table{
 	"installation_events":        {"workspace", "app store"},
 	"membership_roles":           {"workspace", "access control"},
 	"memberships":                {"workspace", "access control"},
+	"membership_transfers":       {"workspace", "access control"},
 	"oauth2_access_tokens":       {"workspace", "OAuth2 provider"},
 	"oauth2_authorization_codes": {"workspace", "OAuth2 provider"},
 	"oauth2_clients":             {"workspace", "OAuth2 provider"},

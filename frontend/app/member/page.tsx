@@ -7,6 +7,9 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Banner, fieldClass, Loading } from "@/components/ui";
 
+import MembershipTransfers from "@/components/MembershipTransfers";
+
+type Transfer = Awaited<ReturnType<typeof api.getMyTransfers>>["requests"][number];
 type Profile = Awaited<ReturnType<typeof api.profile>>;
 type Identity = Awaited<ReturnType<typeof api.getMe>>;
 type Item = Awaited<ReturnType<typeof api.getMyItems>>["items"][number];
@@ -14,7 +17,7 @@ type Branch = Awaited<ReturnType<typeof api.getBranches>>["branches"][number];
 
 export default function MemberHome() {
   const { t } = useI18n();
-  const [data, setData] = useState<{ profile: Profile; me: Identity; branches: Branch[]; items: Item[] } | null>(null);
+  const [data, setData] = useState<{ profile: Profile; me: Identity; branches: Branch[]; items: Item[]; transfers: Transfer[] } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [slug, setSlug] = useState("");
@@ -22,8 +25,8 @@ export default function MemberHome() {
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
-      const [profile, me, directory, feed] = await Promise.all([api.profile(), api.getMe(), api.getBranches(), api.getMyItems()]);
-      setData({ profile, me, branches: directory.branches, items: feed.items.filter(item => item.code === "join_request") });
+      const [profile, me, directory, feed, transfers] = await Promise.all([api.profile(), api.getMe(), api.getBranches(), api.getMyItems(), api.getMyTransfers()]);
+      setData({ profile, me, transfers: transfers.requests, branches: directory.branches, items: feed.items.filter(item => item.code === "join_request") });
       setError("");
     } catch (err) { setError(err instanceof Error ? err.message : "—"); }
   }, []);
@@ -71,8 +74,10 @@ export default function MemberHome() {
       <Link href="/member/participation" className="flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-5"><CheckCircle2 className="h-6 w-6 text-accent" /><span className="font-semibold">{t("events.participation")}</span></Link>
       <Link href="/member/dues" className="flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-5"><Wallet className="h-6 w-6 text-accent" /><span className="font-semibold">{t("dues.title")}</span></Link>
       {(me.is_admin || me.permissions?.includes("events.manage")) && <Link href="/member/activity" className="flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-5"><ChartNoAxesCombined className="h-6 w-6 text-accent" /><span className="font-semibold">{t("events.activity.title")}</span></Link>}
+      {me.is_admin && <Link href="/member/transfers" className="flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-5"><Users className="h-6 w-6 text-accent" /><span className="font-semibold">{t("membership.transfer_requests")}</span></Link>}
       {canAdmit && <Link href="/member/requests" className="flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-5"><Users className="h-6 w-6 text-accent" /><span className="font-semibold">{t("membership.requests")}</span></Link>}
     </div>}
+    <MembershipTransfers memberships={memberships} branches={branches} requests={data.transfers} reload={load} />
     {items.length > 0 && <section className="space-y-3" aria-label={t("membership.requests")}>{items.map(item => <div key={item.id} className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-medium">{item.provider}</h2><p className="mt-1 text-sm text-muted">{t(`membership.${item.status.toLowerCase()}`)}</p>
       {item.answer && <p className="mt-2 text-sm">{item.answer}</p>}

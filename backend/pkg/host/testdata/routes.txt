@@ -73,7 +73,9 @@ GET /api/v1/installed-apps
 GET /api/v1/me/branches
 GET /api/v1/me/directory
 GET /api/v1/me/items
+GET /api/v1/me/transfers
 GET /api/v1/membership/join-requests
+GET /api/v1/membership/transfers
 GET /api/v1/menus
 GET /api/v1/oauth2/client-info
 GET /api/v1/oauth2/consent
@@ -169,7 +171,10 @@ POST /api/v1/devices/telemetry
 POST /api/v1/devices/token/rotate
 POST /api/v1/me/branch-requests
 POST /api/v1/me/join-requests
+POST /api/v1/me/transfers
+POST /api/v1/me/transfers/{id}/cancel
 POST /api/v1/membership/join-requests/{id}
+POST /api/v1/membership/transfers/{id}
 POST /api/v1/oauth2/consent
 POST /api/v1/profile/identities/eid
 POST /api/v1/profile/identities/unlink

@@ -57,6 +57,8 @@ func (h *Handlers) HandleDecideJoinRequest(w http.ResponseWriter, r *http.Reques
 		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 	case errors.Is(err, ErrNoSuchRequest):
 		httpx.Error(w, http.StatusNotFound, "no open request with that id")
+	case errors.Is(err, ErrBranchTransferRequired):
+		httpx.Error(w, http.StatusConflict, "branch_transfer_required")
 	default:
 		// A quota refusal reaches the administrator in its own words: it is the
 		// one failure here they can do something about, and "internal error"
