@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — SDY нийтийн нүүр хуудас (2026-09-11)
+
+- Landing page-ийг Gerege Design Research дүрмээр шинэчлэв: гишүүний
+  боломжууд, элсэх алхам, FAQ, нэг нэвтрэх урсгалтай neutral light/dark загвар.
+- SDY-ийн нүүр runtime брэндээр сонгогдоно. Хуучин public танилцуулгын
+  холбоосууд шинэ нүүрийн холбогдох хэсэгт шилжинэ.
+- Таван дэлгэцийн хэмжээ, хоёр горим, keyboard, JS-гүй хандалт болон
+  нэвтрэх холбоосыг шалгах 12 browser тестийг CI-д нэмэв.
+
 ### Changed — Gerege жишигт нийцүүлсэн гишүүний UI (2026-09-11)
 
 - Гишүүний PWA, Events, Profile-д байгууллагын нэртэй тусдаа shell,

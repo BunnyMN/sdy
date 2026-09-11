@@ -1,4 +1,4 @@
-# SDY гишүүний UI — Gerege Design Research
+# SDY нүүр хуудас ба гишүүний UI — Gerege Design Research
 
 Эх сурвалж: [Gerege Design Research](https://gerege-systems.github.io/design-research/),
 2026-09-11-нд уншсан 00–15 дүрэм. Defaults, semantic token, dashboard болон
@@ -7,6 +7,17 @@ mobile/PWA бүлгийг гишүүний үндсэн урсгалд хэрэ�
 
 ## Хэрэгжүүлсэн хүрээ
 
+- Нийтийн `/` нүүрийг SDY-ийн гишүүний урсгалаар шинэчилсэн: hero, гурван
+  боломж, элсэх гурван алхам, таван FAQ, төгсгөлийн CTA болон footer.
+  `BRAND_SHORT_NAME=SDY` үед серверээс шууд энэ хуудсыг зурна.
+  Ерөнхий платформын хуучин `/trust`, `/architecture`, `/platform` холбоос
+  тухайн SDY тайлбар хэсэгт шилжинэ. Бусад брэндийн нүүр хэвээр.
+- Landing: 1280px хүрээ, 64/48px section зай, Geist 400/500/600,
+  neutral light/dark, SDY-ийн улаан accent, 44px товч. Header дахь CTA
+  secondary, hero ба төгсгөлийн CTA primary; label ижил, `/login?next=%2Fmember`.
+  Header-ийн гар утасны цэс болон FAQ нь native details тул JS-гүй ажиллана.
+  Product preview нь боломжуудыг тайлбарласан HTML дүрслэл; бодит хэрэглэгчийн
+  мэдээлэл, зохиомол ирц/оноо/төлбөрийн тоо харуулахгүй.
 - Гишүүний нүүр, ирц/оноо, хураамж, элсэлт/шилжилт шийдвэрлэх, санхүү болон
   үйл ажиллагааны дэлгэцийн зай, карт, бичгийн шатлалыг нэгтгэв.
 - Гишүүн, Events, Profile хэсэгт тусдаа MemberShell: байгууллагын нэр,
@@ -31,7 +42,7 @@ Playwright-ийн member-pwa тестүүд 320/768/1280px, light/dark, overflow
 тестээр шалгагдана; браузерын тестийн API нь fixture.
 
 Энэ нь бүх платформ, бүх legacy модульд design checklist бүрэн хангасан
-гэсэн дүгнэлт биш. Нийтийн marketing landing, operator console болон бусад
+гэсэн дүгнэлт биш. Operator console болон бусад
 модулийн дотоод загвар тусдаа. Үйлдлийн статистикийн бодит Core Web Vitals,
 физик iPhone keyboard/VoiceOver, eID аппын зөвшөөрлийг төхөөрөмж дээр хүлээн
 авах шалгалт үлдэнэ. Хувийн өгөгдлийг offline draft болгон хадгалахгүй.
@@ -44,3 +55,9 @@ runner эхлүүлэхгүй болсон. Локал test/lint/build-ийн ү
 799 тест, 61 package PASS, SKIP 0; go vet болон CI-тэй ижил golangci-lint
 v2.1.6 — 0 issues. Frontend 198 unit, 23 Playwright тест PASS. TypeScript,
 API boundary болон Next production webpack build амжилттай.
+
+Landing нэмэлтийн шалгалт: `npx playwright test --config playwright.landing.config.ts`
+— 12 тест PASS. 320/375/768/1280/1920px light/dark, overflow, CTA-ийн 44px
+өндөр, skip link/focus, mobile menu/Escape, FAQ keyboard, хуучин `/trust`
+холбоос, login handoff болон JavaScript-гүй SSR/FAQ/menu шалгасан.
+Шинэ/өөрчилсөн TS/TSX дээр ESLint, TypeScript, production build PASS.
