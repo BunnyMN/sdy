@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/memo"
+	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -131,5 +133,60 @@ func TestSigningInToASuspendedOrganisationIsRefused(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
 	if _, _, err := server.IssueSession(request, userID, tenantID, "password"); err == nil {
 		t.Fatal("a session was issued for a suspended organisation")
+	}
+}
+
+func TestClosedSelectedOrganisationDoesNotReachRLS(t *testing.T) {
+	for name, change := range map[string]string{
+		"suspended": `UPDATE registry.tenants SET suspended_at=now() WHERE id=$1`,
+		"deleting":  `UPDATE registry.tenants SET deletion_scheduled_at=now()+interval '30 days' WHERE id=$1`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			server, pool := suspensionServer(t)
+			current, user, token := tenantWithMember(t, pool)
+			other, _, _ := tenantWithMember(t, pool)
+			ctx := context.Background()
+			if _, err := pool.Exec(ctx, `INSERT INTO workspace.memberships(tenant_id,user_id) VALUES($1,$2)`, other, user); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := server.sessions.SetActiveTenants(ctx, token, []string{other}); err != nil {
+				t.Fatal(err)
+			}
+			readSelection := func() []string {
+				t.Helper()
+				var selection []string
+				handler := server.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					selection = nexus.AllowedWorkspaces(r.Context())
+					claims, err := UserFromContext(r.Context())
+					if err != nil || !slices.Equal(claims.AllowedWorkspaceIDs, selection) {
+						t.Fatalf("claims and RLS selection differ: %v %v err=%v", claims.AllowedWorkspaceIDs, selection, err)
+					}
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				r := httptest.NewRequest(http.MethodGet, "/selection-probe", nil)
+				r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				if w.Code != http.StatusNoContent {
+					t.Fatalf("current organisation was refused: %d %s", w.Code, w.Body.String())
+				}
+				return selection
+			}
+			if selection := readSelection(); len(selection) != 2 || !slices.Contains(selection, other) {
+				t.Fatalf("initial selection=%v", selection)
+			}
+			if _, err := pool.Exec(ctx, change, other); err != nil {
+				t.Fatal(err)
+			}
+			// The operator invalidates this cache on every replica when closing.
+			server.suspended = memo.New[bool](SuspendedTTL)
+			if selection := readSelection(); len(selection) != 1 || selection[0] != current {
+				t.Fatalf("closed organisation reached RLS: %v", selection)
+			}
+			selection, err := server.sessions.SetActiveTenants(ctx, token, []string{other})
+			if err != nil || len(selection) != 1 || selection[0] != current {
+				t.Fatalf("closed organisation could be selected again: %v err=%v", selection, err)
+			}
+		})
 	}
 }

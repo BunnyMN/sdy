@@ -163,8 +163,6 @@ func TestSavedWorkspaceSelectionLosesUnavailableMemberships(t *testing.T) {
 	for _, change := range []string{
 		`UPDATE workspace.memberships SET active=false,deactivated_at=now() WHERE tenant_id=$1`,
 		`DELETE FROM workspace.memberships WHERE tenant_id=$1`,
-		`UPDATE registry.tenants SET suspended_at=now() WHERE id=$1`,
-		`UPDATE registry.tenants SET deletion_scheduled_at=now()+interval '30 days' WHERE id=$1`,
 	} {
 		other := seedTenant(t, pool, user, true)
 		if _, err := store.SetActiveTenants(ctx, token, []string{other}); err != nil {

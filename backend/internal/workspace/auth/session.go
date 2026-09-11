@@ -212,8 +212,7 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (UserClaims, e
 		SELECT s.user_id::text, COALESCE(s.tenant_id::text, ''), u.email,
 		        ARRAY(SELECT a.id::text FROM unnest(s.allowed_tenant_ids) a(id)
 		          JOIN workspace.memberships am ON am.tenant_id=a.id AND am.user_id=s.user_id AND am.active
-		          JOIN registry.tenants org ON org.id=a.id
-		          WHERE org.suspended_at IS NULL AND org.deletion_scheduled_at IS NULL ORDER BY a.id) AS allowed,
+		          ORDER BY a.id) AS allowed,
 		        COALESCE(s.impersonated_by::text, '') AS impersonated_by,
 		        EXISTS (
 		            SELECT 1 FROM workspace.memberships m
