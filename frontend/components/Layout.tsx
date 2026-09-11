@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { useBrand } from "@/lib/brandContext";
 import UserMenu from "@/components/UserMenu";
+import MemberShell from "@/components/membership/MemberShell";
 import { TenantChoices, forgetTenants, useTenants } from "@/components/TenantChoices";
 import AICopilot from "@/components/AICopilot";
 import { invokeShell, useShell, SHELL_EVENTS, SHELL_METHODS, type ShellNavigatePayload, type ShellSearchPayload } from "@/lib/shell";
@@ -339,6 +340,8 @@ export default function Layout({children}:{children:React.ReactNode}){
     </div>}
     <AICopilot/>
   </div>;
+
+  if(memberArea)return <MemberShell user={user} onLogout={logout}><ImpersonationBanner active={!!user?.impersonated}/><PlatformNotices notices={user?.notices}/>{children}</MemberShell>;
 
   return <div className="gerege-shell min-h-dvh flex flex-col">
     <ImpersonationBanner active={!!user?.impersonated}/>

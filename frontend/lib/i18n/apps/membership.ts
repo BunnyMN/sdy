@@ -1,6 +1,21 @@
 import { registerDictionary, source } from "../registry";
 
 registerDictionary("membership", source({
+  "membership.nav_events": { mn: "Эвент", en: "Events" },
+  "membership.management": { mn: "Удирдлага", en: "Management" },
+  "membership.my_activity": { mn: "Миний үйл ажиллагаа", en: "My activity" },
+  "membership.skip_content": { mn: "Гол контент руу", en: "Skip to content" },
+  "membership.back": { mn: "Буцах", en: "Back" },
+  "membership.page_loaded": { mn: "{title} хуудас ачаалагдлаа", en: "{title} page loaded" },
+  "membership.offline": { mn: "Интернэт холболт алга. Холбогдсоны дараа дахин оролдоно уу.", en: "No internet connection. Reconnect and try again." },
+  "membership.retry": { mn: "Дахин оролдох", en: "Try again" },
+  "membership.load_failed": { mn: "Мэдээллийг авч чадсангүй. Дахин оролдоно уу.", en: "Could not load the information. Please try again." },
+  "membership.updated": { mn: "Шинэчилсэн {time}", en: "Updated {time}" },
+  "membership.transfer_confirm": { mn: "Харьяалал шилжүүлэхийг батлах", en: "Confirm membership transfer" },
+  "membership.transfer_confirm_hint": { mn: "Баталсны дараа өмнөх харьяалал дуусаж, гишүүн дахин нэвтрэх шаардлагатай.", en: "Approval ends the previous membership and the member must sign in again." },
+  "membership.transfer_decline_confirm": { mn: "Шилжих хүсэлтээс татгалзах", en: "Decline transfer request" },
+  "membership.transfer_cancel_confirm": { mn: "Шилжих хүсэлтээ цуцлах уу?", en: "Cancel your transfer request?" },
+  "membership.no_access_title": { mn: "Энэ хуудсыг үзэх эрх хүрэхгүй байна", en: "You do not have access to this page" },
   "membership.transfer_title": { mn: "Харьяалал шилжүүлэх", en: "Transfer membership" },
   "membership.transfer_hint": { mn: "Очих байгууллагын админ батлах хүртэл одоогийн харьяалал хэвээр байна. Батлагдвал дахин нэвтэрнэ. Өмнөх ирц, оноо, төлөлтийн түүх хуучин байгууллагын бүртгэлд хадгалагдана.", en: "Your current membership remains until the destination administrator approves. Sign in again after approval. Previous attendance, points and payment records remain with the former organisation." },
   "membership.transfer_start": { mn: "Өөр салбарт шилжих", en: "Move to another branch" },

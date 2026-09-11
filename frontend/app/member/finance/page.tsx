@@ -8,7 +8,7 @@ import { Banner, fieldClass, Loading } from "@/components/ui";
 
 type Decision = { id: string; action: "approve" | "reject" | "reverse" | "waive"; title: string; reason: string };
 const button = "min-h-11 rounded-lg border border-line px-4 disabled:opacity-50";
-const money = (value: number) => `${value.toLocaleString()} ₮`;
+import { memberMoney as money } from "@/lib/memberFormat";
 
 export default function DuesFinance() {
   const { t } = useI18n();
@@ -48,8 +48,8 @@ export default function DuesFinance() {
   if (!allowed) return <p>{t("dues.no_access")}</p>;
   return <div className="mx-auto max-w-4xl space-y-5">
     <h1 className="text-2xl font-semibold">{t("dues.finance")}</h1>
-    {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-accent-soft p-4 text-accent">{notice}</p>}
-    {settings && <details className="rounded-2xl border border-line bg-surface p-5" open={!settings.enabled}>
+    {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-success-soft p-4 text-success">{notice}</p>}
+    {settings && <details className="rounded-lg border border-line bg-surface p-4 sm:p-6" open={!settings.enabled}>
       <summary className="cursor-pointer font-semibold">{t("dues.settings")}</summary>
       <form onSubmit={save} className="mt-4 space-y-4">
         <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={settings.enabled} onChange={e => setSettings({ ...settings, enabled: e.target.checked })} />{t("dues.enabled")}</label>
@@ -61,14 +61,14 @@ export default function DuesFinance() {
         <button disabled={busy} className={button}>{t("dues.save")}</button>
       </form>
     </details>}
-    <section className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+    <section className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <label className="block space-y-1"><span className="text-sm">{t("dues.period")}</span><input required type="month" min="2000-01" max="2100-12" value={period} disabled={busy} onChange={e => { setPeriod(e.target.value); setDecision(null); setNotice(""); }} className={`${fieldClass} block min-h-11`} /></label>
       <p className="text-sm text-muted">{t("dues.charge_hint")}</p>
       <button disabled={busy || !settings?.enabled || !period} onClick={() => void act(async () => { const result = await duesApi.charge(period); setNotice(t("dues.created", { count: result.created })); await load(); })} className={button}>{t("dues.create")}</button>
     </section>
     {!data && !error && <Loading />}
     {data && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(data.totals).map(([key, value]) => <div key={key} className="rounded-xl border border-line p-4"><p className="text-xs text-muted">{t(`dues.${key}`)}</p><strong className="mt-2 block break-words">{money(value)}</strong></div>)}</div>}
-    {decision && <form onSubmit={review} className="space-y-3 rounded-2xl border border-accent bg-surface p-5">
+    {decision && <form onSubmit={review} className="space-y-3 rounded-lg border border-accent bg-surface p-4 sm:p-6">
       <h2 className="font-semibold">{t(`dues.${decision.action}`)} · {decision.title}</h2>
       <label className="block space-y-1"><span className="text-sm">{t("dues.reason")}</span><textarea required autoFocus maxLength={500} rows={3} value={decision.reason} onChange={e => setDecision({ ...decision, reason: e.target.value })} className={`${fieldClass} w-full`} /></label>
       <div className="flex flex-wrap gap-3"><button disabled={busy || !decision.reason.trim()} className={button}>{t("dues.save")}</button><button type="button" disabled={busy} onClick={() => setDecision(null)} className={button}>{t("dues.cancel")}</button></div>

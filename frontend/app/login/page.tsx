@@ -9,7 +9,8 @@ import {resetAccess} from "@/lib/access";
 import {useI18n} from "@/lib/i18n";
 import {useBrand} from "@/lib/brandContext";
 import type {TranslationKey} from "@/lib/i18n";
-import {ChevronDown,HelpCircle,Lock,Mail,ShieldCheck} from "lucide-react";
+import {ChevronDown,HelpCircle,Lock,ShieldCheck} from "lucide-react";
+import "@/components/membership/member.css";
 import { GoogleMark } from "@/components/ProviderMark";
 import {safeReturnPath} from "@/lib/safeReturnPath.mjs";
 
@@ -80,7 +81,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
   const showLocal=!!sso&&(!federated||sso.local_login);
   const eidEnabled=sso?.eid===undefined||sso.eid.enabled;
 
-  return <main className="signin-shell">
+  return <main className="signin-shell sdy-member-shell sdy-signin">
     <header className="signin-shell__nav">
       <Link href="/" className="gp-brand"><img src={brand.logoUrl} alt=""/><span>{brand.name}</span></Link>
       <LanguageSwitcher/>
@@ -133,7 +134,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
             {/* eID-гүй суулгац дээр нууц үг бол цорын ганц зам: түүнийг
                 эвхээд нуух нь дэлгэцийг хоосон болгоно, тиймээс шууд нээлттэй. */}
             {eidEnabled&&<button className="admin-disclosure" onClick={()=>setAdmin(v=>!v)}><Lock/> {t("auth.action.admin_disclosure")} <ChevronDown className={admin?"rotate-180":""}/></button>}
-            {(admin||!eidEnabled)&&<form className="admin-login" onSubmit={passwordLogin}>{error&&<p>{error}</p>}<label><Mail/> <input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>setEmail(e.target.value)} required/></label><label><Lock/> <input type="password" autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button>{t("auth.action.admin_sign_in")}</button></form>}
+            {(admin||!eidEnabled)&&<form className="admin-login" onSubmit={passwordLogin}>{error&&<p>{error}</p>}<label className="sdy-login-field"><span>{t("auth.field.email")}</span><input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>setEmail(e.target.value)} required/></label><label className="sdy-login-field"><span>{t("auth.field.password")}</span><input type="password" autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button>{t("auth.action.admin_sign_in")}</button></form>}
             {/* Link rather than an anchor: this points at a page of this
                 application, and a full page load here throws away the sign-in
                 state the screen is holding. */}

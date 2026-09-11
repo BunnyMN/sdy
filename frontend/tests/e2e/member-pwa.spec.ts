@@ -57,7 +57,7 @@ async function memberAPI(page: Page, role: "applicant" | "member" | "manager" | 
 test("утсан дээр Дархан-Уул ба дөрвөн сумын бүтцээс элсэх хүсэлт өгнө", async ({ page, baseURL }) => {
   const state = await memberAPI(page, "applicant");
   await page.goto(`${base(baseURL!)}/member`);
-  await expect(page.getByRole("heading", { name: /Сайн байна уу/ })).toBeVisible();
+  await expect(page.locator("h1")).toBeVisible();
   await expect(page.getByRole("combobox").locator("option")).toHaveCount(6);
   await expect(page.locator('optgroup[label="Дархан-Уул аймгийн СДМЗХ"] option')).toHaveCount(5);
   await page.getByRole("combobox", { name: "Салбар байгууллага", exact: true }).selectOption(branches[0].slug);
@@ -119,7 +119,7 @@ test("шилжүүлгээ мэдээлэх нь төлсөн гэж шууд т
   await page.getByLabel("Банкны гүйлгээний дугаар").fill("TEST-123");
   await page.locator("form").getByRole("button", { name: "Шилжүүлгээ мэдээлэх", exact: true }).click();
   await expect(page.getByText("Баталгаажуулалт хүлээж байна", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Төлсөн: 0 ₮/)).toBeVisible();
+  await expect(page.getByText(/Төлсөн: 0₮/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Хураамжийн санхүү", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -133,7 +133,7 @@ test("PWA нь гишүүний нүүрээр эхэлж, хувийн мэдэ
   expect(manifest.icons.length).toBeGreaterThan(0);
   await memberAPI(page);
   await page.goto(`${origin}/member`);
-  await expect(page.getByRole("heading", { name: /Сайн байна уу/ })).toBeVisible();
+  await expect(page.locator("h1")).toBeVisible();
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   const cached = await page.evaluate(async () => { const urls: string[] = []; for (const key of await caches.keys()) for (const req of await (await caches.open(key)).keys()) urls.push(new URL(req.url).pathname); return urls; });
@@ -156,6 +156,7 @@ test("гишүүн шилжих хүсэлт илгээж, хүлээгдэж б
   expect(state.transferStatus).toBe("PENDING");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Хүсэлтээ цуцлах", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Хүсэлтээ цуцлах", exact: true }).click();
   await expect(page.getByText("Шилжих хүсэлт цуцлагдсан", { exact: true })).toBeVisible();
   expect(state.transferStatus).toBe("CANCELLED");
 });
@@ -166,6 +167,7 @@ test("очих байгууллагын админ шилжих хүсэлтий
   await page.getByRole("link", { name: "Шилжих хүсэлтүүд", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Шилжих Гишүүн" })).toBeVisible();
   await page.getByRole("button", { name: "Батлах", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Батлах", exact: true }).click();
   await expect(page.getByText("Хүлээгдэж буй хүсэлт алга.")).toBeVisible();
   expect(state.transferStatus).toBe("ACCEPTED");
 });
@@ -178,4 +180,42 @@ test("менежерт шилжилт шийдвэрлэх дэлгэц нээг
   await page.goto(`${base(baseURL!)}/member/transfers`);
   await expect(page.getByText("Зөвхөн очих байгууллагын админ шийдвэр гаргана.")).toBeVisible();
   expect(state.calls.some(call => call.includes("/membership/transfers"))).toBe(false);
+});
+
+test("гишүүний UI нь Gerege-ийн хэмжээс, dark mode болон жижиг дэлгэцийг дэмжинэ", async ({ page, baseURL }, testInfo) => {
+  await memberAPI(page);
+  for (const width of [320, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base(baseURL!)}/member`);
+    await expect(page.getByRole("heading", { name: "Миний гишүүнчлэл", exact: true })).toBeVisible();
+    await expect(page.locator(".sdy-action-list").first()).toBeVisible();
+    for (const dark of [false, true]) {
+      await page.evaluate(dark => document.documentElement.classList.toggle("dark", dark), dark);
+      const dimensions = await page.evaluate(() => {
+        const shell = document.querySelector(".sdy-member-shell")!;
+        const list = document.querySelector(".sdy-action-list")!;
+        const main = document.querySelector(".sdy-member-main > div:last-child")!;
+        return { overflow: document.documentElement.scrollWidth > innerWidth, radius: getComputedStyle(list).borderRadius, font: getComputedStyle(shell).fontSize, mainWidth: main.getBoundingClientRect().width };
+      });
+      expect(dimensions).toMatchObject({ overflow: false, radius: "8px", font: "14px" });
+      expect(dimensions.mainWidth).toBeLessThanOrEqual(720);
+      if (width <= 1024) {
+        await expect(page.locator(".sdy-member-sidebar")).toBeHidden();
+        await expect(page.locator(".sdy-member-tabs a")).toHaveCount(5);
+        const targets = await page.locator(".sdy-member-tabs a").evaluateAll(links => links.map(link => ({ width: link.getBoundingClientRect().width, height: link.getBoundingClientRect().height })));
+        expect(targets.every(target => target.width >= 44 && target.height >= 44)).toBe(true);
+      } else {
+        await expect(page.locator(".sdy-member-sidebar")).toBeVisible();
+        await expect(page.locator(".sdy-member-tabs")).toBeHidden();
+      }
+      await page.screenshot({ path: testInfo.outputPath(`member-${width}-${dark ? "dark" : "light"}.png`), fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByRole("button", { name: "Өөр салбарт шилжих", exact: true }).click();
+  expect(await page.getByRole("combobox", { name: "Шилжиж очих байгууллага", exact: true }).evaluate(input => getComputedStyle(input).fontSize)).toBe("16px");
+  await page.getByRole("link", { name: "Миний хураамж", exact: true }).click();
+  await expect(page).toHaveTitle(/Миний хураамж/);
+  await expect(page.locator("h1")).toBeFocused();
+  await expect(page.getByRole("link", { name: "Буцах", exact: true })).toBeVisible();
 });
