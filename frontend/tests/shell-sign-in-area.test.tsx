@@ -84,6 +84,6 @@ test("a handover is spent rather than sent to the sign-in screen", async () => {
 test("a screen behind the door still sends a stranger to sign in", async () => {
   shellAt("/profile");
 
-  await waitFor(() => expect(route.push).toHaveBeenCalledWith("/login"));
+  await waitFor(() => expect(route.push).toHaveBeenCalledWith("/login?next=%2Fprofile"));
   expect(api.getMe).toHaveBeenCalled();
 });

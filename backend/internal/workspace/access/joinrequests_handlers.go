@@ -17,11 +17,15 @@ import (
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/auth"
 )
 
-// HandleJoinRequests is the queue. Administrator only, like everything else
-// under /admin/access: it is a list of people's names and addresses, and the
-// decision it leads to is who may act here.
+// HandleJoinRequests serves the active organisation's admission queue.
+// Routes require membership.manage, or the legacy administrator gate.
 func (h *Handlers) HandleJoinRequests(w http.ResponseWriter, r *http.Request) {
-	queue, err := h.PendingJoinRequests(r.Context())
+	claims, err := auth.UserFromContext(r.Context())
+	if err != nil || claims.WorkspaceID == "" {
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	queue, err := h.PendingJoinRequests(r.Context(), claims.WorkspaceID)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "failed to list join requests")
 		return
@@ -48,7 +52,7 @@ func (h *Handlers) HandleDecideJoinRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	switch err := h.Decide(r.Context(), chi.URLParam(r, "id"), claims.UserID, body.Accept); {
+	switch err := h.Decide(r.Context(), claims.WorkspaceID, chi.URLParam(r, "id"), claims.UserID, body.Accept); {
 	case err == nil:
 		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 	case errors.Is(err, ErrNoSuchRequest):

@@ -74,7 +74,7 @@ export default function manifest(): MetadataRoute.Manifest {
     // launcher labels the icon in before the app itself has loaded a locale.
     lang: "mn",
     dir: "ltr",
-    start_url: "/",
+    start_url: "/member",
     scope: "/",
     display: "standalone",
     orientation: "any",
@@ -88,21 +88,21 @@ export default function manifest(): MetadataRoute.Manifest {
     // so this is a small list of destinations rather than a second menu.
     shortcuts: [
       {
-        name: "Аппын дэлгүүр",
-        short_name: "Аппууд",
-        url: "/apps",
+        name: "Миний гишүүнчлэл",
+        short_name: "Нүүр",
+        url: "/member",
         icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
       },
       {
-        name: "SSO клиентүүд",
-        short_name: "SSO",
-        url: "/sso-clients",
+        name: "Арга хэмжээ",
+        short_name: "Арга хэмжээ",
+        url: "/module/events",
         icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
       },
       {
-        name: "Тохиргоо",
-        short_name: "Тохиргоо",
-        url: "/settings/apps",
+        name: "Миний бүртгэл",
+        short_name: "Бүртгэл",
+        url: "/profile",
         icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
       },
     ],

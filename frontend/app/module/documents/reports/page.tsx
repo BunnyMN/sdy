@@ -1,6 +1,6 @@
 "use client";
 
-import ReportsPage from "@/app/reports/page";
+import ReportsScreen from "@/components/reports/ReportsScreen";
 
 /**
  * Тайлан — documents аппын дотор. Дэлгэц нь платформын тайлангийн нэгдсэн
@@ -10,5 +10,5 @@ import ReportsPage from "@/app/reports/page";
  * ажиллуулагчийнх: тайлан нэмэхэд энэ файл өөрчлөгдөхгүй.
  */
 export default function DocumentsReportsPage() {
-  return <ReportsPage appFilter="io.gerege.nexus.documents" />;
+  return <ReportsScreen appFilter="io.gerege.nexus.documents" />;
 }

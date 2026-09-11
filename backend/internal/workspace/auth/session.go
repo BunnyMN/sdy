@@ -276,7 +276,8 @@ func (s *SessionStore) TenantsForUser(ctx context.Context, userID string) ([]Ten
 		`SELECT t.id::text, t.name, t.slug, t.kind
 		   FROM workspace.memberships m
 		   JOIN registry.tenants t ON t.id = m.tenant_id
-		  WHERE m.user_id = $1
+		  WHERE m.user_id = $1 AND m.active
+		    AND t.suspended_at IS NULL AND t.deletion_scheduled_at IS NULL
 		  ORDER BY (t.kind = 'personal'), t.name, t.id`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list tenants for user: %w", err)
@@ -335,7 +336,10 @@ func (s *SessionStore) SwitchTenant(ctx context.Context, token, tenantID string)
 
 	var member bool
 	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM workspace.memberships WHERE user_id = $1 AND tenant_id = $2)`,
+		`SELECT EXISTS (SELECT 1 FROM workspace.memberships m
+		 JOIN registry.tenants t ON t.id=m.tenant_id
+		 WHERE m.user_id=$1 AND m.tenant_id=$2 AND m.active
+		 AND t.suspended_at IS NULL AND t.deletion_scheduled_at IS NULL)`,
 		userID, tenantID).Scan(&member); err != nil {
 		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
 	}

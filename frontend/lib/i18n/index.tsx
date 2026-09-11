@@ -268,6 +268,14 @@ export function I18nProvider({
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
+// Next may render the root 404 without the layout when it rejects an unknown
+// Server Action. Preserve the existing locale/brand when the layout is there,
+// and supply a provider only for that standalone fallback.
+export function I18nFallback({ children }: { children: React.ReactNode }) {
+  const parent = useContext(I18nContext);
+  return parent ? children : <I18nProvider>{children}</I18nProvider>;
+}
+
 export function useI18n(): I18nValue {
   const context = useContext(I18nContext);
   if (!context) {

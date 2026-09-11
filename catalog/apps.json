@@ -7,18 +7,80 @@
     "icon_url": "/icons/events.png",
     "category": "Union",
     "visibility": "public",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "translations": {
       "mn": {
         "name": "Арга хэмжээ",
         "description": "Байгууллагын арга хэмжээг зарлах, гишүүдийг бүртгэх, ирцийг тэмдэглэх.",
         "category": "Холбоо"
       },
-      "ru": { "name": "Мероприятия", "description": "Объявляйте мероприятия организации, регистрируйте участников и отмечайте явку.", "category": "Союз" },
-      "zh": { "name": "活动", "description": "发布组织的活动，让成员报名并记录出席情况。", "category": "联盟" },
-      "fr": { "name": "Événements", "description": "Annoncez les événements de l'organisation, inscrivez les membres et notez les présences.", "category": "Union" },
-      "es": { "name": "Eventos", "description": "Anuncie los eventos de la organización, inscriba a los miembros y registre la asistencia.", "category": "Unión" },
-      "ar": { "name": "الفعاليات", "description": "أعلن عن فعاليات المنظمة، وسجّل الأعضاء، ودوّن الحضور.", "category": "الاتحاد" }
+      "ru": {
+        "name": "Мероприятия",
+        "description": "Объявляйте мероприятия организации, регистрируйте участников и отмечайте явку.",
+        "category": "Союз"
+      },
+      "zh": {
+        "name": "活动",
+        "description": "发布组织的活动，让成员报名并记录出席情况。",
+        "category": "联盟"
+      },
+      "fr": {
+        "name": "Événements",
+        "description": "Annoncez les événements de l'organisation, inscrivez les membres et notez les présences.",
+        "category": "Union"
+      },
+      "es": {
+        "name": "Eventos",
+        "description": "Anuncie los eventos de la organización, inscriba a los miembros y registre la asistencia.",
+        "category": "Unión"
+      },
+      "ar": {
+        "name": "الفعاليات",
+        "description": "أعلن عن فعاليات المنظمة، وسجّل الأعضاء، ودوّن الحضور.",
+        "category": "الاتحاد"
+      }
+    }
+  },
+  {
+    "id": "mn.sdy.membership",
+    "slug": "membership",
+    "name": "Membership dues",
+    "description": "Monthly dues, transfer reports and a reviewed payment ledger.",
+    "icon_url": "/icons/app-192.png",
+    "category": "Union",
+    "visibility": "public",
+    "version": "1.0.0",
+    "translations": {
+      "mn": {
+        "name": "Гишүүний хураамж",
+        "description": "Сарын хураамж, шилжүүлгийн мэдээлэл, баталгаажсан төлөлтийн бүртгэл.",
+        "category": "Холбоо"
+      },
+      "ru": {
+        "name": "Членские взносы",
+        "description": "Ежемесячные взносы и подтверждённые платежи.",
+        "category": "Союз"
+      },
+      "zh": {
+        "name": "会费",
+        "description": "每月会费和已审核付款记录。",
+        "category": "联盟"
+      },
+      "fr": {
+        "name": "Cotisations",
+        "description": "Cotisations mensuelles et paiements vérifiés.",
+        "category": "Union"
+      },
+      "es": {
+        "name": "Cuotas",
+        "description": "Cuotas mensuales y pagos verificados.",
+        "category": "Unión"
+      },
+      "ar": {
+        "name": "رسوم العضوية",
+        "description": "رسوم شهرية ومدفوعات معتمدة.",
+        "category": "الاتحاد"
+      }
     }
   }
 ]

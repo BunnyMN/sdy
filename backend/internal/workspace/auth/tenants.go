@@ -88,7 +88,8 @@ func (h *Handlers) FirstOrganisationFor(ctx context.Context, userID string) (str
 		`SELECT m.tenant_id::text
 		   FROM workspace.memberships m
 		   JOIN registry.tenants t ON t.id = m.tenant_id
-		  WHERE m.user_id = $1 AND t.kind = 'organisation'
+		  WHERE m.user_id = $1 AND m.active AND t.kind = 'organisation'
+		    AND t.suspended_at IS NULL AND t.deletion_scheduled_at IS NULL
 		  ORDER BY m.created_at, m.tenant_id LIMIT 1`, userID).Scan(&tenantID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoOrganisation

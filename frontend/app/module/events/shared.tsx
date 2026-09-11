@@ -6,7 +6,7 @@
  * хуудсаа экспортолдог.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { EventInput, EventRecord, EventStatus } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
@@ -45,12 +45,14 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
   busy: boolean;
 }) {
   const { t } = useI18n();
+  const formID = useId();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [startsAt, setStartsAt] = useState(toLocalInput(initial?.starts_at ?? null));
   const [endsAt, setEndsAt] = useState(toLocalInput(initial?.ends_at ?? null));
   const [capacity, setCapacity] = useState(initial?.capacity ? String(initial.capacity) : "");
+  const [points, setPoints] = useState(String(initial?.points_value ?? 0));
   const [status, setStatus] = useState<EventStatus>(initial?.status ?? "planned");
   const [failed, setFailed] = useState("");
 
@@ -63,7 +65,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
       await onSave({
         title: title.trim(), description: description.trim(), location: location.trim(),
         starts_at: starts, ends_at: fromLocalInput(endsAt),
-        capacity: capacity.trim() ? Number(capacity) : null, status,
+        capacity: capacity.trim() ? Number(capacity) : null, status, points_value: Number(points),
       });
     } catch (err: unknown) {
       setFailed(err instanceof Error ? err.message : "—");
@@ -75,40 +77,45 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
     <form onSubmit={submit} className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">{initial ? t("events.view.edit_title") : t("events.view.new_title")}</h2>
       <div>
-        <label className={label}>{t("events.field.title")}</label>
-        <input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
+        <label htmlFor={`${formID}-title`} className={label}>{t("events.field.title")}</label>
+        <input id={`${formID}-title`} required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
       </div>
       <div>
-        <label className={label}>{t("events.field.description")}</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={fieldClass} />
+        <label htmlFor={`${formID}-description`} className={label}>{t("events.field.description")}</label>
+        <textarea id={`${formID}-description`} maxLength={10000} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={fieldClass} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={label}>{t("events.field.starts_at")}</label>
-          <input required type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={fieldClass} />
+          <label htmlFor={`${formID}-starts`} className={label}>{t("events.field.starts_at")}</label>
+          <input id={`${formID}-starts`} required type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={fieldClass} />
         </div>
         <div>
-          <label className={label}>{t("events.field.ends_at")}</label>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={fieldClass} />
+          <label htmlFor={`${formID}-ends`} className={label}>{t("events.field.ends_at")}</label>
+          <input id={`${formID}-ends`} type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={fieldClass} />
         </div>
         <div>
-          <label className={label}>{t("events.field.location")}</label>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} className={fieldClass} />
+          <label htmlFor={`${formID}-location`} className={label}>{t("events.field.location")}</label>
+          <input id={`${formID}-location`} maxLength={500} value={location} onChange={(e) => setLocation(e.target.value)} className={fieldClass} />
         </div>
         <div>
-          <label className={label}>{t("events.field.capacity")} <span className="font-normal">({t("events.field.capacity_hint")})</span></label>
-          <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={fieldClass} />
+          <label htmlFor={`${formID}-capacity`} className={label}>{t("events.field.capacity")} <span className="font-normal">({t("events.field.capacity_hint")})</span></label>
+          <input id={`${formID}-capacity`} type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={fieldClass} />
         </div>
         {initial && (
           <div>
-            <label className={label}>{t("events.field.status")}</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className={selectClass}>
+            <label htmlFor={`${formID}-status`} className={label}>{t("events.field.status")}</label>
+            <select id={`${formID}-status`} value={status} onChange={(e) => setStatus(e.target.value as EventStatus)} className={selectClass}>
               {(["planned", "done", "cancelled"] as EventStatus[]).map((s) => (
                 <option key={s} value={s}>{t(`events.status.${s}`)}</option>
               ))}
             </select>
           </div>
         )}
+        <div>
+          <label htmlFor={`${formID}-points`} className={label}>{t("events.field.points")}</label>
+          <input id={`${formID}-points`} type="number" required min={0} max={100000} step={1} value={points} onChange={e => setPoints(e.target.value)} className={fieldClass} />
+          <p className="mt-1 text-xs text-muted">{t("events.field.points_hint")}</p>
+        </div>
       </div>
       {failed && <ErrorNote>{failed}</ErrorNote>}
       <div className="flex justify-end gap-2">
@@ -122,4 +129,3 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
     </form>
   );
 }
-

@@ -74,6 +74,9 @@ func New(deps Deps) *Handlers {
 // every other replica.
 func (h *Handlers) ForgetGate(tenantID string) {
 	h.bus.Invalidate(GateCacheName, memo.Key(tenantID, ""))
+	// Install/upgrade also grants permissions. A manager who used the site
+	// before installation must not keep the old grant set for another 30s.
+	h.bus.Invalidate(access.GrantCacheName, access.TenantPrefix(tenantID))
 }
 
 // GateCacheName is what the invalidation bus knows the gate cache as.

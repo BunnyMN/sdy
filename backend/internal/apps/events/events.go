@@ -66,7 +66,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.0.0" }
+func (m *Module) Version() string { return "1.1.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -107,11 +107,16 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.With(read).Get("/", m.list)
 		er.With(manage).Post("/", m.create)
 		er.With(manage).Get("/members", m.members)
+		er.With(read).Get("/mine", m.myParticipation)
+		er.With(read).Get("/points", m.myPoints)
+		er.With(manage).Get("/summary", m.summary)
 		er.Route("/{id}", func(one chi.Router) {
 			one.With(read).Get("/", m.get)
 			one.With(manage).Put("/", m.update)
 			one.With(read).Post("/register", m.register)
 			one.With(read).Delete("/register", m.withdraw)
+			one.With(manage).Post("/check-in-code", m.issueCheckin)
+			one.With(read, nexus.RateLimit(10, 2)).Post("/check-in", m.checkIn)
 			one.With(read).Get("/attendance", m.attendance)
 			one.With(manage).Post("/attendance", m.addParticipant)
 			one.With(manage).Put("/attendance/{userID}", m.mark)
@@ -137,7 +142,8 @@ type Event struct {
 	Registered int `json:"registered"`
 	Attended   int `json:"attended"`
 	// MyStatus is the caller's own row, or "" when they have none.
-	MyStatus string `json:"my_status"`
+	MyStatus    string `json:"my_status"`
+	PointsValue int    `json:"points_value"`
 }
 
 type Participant struct {
@@ -158,15 +164,25 @@ type eventInput struct {
 	EndsAt      *string `json:"ends_at"`
 	Capacity    *int    `json:"capacity"`
 	Status      string  `json:"status"`
+	PointsValue *int    `json:"points_value,omitempty"`
 }
 
 func (in *eventInput) validate() (start time.Time, end *time.Time, err error) {
+	if in.PointsValue != nil && (*in.PointsValue < 0 || *in.PointsValue > 100000) {
+		return start, nil, errors.New("points must be between 0 and 100000")
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Title == "" {
 		return start, nil, errors.New("title is required")
 	}
 	if len([]rune(in.Title)) > 200 {
 		return start, nil, errors.New("title is too long")
+	}
+	if len([]rune(strings.TrimSpace(in.Description))) > 10000 {
+		return start, nil, errors.New("description is too long")
+	}
+	if len([]rune(strings.TrimSpace(in.Location))) > 500 {
+		return start, nil, errors.New("location is too long")
 	}
 	start, err = time.Parse(time.RFC3339, strings.TrimSpace(in.StartsAt))
 	if err != nil {
@@ -216,7 +232,7 @@ const eventColumns = `
 	       e.status, e.created_by::text, e.created_at,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status <> 'absent')::int,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status = 'attended')::int,
-	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), '')
+	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), ''), e.points_value
 	  FROM events_events e
 	 WHERE e.tenant_id = $1::uuid`
 
@@ -225,7 +241,7 @@ func scanEvent(row pgx.Row) (Event, error) {
 	var starts, created time.Time
 	var ends *time.Time
 	if err := row.Scan(&e.ID, &e.Title, &e.Description, &e.Location, &starts, &ends, &e.Capacity,
-		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus); err != nil {
+		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus, &e.PointsValue); err != nil {
 		return e, err
 	}
 	e.StartsAt, e.EndsAt, e.CreatedAt = stamp(starts), stampPtr(ends), stamp(created)
@@ -234,6 +250,45 @@ func scanEvent(row pgx.Row) (Event, error) {
 
 func (m *Module) loadEvent(ctx context.Context, tenantID, userID, id string) (Event, error) {
 	return scanEvent(m.db.QueryRow(ctx, eventColumns+` AND e.id = $3::uuid`, tenantID, userID, id))
+}
+
+// lockEvent serializes every change to an event and its attendance on the
+// parent row. Read the counts in a separate READ COMMITTED statement AFTER
+// acquiring the lock: a SELECT containing both the lock and the counts could
+// retain a snapshot from before another registration committed.
+func (m *Module) lockEvent(ctx context.Context, tenantID, userID, id string) (pgx.Tx, Event, error) {
+	tx, err := m.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return nil, Event{}, err
+	}
+	var locked string
+	err = tx.QueryRow(ctx, `SELECT id::text FROM events_events
+		WHERE tenant_id = $1::uuid AND id = $2::uuid FOR UPDATE`, tenantID, id).Scan(&locked)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, Event{}, err
+	}
+	e, err := scanEvent(tx.QueryRow(ctx, eventColumns+` AND e.id = $3::uuid`, tenantID, userID, id))
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, Event{}, err
+	}
+	return tx, e, nil
+}
+
+func eventError(w http.ResponseWriter, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		nexus.Error(w, http.StatusNotFound, "no such event")
+		return
+	}
+	nexus.Error(w, http.StatusInternalServerError, "could not read the event")
+}
+
+// An absent participant occupies no seat. Keeping or releasing an existing
+// seat is allowed even when the event is full.
+func needsUnavailableSeat(e Event, status string) bool {
+	return status != "absent" && (e.MyStatus == "" || e.MyStatus == "absent") &&
+		e.Capacity != nil && e.Registered >= *e.Capacity
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -286,6 +341,10 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		}
 		events = append(events, e)
 	}
+	if rows.Err() != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not list events")
+		return
+	}
 	nexus.JSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
@@ -326,11 +385,11 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 	}
 	var id string
 	if err := m.db.QueryRow(r.Context(), `
-		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid)
+		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by, points_value)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, COALESCE($10,0))
 		RETURNING id::text`,
 		claims.WorkspaceID, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status, claims.UserID).Scan(&id); err != nil {
+		start, end, in.Capacity, in.Status, claims.UserID, in.PointsValue).Scan(&id); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not create the event")
 		return
 	}
@@ -363,19 +422,37 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 	if in.Status == "" {
 		in.Status = "planned"
 	}
-	tag, err := m.db.Exec(r.Context(), `
+	tx, current, err := m.lockEvent(r.Context(), claims.WorkspaceID, claims.UserID, id)
+	if err != nil {
+		eventError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if in.Capacity != nil && *in.Capacity < current.Registered {
+		nexus.Error(w, http.StatusConflict, "capacity is below the number of participants")
+		return
+	}
+	if in.PointsValue != nil && *in.PointsValue != current.PointsValue && current.Attended > 0 {
+		nexus.Error(w, http.StatusConflict, "points cannot change after attendance has been recorded")
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `
 		UPDATE events_events
 		   SET title = $3, description = $4, location = $5, starts_at = $6, ends_at = $7,
-		       capacity = $8, status = $9, updated_at = NOW()
+		       capacity = $8, status = $9, points_value = COALESCE($10, points_value), updated_at = NOW()
 		 WHERE tenant_id = $1::uuid AND id = $2::uuid`,
 		claims.WorkspaceID, id, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status)
+		start, end, in.Capacity, in.Status, in.PointsValue)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not update the event")
 		return
 	}
 	if tag.RowsAffected() == 0 {
 		nexus.Error(w, http.StatusNotFound, "no such event")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not update the event")
 		return
 	}
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.update", id,
@@ -397,15 +474,12 @@ func (m *Module) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	e, err := m.loadEvent(r.Context(), claims.WorkspaceID, claims.UserID, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		nexus.Error(w, http.StatusNotFound, "no such event")
-		return
-	}
+	tx, e, err := m.lockEvent(r.Context(), claims.WorkspaceID, claims.UserID, id)
 	if err != nil {
-		nexus.Error(w, http.StatusInternalServerError, "could not read the event")
+		eventError(w, err)
 		return
 	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
 	if e.Status != "planned" {
 		nexus.Error(w, http.StatusConflict, "this event is not taking registrations")
 		return
@@ -414,15 +488,19 @@ func (m *Module) register(w http.ResponseWriter, r *http.Request) {
 		nexus.JSON(w, http.StatusOK, map[string]any{"status": e.MyStatus, "changed": false})
 		return
 	}
-	if e.Capacity != nil && e.Registered >= *e.Capacity {
+	if needsUnavailableSeat(e, "registered") {
 		nexus.Error(w, http.StatusConflict, "this event is full")
 		return
 	}
-	if _, err := m.db.Exec(r.Context(), `
+	if _, err := tx.Exec(r.Context(), `
 		INSERT INTO events_attendance (tenant_id, event_id, user_id)
 		VALUES ($1::uuid, $2::uuid, $3::uuid)
 		ON CONFLICT (event_id, user_id) DO NOTHING`,
 		claims.WorkspaceID, id, claims.UserID); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not register")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not register")
 		return
 	}
@@ -431,19 +509,37 @@ func (m *Module) register(w http.ResponseWriter, r *http.Request) {
 }
 
 // withdraw takes the member's own name off again — only while it is still a
-// registration. A row somebody marked attended or absent is the organiser's
-// record of what happened, not the member's to erase.
+// registration and the event is planned. A row marked attended or absent is
+// the organiser's record of what happened, not the member's to erase.
 func (m *Module) withdraw(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	tag, err := m.db.Exec(r.Context(), `
+	tx, e, err := m.lockEvent(r.Context(), claims.WorkspaceID, claims.UserID, id)
+	if err != nil {
+		eventError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if e.Status != "planned" {
+		nexus.Error(w, http.StatusConflict, "this event is not taking registration changes")
+		return
+	}
+	if e.MyStatus != "" && e.MyStatus != "registered" {
+		nexus.Error(w, http.StatusConflict, "recorded attendance cannot be withdrawn")
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `
 		DELETE FROM events_attendance
 		 WHERE tenant_id = $1::uuid AND event_id = $2::uuid AND user_id = $3::uuid AND status = 'registered'`,
 		claims.WorkspaceID, id, claims.UserID)
 	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not withdraw")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not withdraw")
 		return
 	}
@@ -465,7 +561,11 @@ func (m *Module) attendance(w http.ResponseWriter, r *http.Request) {
 	var exists bool
 	if err := m.db.QueryRow(r.Context(),
 		`SELECT EXISTS (SELECT 1 FROM events_events WHERE tenant_id = $1::uuid AND id = $2::uuid)`,
-		claims.WorkspaceID, id).Scan(&exists); err != nil || !exists {
+		claims.WorkspaceID, id).Scan(&exists); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not read the event")
+		return
+	}
+	if !exists {
 		nexus.Error(w, http.StatusNotFound, "no such event")
 		return
 	}
@@ -492,6 +592,10 @@ func (m *Module) attendance(w http.ResponseWriter, r *http.Request) {
 		}
 		p.RegisteredAt, p.CheckedAt = stamp(registered), stampPtr(checked)
 		people = append(people, p)
+	}
+	if rows.Err() != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not list the participants")
+		return
 	}
 	nexus.JSON(w, http.StatusOK, map[string]any{"participants": people})
 }
@@ -529,7 +633,17 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		checked, checkedBy = &now, &claims.UserID
 	}
-	tag, err := m.db.Exec(r.Context(), `
+	tx, e, err := m.lockEvent(r.Context(), claims.WorkspaceID, in.UserID, id)
+	if err != nil {
+		eventError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if needsUnavailableSeat(e, in.Status) {
+		nexus.Error(w, http.StatusConflict, "this event is full")
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `
 		INSERT INTO events_attendance (tenant_id, event_id, user_id, status, checked_at, checked_by)
 		SELECT $1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid
 		 WHERE EXISTS (SELECT 1 FROM events_events WHERE tenant_id = $1::uuid AND id = $2::uuid)
@@ -542,6 +656,14 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 	if tag.RowsAffected() == 0 {
 		nexus.Error(w, http.StatusNotFound, "no such event")
+		return
+	}
+	if err := syncPoints(r.Context(), tx, e, claims.WorkspaceID, in.UserID, claims.UserID, in.Status, "attendance.add"); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record participation points")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not add the participant")
 		return
 	}
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.attendance.add", id,
@@ -575,7 +697,21 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		checked, checkedBy = &now, &claims.UserID
 	}
-	tag, err := m.db.Exec(r.Context(), `
+	tx, e, err := m.lockEvent(r.Context(), claims.WorkspaceID, userID, id)
+	if err != nil {
+		eventError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if e.MyStatus == "" {
+		nexus.Error(w, http.StatusNotFound, "that person is not on this event's list")
+		return
+	}
+	if needsUnavailableSeat(e, in.Status) {
+		nexus.Error(w, http.StatusConflict, "this event is full")
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `
 		UPDATE events_attendance
 		   SET status = $4, note = $5, checked_at = $6, checked_by = $7::uuid
 		 WHERE tenant_id = $1::uuid AND event_id = $2::uuid AND user_id = $3::uuid`,
@@ -586,6 +722,14 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 	}
 	if tag.RowsAffected() == 0 {
 		nexus.Error(w, http.StatusNotFound, "that person is not on this event's list")
+		return
+	}
+	if err := syncPoints(r.Context(), tx, e, claims.WorkspaceID, userID, claims.UserID, in.Status, "attendance.mark"); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record participation points")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record attendance")
 		return
 	}
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.attendance.mark", id,

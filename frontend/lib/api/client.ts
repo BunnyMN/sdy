@@ -333,6 +333,10 @@ export const coreApi = {
     request<{
       providers: Array<{ slug: string; name: string; code: string; title: string }>;
     }>(`/me/directory?code=${encodeURIComponent(code)}`),
+  getBranches: () => request<{ branches: Array<{ slug: string; name: string; parent_slug?: string }> }>("/me/branches"),
+  askToJoinBranch: (slug: string, message: string) => request<{ ok: boolean; joined: boolean; workspace_id: string; workspace_name: string }>("/me/branch-requests", { method: "POST", body: JSON.stringify({ slug, message }) }),
+  getAdmissionRequests: () => request<{ requests: Array<{ id: string; user_id: string; name: string; email: string; message: string; status: string; created_at: string }> }>("/membership/join-requests"),
+  decideAdmissionRequest: (id: string, accept: boolean) => request<{ ok: boolean }>(`/membership/join-requests/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ accept }) }),
   // This organisation's own published services, and publishing or withdrawing
   // one. Reading is any member's; changing it is the administrator's.
   getPublishedServices: () =>

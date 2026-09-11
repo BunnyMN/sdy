@@ -73,9 +73,10 @@ func TestTheAppRailIsOrderedByTheManifests(t *testing.T) {
 	// actually draws is whatever its catalogue carries; what is asserted here
 	// is that the core contributes nothing to it.
 	wantRail := []string{
-		// The union's events app, order 10 in its manifest — the only app this
+		// SDY events and dues, in manifest order; the apps this
 		// catalogue carries since the platform's own left for the App Store.
 		"mn.sdy.events",
+		"mn.sdy.membership",
 	}
 	if len(rail) != len(wantRail) {
 		t.Fatalf("the rail holds %v, want %v", rail, wantRail)

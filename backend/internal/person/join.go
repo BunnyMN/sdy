@@ -42,6 +42,20 @@ const CoreApp = "io.gerege.nexus.core"
 // under a different name.
 var ErrNotAsked = errors.New("no organisation answers to that name")
 
+func (s *Store) AskBranch(ctx context.Context, userID, slug, message string) (Outcome, error) {
+	var eligible bool
+	err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM registry.tenants
+		WHERE slug = $1 AND kind = 'organisation' AND membership_branch
+		AND suspended_at IS NULL AND deletion_scheduled_at IS NULL)`, strings.ToLower(strings.TrimSpace(slug))).Scan(&eligible)
+	if err != nil {
+		return Outcome{}, err
+	}
+	if !eligible {
+		return Outcome{}, ErrNotAsked
+	}
+	return s.Ask(ctx, userID, slug, message)
+}
+
 // Ask records that this person would like to join an organisation.
 //
 // The write crosses a workspace boundary — the asker is bound to their own and

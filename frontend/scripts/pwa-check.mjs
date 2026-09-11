@@ -119,6 +119,8 @@ const cases = [
   ["a build asset", `${ORIGIN}/_next/static/chunks/a.js`, {}, true],
   ["an app icon", `${ORIGIN}/icons/app-192.png`, {}, true],
   ["the brand mark", `${ORIGIN}/brand.webp`, {}, true],
+  ["a no-store page navigation", `${ORIGIN}/member`, { mode: "navigate", cache: "no-store" }, true],
+  ["an offline reload", `${ORIGIN}/member`, { mode: "navigate", cache: "reload" }, true],
   ["a page navigation", `${ORIGIN}/apps`, { mode: "navigate" }, true],
 ];
 

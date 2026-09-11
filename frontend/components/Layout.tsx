@@ -16,7 +16,7 @@ import { currentDeviceLine, type DeviceLine } from "@/lib/deviceLine";
 import { MenuIcon } from "@/lib/icons";
 import { isPublicPath } from "@/lib/publicRoutes";
 import { homeScreensVisible, organisationScreensVisible } from "@/lib/workspaceKind.mjs";
-import { LayoutGrid, Settings, Menu as HamburgerIcon, Palette, Building2, Megaphone, Search, Ellipsis, ShieldCheck, RefreshCw, MailCheck, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, Sparkles, Inbox} from "lucide-react";
+import { LayoutGrid, Settings, Menu as HamburgerIcon, Palette, Building2, Megaphone, Search, Ellipsis, ShieldCheck, RefreshCw, MailCheck, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, Sparkles, Inbox, CheckCircle2} from "lucide-react";
 
 // app_order and app_chrome describe the app rather than the entry: where its
 // tile sits in the rail, and whether it has a tile at all. Both come from the
@@ -110,7 +110,10 @@ export default function Layout({children}:{children:React.ReactNode}){
         // Төхөөрөмжийн шугам дээр `/login` нь шугамын нүүр рүү эргэж
         // шилжүүлэгддэг тул энд түлхвэл мөчлөг үүснэ.
         if(currentDeviceLine())return;
-        router.push("/login");
+        if(pathname==="/member/check-in"&&location.hash){
+          try{sessionStorage.setItem("sdy.checkin",JSON.stringify({fragment:location.hash,expires:Date.now()+5*60*1000}))}catch{/* Storage may be disabled. */}
+        }
+        router.push(`/login?next=${encodeURIComponent(pathname)}`);
       }finally{
         if(!cancelled)setLoading(false);
       }
@@ -221,13 +224,20 @@ export default function Layout({children}:{children:React.ReactNode}){
   // тийш нь илгээнэ — провайдер өөрийнхөө session-ийг хааж, бүртгэлтэй
   // post-logout хаягаар нь энэ суулгац руу буцаана.
   async function logout(){let endSession="";try{const res=await api.logout();endSession=res.end_session_url||""}catch{}resetAccess();forgetTenants();if(endSession)window.location.assign(endSession);else router.replace("/")}
-  const brandTitle=selected?.name||(t("web.label.platform"));
+  const memberArea=pathname.startsWith("/member")||pathname.startsWith("/module/events")||pathname==="/profile";
+  const brandTitle=selected?.name||(memberArea?t("membership.home"):t("web.label.platform"));
   // A home is a workspace and gets this shell, minus the screens that are about
   // being a company. See lib/workspaceKind.mjs for why the rule lives there
   // rather than as the same condition written out four times here.
   const company=organisationScreensVisible(user?.workspace_kind);
   const ownHome=homeScreensVisible(user?.workspace_kind);
-  const mobileAppTabs=[
+  const mobileAppTabs=memberArea?[
+    {id:"member-home",href:"/member",external:false,active:pathname==="/member",label:t("membership.nav_home"),icon:<Building2 className="w-5 h-5"/>},
+    ...(company?[{id:"member-events",href:"/module/events",external:false,active:pathname.startsWith("/module/events"),label:t("membership.events"),icon:<MenuIcon name="calendar-days" className="w-5 h-5"/>}]:[]),
+    ...(company?[{id:"member-participation",href:"/member/participation",external:false,active:pathname==="/member/participation"||pathname==="/member/check-in",label:t("membership.nav_attendance"),icon:<CheckCircle2 className="w-5 h-5"/>},
+    {id:"member-dues",href:"/member/dues",external:false,active:pathname==="/member/dues"||pathname==="/member/finance",label:t("dues.nav"),icon:<MenuIcon name="wallet" className="w-5 h-5"/>}]:[]),
+    {id:"member-profile",href:"/profile",external:false,active:pathname==="/profile",label:t("membership.nav_profile"),icon:<ShieldCheck className="w-5 h-5"/>},
+  ]:[
     // The platform tab is the way back out of an app on a phone, so it always
     // exists — it is where it goes that changes. The app store is the shelf a
     // company buys from; a home has nothing to buy, and the person's own record
@@ -240,9 +250,11 @@ export default function Layout({children}:{children:React.ReactNode}){
   const remainingMobileTabs=hasMobileMore?mobileAppTabs.slice(4):[];
 
   if(isPublic)return <>{children}</>;
-  if(loading)return <div className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
+  if(loading||!user)return <div className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
 
   const platformMenus=<><MenuGroup id={PLATFORM_GROUPS.modules} title={t("web.group.modules")} closed={closedGroups.includes(PLATFORM_GROUPS.modules)} onToggle={toggleGroup}>
+    <NavLink href="/member" active={pathname==="/member"} icon={<Building2 className="w-5 h-5"/>} label={t("membership.home")}/>
+    {company&&(user?.is_admin||user?.permissions?.includes("membership.manage"))&&<NavLink href="/member/requests" active={pathname==="/member/requests"} icon={<Inbox className="w-5 h-5"/>} label={t("membership.requests")}/>}
     {/* The mirror of the two lines below: an organisation's screens are hidden
         in a home, and the home's own screen is hidden in an organisation. A
         member of a company asks for things through the company, so this list

@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/events"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/membership"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
 
@@ -56,5 +57,6 @@ func Bootstrap(p nexus.Platform) Runtime {
 	// itself with nexus in its constructor and arrives at the tenant through
 	// the catalogue (catalog/apps.json) like any distribution's module.
 	events.New(p)
+	membership.New(p)
 	return Runtime{}
 }

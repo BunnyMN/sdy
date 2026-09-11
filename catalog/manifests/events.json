@@ -1,12 +1,20 @@
 {
   "id": "mn.sdy.events",
   "name": "Events",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "platform": ">=1.0.0",
   "order": 10,
   "publisher": "sdy",
-  "authors": [{ "name": "Социал Демократ Монголын Залуучуудын Холбоо" }],
-  "maintainers": [{ "name": "Социал Демократ Монголын Залуучуудын Холбоо" }],
+  "authors": [
+    {
+      "name": "Социал Демократ Монголын Залуучуудын Холбоо"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "Социал Демократ Монголын Залуучуудын Холбоо"
+    }
+  ],
   "repository": "https://github.com/BunnyMN/sdy",
   "homepage": "https://e-sdy.mn",
   "license": "Apache-2.0",
@@ -16,13 +24,18 @@
       "code": "events.read",
       "name": "See events",
       "description": "See the organisation's events, register for one and see who is coming",
-      "default_roles": ["manager", "user"]
+      "default_roles": [
+        "manager",
+        "user"
+      ]
     },
     {
       "code": "events.manage",
       "name": "Run events",
       "description": "Create and edit events, add participants and mark attendance",
-      "default_roles": ["manager"]
+      "default_roles": [
+        "manager"
+      ]
     }
   ],
   "menus": [

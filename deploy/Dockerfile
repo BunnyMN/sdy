@@ -58,6 +58,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" \
 # reasoning as above — the host has a Docker daemon and nothing else.
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" \
         -o /bin/tenant-bootstrap ./cmd/tenant-bootstrap
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" \
+        -o /bin/sdy-provision ./cmd/sdy-provision
 
 
 # Production Alpine image
@@ -86,6 +88,7 @@ COPY --from=builder /bin/catalog-diff /app/catalog-diff
 COPY --from=builder /bin/publish-catalog /app/publish-catalog
 COPY --from=builder /bin/operator-bootstrap /app/operator-bootstrap
 COPY --from=builder /bin/tenant-bootstrap /app/tenant-bootstrap
+COPY --from=builder /bin/sdy-provision /app/sdy-provision
 # App-store catalog + goose migrations are read from disk at runtime.
 COPY catalog/ /app/catalog/
 COPY backend/db/migrations/ /app/db/migrations/

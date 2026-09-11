@@ -66,6 +66,7 @@ const CORE_PREFIXES = [
   // deployment with no such module answers with an empty list rather than a
   // 404. An app's endpoint is one that stops existing when the app is removed.
   "/me",
+  "/membership",
 ];
 
 const source = readFileSync(clientPath, "utf8");
