@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { currentDeviceLine } from "@/lib/deviceLine";
 import { Download, X, Share } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useBrand } from "@/lib/brandContext";
 
 /**
  * Installing the platform from the browser, and the worker that makes it
@@ -28,6 +29,16 @@ interface InstallPromptEvent extends Event {
 }
 
 const DISMISSED_KEY = "gerege_install_dismissed";
+
+function wasDismissed(): boolean {
+  try { return window.localStorage.getItem(DISMISSED_KEY) === "1"; }
+  catch { return false; }
+}
+
+function rememberDismissal() {
+  try { window.localStorage.setItem(DISMISSED_KEY, "1"); }
+  catch { /* Dismiss for this page even when browser storage is unavailable. */ }
+}
 
 /** Whether this is already running as an installed app rather than in a tab. */
 function runningInstalled(): boolean {
@@ -55,6 +66,7 @@ function isAppleMobile(): boolean {
 
 export default function InstallApp() {
   const { t } = useI18n();
+  const brand = useBrand();
   const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
   const [showAppleHint, setShowAppleHint] = useState(false);
   const [hidden, setHidden] = useState(true);
@@ -82,7 +94,7 @@ export default function InstallApp() {
     // апп дотор сууж байгаа бөгөөд түүнийг PWA болгож "суулгах" нь тэр аппыг
     // өөрийг нь хоёр дахин үүсгэнэ гэсэн үг. Хөтчийн шугам дээр урьдын адил.
     if (currentDeviceLine()) return;
-    if (window.localStorage.getItem(DISMISSED_KEY) === "1") return;
+    if (wasDismissed()) return;
 
     const onPrompt = (event: Event) => {
       // Holding the event is what lets the offer be made in our own words, at a
@@ -122,12 +134,12 @@ export default function InstallApp() {
     // fresh one if the browser decides to offer again.
     setPrompt(null);
     setHidden(true);
-    if (outcome === "dismissed") window.localStorage.setItem(DISMISSED_KEY, "1");
+    if (outcome === "dismissed") rememberDismissal();
   }, [prompt]);
 
   const dismiss = useCallback(() => {
     setHidden(true);
-    window.localStorage.setItem(DISMISSED_KEY, "1");
+    rememberDismissal();
   }, []);
 
   if (hidden || (!prompt && !showAppleHint)) return null;
@@ -145,7 +157,7 @@ export default function InstallApp() {
         }}
       >
         <div className="flex items-start gap-3">
-          <img src="/icons/app-192.png" alt="" className="h-10 w-10 rounded-lg" />
+          <img src={brand.iconUrl || "/icons/app-192.png"} alt="" className="h-10 w-10 rounded-lg" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">{t("pwa.install.title")}</p>
             <p className="mt-0.5 text-xs opacity-70">{t("pwa.install.body")}</p>

@@ -154,6 +154,24 @@ func (f *duesFixture) prepare(t *testing.T) []Charge {
 	return charges
 }
 
+func TestInactiveMembersKeepOldChargesWithoutNewDues(t *testing.T) {
+	f := newDuesFixture(t)
+	f.prepare(t)
+	if _, err := f.pool.Exec(context.Background(), `UPDATE workspace.memberships SET active=false,deactivated_at=now() WHERE tenant_id=$1 AND user_id=$2`, f.tenant, f.users[1]); err != nil {
+		t.Fatal(err)
+	}
+	w := f.request("POST", "/charges", `{"period":"2026-10"}`, f.tenant, f.users[0], true)
+	status(t, w, 200)
+	if !strings.Contains(w.Body.String(), `"created":2`) {
+		t.Fatal("inactive membership was charged", w.Body.String())
+	}
+	var old, fresh int
+	err := f.pool.QueryRow(context.Background(), `SELECT count(*) FILTER(WHERE period='2026-09-01'),count(*) FILTER(WHERE period='2026-10-01') FROM membership_dues_charges WHERE tenant_id=$1 AND user_id=$2`, f.tenant, f.users[1]).Scan(&old, &fresh)
+	if err != nil || old != 1 || fresh != 0 {
+		t.Fatalf("inactive member old=%d fresh=%d err=%v", old, fresh, err)
+	}
+}
+
 func TestDuesPrivacyReviewAndReversal(t *testing.T) {
 	f := newDuesFixture(t)
 	charges := f.prepare(t)

@@ -2,6 +2,20 @@
   "app_id": "mn.sdy.membership",
   "entries": [
     {
+      "version": "1.0.1",
+      "released_at": "2026-09-11",
+      "kind": "fix",
+      "summary": {
+        "mn": "Идэвхгүй гишүүнд шинэ хураамж ногдуулахгүй.",
+        "en": "Exclude inactive memberships from new dues."
+      },
+      "details": {
+        "mn": "Шинэ сарын ногдуулалтад зөвхөн идэвхтэй гишүүнчлэл орно. Өмнөх ногдуулалт, төлөлт, үлдэгдлийн түүх хадгалагдана.",
+        "en": "New monthly charges include only active memberships. Earlier charges, payments and balances are preserved."
+      },
+      "authors": ["sdy"]
+    },
+    {
       "version": "1.0.0",
       "released_at": "2026-09-10",
       "kind": "feature",

@@ -65,9 +65,8 @@ func (h *Handlers) Middleware(next http.Handler) http.Handler {
 			// plane, through this same middleware.
 			ctx = nexus.WithPersonScope(ctx)
 		}
-		// The organisations this session reads across, straight from the
-		// session row. dbguard turns it into the policy's array; almost every
-		// session carries none and behaves exactly as it always has.
+		// Resolve intersects the saved selection with current active memberships
+		// and available organisations before dbguard turns it into the RLS array.
 		ctx = nexus.WithAllowedWorkspaces(ctx, claims.AllowedWorkspaceIDs)
 
 		next.ServeHTTP(w, r.WithContext(ctx))

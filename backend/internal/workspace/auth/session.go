@@ -210,7 +210,10 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (UserClaims, e
 		       AND last_seen_at < NOW() - $3::interval
 		)
 		SELECT s.user_id::text, COALESCE(s.tenant_id::text, ''), u.email,
-		        ARRAY(SELECT a::text FROM unnest(s.allowed_tenant_ids) a) AS allowed,
+		        ARRAY(SELECT a.id::text FROM unnest(s.allowed_tenant_ids) a(id)
+		          JOIN workspace.memberships am ON am.tenant_id=a.id AND am.user_id=s.user_id AND am.active
+		          JOIN registry.tenants org ON org.id=a.id
+		          WHERE org.suspended_at IS NULL AND org.deletion_scheduled_at IS NULL ORDER BY a.id) AS allowed,
 		        COALESCE(s.impersonated_by::text, '') AS impersonated_by,
 		        EXISTS (
 		            SELECT 1 FROM workspace.memberships m
@@ -223,7 +226,7 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (UserClaims, e
 		   JOIN live ON live.id = s.id
 		   JOIN registry.users u ON u.id = s.user_id
 		   LEFT JOIN workspace.memberships sm
-		          ON sm.tenant_id = s.tenant_id AND sm.user_id = s.user_id
+		          ON sm.tenant_id = s.tenant_id AND sm.user_id = s.user_id AND sm.active
 		  WHERE s.tenant_id IS NULL OR sm.user_id IS NOT NULL`,
 		hashToken(token), nullableTime(idleCutoff), touchInterval.String()).
 		Scan(&claims.UserID, &claims.WorkspaceID, &claims.Email, &claims.AllowedWorkspaceIDs,
@@ -424,7 +427,9 @@ func (s *SessionStore) SetActiveTenants(ctx context.Context, token string, tenan
 	rows, err := s.db.Query(ctx,
 		`SELECT m.tenant_id::text FROM workspace.memberships m
 		  JOIN workspace.sessions s ON s.token_hash = $1 AND s.user_id = m.user_id
-		 WHERE m.tenant_id = ANY($2::uuid[]) AND m.active`,
+		  JOIN registry.tenants t ON t.id=m.tenant_id
+		 WHERE m.tenant_id = ANY($2::uuid[]) AND m.active
+		 AND t.suspended_at IS NULL AND t.deletion_scheduled_at IS NULL`,
 		hashToken(token), candidates)
 	if err != nil {
 		return nil, fmt.Errorf("check memberships: %w", err)

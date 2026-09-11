@@ -412,9 +412,9 @@ jobs:
       - name: Require the SDY registration and membership journey tests to run
         if: matrix.shard == 1
         run: |
-          go test -race -count=1 -p 1 -run 'TestConcurrentRegistrationCannotOverbook|TestSDYJoinInstallAndAttendanceJourney|TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory|TestDuesPrivacyReviewAndReversal|TestConcurrentDuesApprovalsCannotOverpay' -v \
-            ./internal/apps/events ./internal/apps/membership ./pkg/host | tee /tmp/sdy-journey.log
-          for test in TestConcurrentRegistrationCannotOverbook TestSDYJoinInstallAndAttendanceJourney TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory TestDuesPrivacyReviewAndReversal TestConcurrentDuesApprovalsCannotOverpay; do
+          go test -race -count=1 -p 1 -run 'TestConcurrentRegistrationCannotOverbook|TestSDYJoinInstallAndAttendanceJourney|TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory|TestDuesPrivacyReviewAndReversal|TestConcurrentDuesApprovalsCannotOverpay|TestInactiveMembersKeepOldChargesWithoutNewDues|TestDeactivationEndsExistingWorkspaceSession|TestSavedWorkspaceSelectionLosesUnavailableMemberships' -v \
+            ./internal/apps/events ./internal/apps/membership ./internal/workspace/auth ./pkg/host | tee /tmp/sdy-journey.log
+          for test in TestConcurrentRegistrationCannotOverbook TestSDYJoinInstallAndAttendanceJourney TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory TestDuesPrivacyReviewAndReversal TestConcurrentDuesApprovalsCannotOverpay TestInactiveMembersKeepOldChargesWithoutNewDues TestDeactivationEndsExistingWorkspaceSession TestSavedWorkspaceSelectionLosesUnavailableMemberships; do
             if ! grep -Fq -- "--- PASS: $test " /tmp/sdy-journey.log; then
               echo "::error::$test did not pass — check TEST_DATABASE_URL and the test name"
               exit 1

@@ -108,7 +108,7 @@ func (m *Module) createCharges(w http.ResponseWriter, r *http.Request) {
 	due := period.AddDate(0, 0, day-1)
 	tag, err := tx.Exec(r.Context(), `INSERT INTO membership_dues_charges(tenant_id,user_id,period,amount,due_date)
 		SELECT $1,m.user_id,$2,$3,$4 FROM workspace.memberships m
-		WHERE m.tenant_id=$1 ON CONFLICT(tenant_id,user_id,period) DO NOTHING`, c.WorkspaceID, period, amount, due)
+		WHERE m.tenant_id=$1 AND m.active ON CONFLICT(tenant_id,user_id,period) DO NOTHING`, c.WorkspaceID, period, amount, due)
 	if fail(w, err) || fail(w, tx.Commit(r.Context())) {
 		return
 	}
