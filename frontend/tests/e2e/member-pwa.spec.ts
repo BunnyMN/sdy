@@ -14,7 +14,7 @@ const branches = [
 ];
 
 async function memberAPI(page: Page, role: "applicant" | "member" | "manager" | "admin" = "member") {
-  const state = { transferStatus: "" as string, approved: false, requested: false, checked: false, payment: false, signedIn: true, calls: [] as string[] };
+  const state = { notificationPath: "/member/record", switchedTo: "", profile: { phone: "", residence: "", notifications_enabled: true }, memberStatus: "active", readNotifications: false, transferStatus: "" as string, approved: false, requested: false, checked: false, payment: false, signedIn: true, calls: [] as string[] };
   await page.route("**/api/v1/**", async route => {
     const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
     const method = route.request().method(); state.calls.push(`${method} ${path}`);
@@ -24,8 +24,22 @@ async function memberAPI(page: Page, role: "applicant" | "member" | "manager" | 
       workspace_kind: joined ? "organisation" : "personal", is_admin: role === "admin",
       permissions: joined ? ["events.read", "membership.read", ...(role === "manager" ? ["events.manage", "membership.manage"] : [])] : [],
     }) : json(route, { error: "unauthorized" }, 401);
+    if (path === "/auth/switch-tenant") { state.switchedTo = route.request().postDataJSON().tenant_id; return json(route, { ok: true }); }
     if (path === "/menus") return json(route, []);
     if (path === "/profile") return json(route, { id: "member-1", name: "Тест Гишүүн", email: "test@example.test", identities: [], organisations: joined ? [{ id: "branch-1", slug: branches[0].slug, name: branches[0].name }] : [], active_sessions: 1 });
+    if (path === "/me/member-record") {
+      if (method === "PUT") { state.profile = route.request().postDataJSON(); return json(route, state.profile); }
+      return json(route, { memberships: joined ? [{ tenant_id: "branch-1", slug: branches[0].slug, name: branches[0].name, is_primary: true, status: state.memberStatus, has_access: true, member_since: "2026-09-01T00:00:00Z" }] : [], profile: state.profile, history: [], has_more: false, next_offset: 0 });
+    }
+    if (path === "/me/notifications") return json(route, { items: [{ id: "notification-1", title: "Гишүүнчлэлийн төлөв өөрчлөгдлөө", kind: "membership", body: branches[0].name, path: state.notificationPath, created_at: "2026-09-15T00:00:00Z", read_at: state.readNotifications ? "2026-09-15T01:00:00Z" : null }], unread: state.readNotifications ? 0 : 1, has_more: false, next_offset: 0 });
+    if (path.startsWith("/me/notifications/")) { state.readNotifications = true; return json(route, { ok: true }); }
+    if (path === "/membership/members") return json(route, { members: [{ user_id: "member-1", name: "Тест Гишүүн", email: "test@example.test", is_primary: true, status: state.memberStatus, has_access: true, member_since: "2026-09-01T00:00:00Z", roles: ["user"] }], has_more: false, next_offset: 0 });
+    if (path === "/membership/members/member-1/status") { const input = route.request().postDataJSON(); expect(input.reason).not.toBe(""); state.memberStatus = input.status; return json(route, { ok: true }); }
+    if (path === "/membership/summary") return json(route, { active_members: 1, suspended_members: 0, expired_members: 0, former_members: 0, access_without_membership: 2, pending_applications: 3, pending_transfers: role === "admin" ? 1 : null });
+    if (path === "/events/summary") return json(route, { events: 2, registrations: 5, attended: 4, active_members: 3, points: 40 });
+    if (path === "/dues/finance") return json(route, { charges: [], payments: [], totals: { charged: 10000, received: 4000, outstanding: 6000, waived: 0 }, has_more: false, next_offset: 0 });
+    if (path === "/me/dues-history") return json(route, { charges: [{ id: "old-charge", tenant_id: "old-branch", branch: "Өмнөх салбар", period: "2026-08", amount: 10000, paid: 4000, balance: 6000, waived: false }], payments: [], has_more: false, next_offset: 50 });
+    if (path === "/me/participation-history") return json(route, { items: [{ id: "old-attendance", branch: "Өмнөх салбар", title: "Өмнөх уулзалт", starts_at: "2026-08-01T00:00:00Z", status: "attended", points: 10 }], entries: [], total_points: 10, has_more: false, next_offset: 50 });
     if (path === "/auth/tenants") return json(route, { current: joined ? "branch-1" : "home-1", active: [], tenants: [] });
     const transfer = { id: "transfer-1", from_tenant_id: "branch-1", from_name: branches[0].name, tenant_id: "branch-2", to_name: branches[1].name, name: "Шилжих Гишүүн", email: "transfer@example.test", message: "Хаяг өөрчлөгдсөн", status: state.transferStatus, created_at: "2026-09-11T01:00:00Z" };
     if (path === "/me/transfers" && method === "POST") { expect(route.request().postDataJSON()).toMatchObject({ from_tenant_id: "branch-1", slug: branches[1].slug, message: "Хаяг өөрчлөгдсөн" }); state.transferStatus = "PENDING"; return json(route, { ok: true, id: "transfer-1" }); }
@@ -53,6 +67,70 @@ async function memberAPI(page: Page, role: "applicant" | "member" | "manager" | 
   });
   return state;
 }
+
+test("гишүүн холбоо барих мэдээлэл, мэдэгдлийн тохиргоогоо хадгална", async ({ page, baseURL }) => {
+  const state = await memberAPI(page);
+  await page.goto(`${base(baseURL!)}/member/record`);
+  await page.getByLabel("Утас", { exact: true }).fill("99112233");
+  await page.getByLabel("Оршин суугаа аймаг, сум", { exact: true }).fill("Дархан сум");
+  await page.getByLabel("Апп дотор шинэ мэдэгдэл хүлээн авах").uncheck();
+  await page.getByRole("button", { name: "Хадгалах", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Хадгалагдлаа");
+  expect(state.profile).toEqual({ phone: "99112233", residence: "Дархан сум", notifications_enabled: false });
+  await page.reload();
+  await expect(page.getByLabel("Утас", { exact: true })).toHaveValue("99112233");
+});
+
+test("мэдэгдлийг уншсанд тооцож холбогдох бүртгэлийг нээнэ", async ({ page, baseURL }) => {
+  const state = await memberAPI(page);
+  await page.goto(`${base(baseURL!)}/member/notifications`);
+  await page.getByRole("button", { name: "Уншсанд тооцох", exact: true }).click();
+  await expect(page.getByText("Уншаагүй", { exact: true })).toHaveCount(0);
+  expect(state.readNotifications).toBe(true);
+  await page.getByRole("link", { name: "Дэлгэрэнгүй үзэх", exact: true }).click();
+  await expect(page).toHaveURL(/\/member\/record$/);
+});
+
+test("арга хэмжээний мэдэгдэл өөрийн салбарыг сонгож нээнэ", async ({ page, baseURL }) => {
+  const state = await memberAPI(page);
+  state.notificationPath = "/module/events/event-1?workspace=branch-2";
+  await page.goto(`${base(baseURL!)}/member/notifications`);
+  await page.getByRole("link", { name: "Дэлгэрэнгүй үзэх", exact: true }).click();
+  await expect(page).toHaveURL(/\/module\/events\/event-1$/);
+  expect(state.switchedTo).toBe("branch-2");
+});
+
+test("админ шалтгаантайгаар гишүүнчлэлийн төлөв өөрчилнө", async ({ page, baseURL }) => {
+  const state = await memberAPI(page, "admin");
+  await page.goto(`${base(baseURL!)}/member/members`);
+  await page.getByRole("button", { name: "Гишүүнчлэлийн төлөв өөрчлөх", exact: true }).click();
+  const modal = page.getByRole("dialog");
+  await modal.getByRole("combobox", { name: "Шинэ төлөв", exact: true }).selectOption("suspended");
+  await expect(modal.getByRole("button", { name: "Хадгалах", exact: true })).toBeDisabled();
+  await modal.getByLabel("Өөрчлөлтийн шалтгаан", { exact: true }).fill("Баталсан хүсэлтийн дагуу");
+  await modal.getByRole("button", { name: "Хадгалах", exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  expect(state.memberStatus).toBe("suspended");
+  await expect(page.getByText("Түдгэлзсэн", { exact: false }).first()).toBeVisible();
+});
+
+test("менежер гишүүдийг харж болох ч үндсэн харьяалал өөрчлөхгүй", async ({ page, baseURL }) => {
+  const state = await memberAPI(page, "manager");
+  await page.goto(`${base(baseURL!)}/member/members`);
+  await expect(page.getByRole("heading", { name: "Тест Гишүүн", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Гишүүнчлэлийн төлөв өөрчлөх", exact: true })).toHaveCount(0);
+  await page.goto(`${base(baseURL!)}/member/overview`);
+  await expect(page.getByText("Идэвхтэй үндсэн гишүүд", { exact: true })).toBeVisible();
+  expect(state.calls).not.toContain("GET /dues/finance");
+});
+
+test("шилжсэн гишүүн өмнөх салбарын оролцоо, хураамжаа харна", async ({ page, baseURL }) => {
+  await memberAPI(page);
+  await page.goto(`${base(baseURL!)}/member/history`);
+  await expect(page.getByRole("heading", { name: "Өмнөх уулзалт", exact: true })).toBeVisible();
+  await expect(page.getByText("Өмнөх салбар · 2026-08", { exact: true })).toBeVisible();
+  await expect(page.getByText("Үлдэгдэл: 6,000₮", { exact: true })).toBeVisible();
+});
 
 test("утсан дээр Дархан-Уул ба дөрвөн сумын бүтцээс элсэх хүсэлт өгнө", async ({ page, baseURL }) => {
   const state = await memberAPI(page, "applicant");

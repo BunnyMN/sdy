@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, ArrowRightLeft, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Settings, Users, Wallet, WifiOff } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Settings, Users, Wallet, WifiOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useBrand } from "@/lib/brandContext";
 import type { api } from "@/lib/api";
@@ -29,10 +29,14 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
       { href: "/member/participation", label: t("membership.nav_attendance"), icon: CheckCircle2, active: ["/member/participation", "/member/check-in"].includes(pathname) },
       { href: "/member/dues", label: t("dues.nav"), icon: Wallet, active: ["/member/dues", "/member/finance"].includes(pathname) },
     ] : []),
-    { href: "/profile", label: t("membership.nav_profile"), icon: Users, active: pathname === "/profile" },
+    { href: "/member/record", label: t("membership.nav_profile"), icon: Users, active: pathname === "/member/record" || pathname === "/profile" },
   ];
   const staff = company ? [
-    ...(can("membership.manage") ? [{ href: "/member/requests", label: t("membership.requests"), icon: Users }] : []),
+    ...(can("membership.manage") ? [
+      { href: "/member/overview", label: t("membership.record.overview"), icon: ChartNoAxesCombined },
+      { href: "/member/members", label: t("membership.record.members"), icon: Users },
+      { href: "/member/requests", label: t("membership.requests"), icon: Users },
+    ] : []),
     ...(user.is_admin ? [{ href: "/member/transfers", label: t("membership.transfer_requests"), icon: ArrowRightLeft }] : []),
     ...(can("events.manage") ? [{ href: "/member/activity", label: t("events.activity.title"), icon: ChartNoAxesCombined }] : []),
     ...(can("membership.finance") ? [{ href: "/member/finance", label: t("dues.finance"), icon: Wallet }] : []),
@@ -79,6 +83,7 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
         <span><strong>{brand.name}</strong><small>{t("membership.home")}</small></span>
       </Link>
       <p className="sdy-header-organisation" title={user.tenant_name}><Building2 aria-hidden="true" /><span>{company ? user.tenant_name : t("membership.branch_pick")}</span></p>
+      <Link href="/member/notifications" aria-label={t("membership.record.notifications")} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md"><Bell className="h-5 w-5" aria-hidden="true" /></Link>
       <UserMenu user={user} onLogout={onLogout} />
     </header>
     {offline && <p role="status" className="sdy-offline"><WifiOff aria-hidden="true" />{t("membership.offline")}</p>}

@@ -249,6 +249,14 @@ func newRouter(db *pgxpool.Pool, tenantPlane *workspace.Service, platformPlane *
 	// plane may not import another. This is the file allowed to name them all,
 	// which is why the session middleware is handed across here.
 	personPlane.Routes(r, tenantPlane.AuthMiddleware())
+	// A module may expose self-only historical records after membership ends.
+	// These routes receive authentication, and own their person-scoped SQL;
+	// they never grant access to another organisation's workspace routes.
+	for _, module := range nexus.List() {
+		if personal, ok := module.(personalModule); ok {
+			personal.RegisterPersonalRoutes(r, tenantPlane.AuthMiddleware())
+		}
+	}
 	// Last, and unconditionally: the wizard answers 404 to everything until it
 	// is armed, so mounting it on a deployment that was set up years ago costs
 	// one route table entry and nothing else.
@@ -272,4 +280,9 @@ func (s *server) StartBackgroundJobs(ctx context.Context) {
 	s.credentials.StartRefresh(ctx)
 	s.workspace.StartBackgroundJobs(ctx)
 	s.platform.StartBackgroundJobs(ctx)
+}
+
+// personalModule is an optional self-service surface owned by a compiled module.
+type personalModule interface {
+	RegisterPersonalRoutes(chi.Router, func(http.Handler) http.Handler)
 }

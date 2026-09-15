@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/person/member"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -31,6 +33,7 @@ import (
 func (s *Store) Routes(r chi.Router, gate func(http.Handler) http.Handler) {
 	r.Route("/api/v1/me", func(mr chi.Router) {
 		mr.Use(gate)
+		member.New(s.db).Routes(mr)
 		mr.Get("/items", s.HandleItems)
 		mr.Post("/join-requests", s.HandleAsk)
 		mr.Get("/directory", s.HandleDirectory)

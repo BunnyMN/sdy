@@ -247,6 +247,7 @@ func runSDYMembershipJourney(t *testing.T, transfers bool) {
 	if !strings.Contains(mine.Body.String(), `"paid":10000`) {
 		t.Fatal(mine.Body.String())
 	}
+	assertSDYMemberRecordAPI(t, admin, manager, member, do)
 	do(admin, "POST", "/api/v1/auth/switch-tenant", `{"tenant_id":"`+other+`"}`, 200)
 	do(admin, "GET", path+"/attendance", "", 403)
 	if transfers {

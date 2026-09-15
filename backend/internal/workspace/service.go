@@ -866,6 +866,9 @@ func (s *Service) Routes(r chi.Router) {
 				mr.Use(nexus.RequirePermission(s.permissions, "membership.manage"))
 				mr.Get("/join-requests", s.access.HandleJoinRequests)
 				mr.Post("/join-requests/{id}", s.access.HandleDecideJoinRequest)
+				mr.Get("/members", s.access.HandleMembers)
+				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/status", s.access.HandleMemberStatus)
+				mr.Get("/summary", s.access.HandleMemberSummary)
 			})
 
 			// Tenant access control. Mutations are deliberately admin-only;

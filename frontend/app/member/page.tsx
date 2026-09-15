@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2, CalendarDays, CheckCircle2, RefreshCw, Users, Wallet, ChartNoAxesCombined, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
+import { memberApi, type MemberRecord } from "@/lib/api/member";
 import { useI18n } from "@/lib/i18n";
 import { Banner, fieldClass, Loading } from "@/components/ui";
 
@@ -17,7 +18,7 @@ type Branch = Awaited<ReturnType<typeof api.getBranches>>["branches"][number];
 
 export default function MemberHome() {
   const { t } = useI18n();
-  const [data, setData] = useState<{ profile: Profile; me: Identity; branches: Branch[]; items: Item[]; transfers: Transfer[] } | null>(null);
+  const [data, setData] = useState<{ profile: Profile; me: Identity; branches: Branch[]; items: Item[]; transfers: Transfer[]; record: MemberRecord } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [slug, setSlug] = useState("");
@@ -26,8 +27,8 @@ export default function MemberHome() {
   const [updated, setUpdated] = useState("");
   const load = useCallback(async () => {
     try {
-      const [profile, me, directory, feed, transfers] = await Promise.all([api.profile(), api.getMe(), api.getBranches(), api.getMyItems(), api.getMyTransfers()]);
-      setData({ profile, me, transfers: transfers.requests, branches: directory.branches, items: feed.items.filter(item => item.code === "join_request") });
+      const [profile, me, directory, feed, transfers, record] = await Promise.all([api.profile(), api.getMe(), api.getBranches(), api.getMyItems(), api.getMyTransfers(), memberApi.record()]);
+      setData({ profile, me, record, transfers: transfers.requests, branches: directory.branches, items: feed.items.filter(item => item.code === "join_request") });
       setError("");
       setUpdated(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ulaanbaatar", hour: "2-digit", minute: "2-digit" }).format(new Date()));
     } catch (err) { setError(err instanceof Error ? err.message : "—"); }
@@ -58,7 +59,9 @@ export default function MemberHome() {
   }
   if (!data) return <div className="space-y-6"><h1>{t("membership.home")}</h1>{error ? <><Banner tone="error" message={t("membership.load_failed")} /><button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button></> : <Loading />}</div>;
   const { me, profile, branches, items } = data;
-  const memberships = profile.organisations.filter(org => branches.some(branch => branch.slug === org.slug));
+  const workspaces = profile.organisations.filter(org => branches.some(branch => branch.slug === org.slug));
+  const memberships = workspaces.filter(org => data.record.memberships.some(m => m.tenant_id === org.id && m.is_primary && m.status === "active"));
+  const hasPrimary = data.record.memberships.some(m => m.is_primary);
   const canAdmit = me.is_admin || me.permissions?.includes("membership.manage");
   return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
     <header className="flex items-start justify-between gap-3">
@@ -68,8 +71,8 @@ export default function MemberHome() {
     <p className="text-xs text-muted tabular-nums">{t("membership.updated", { time: updated })}</p>
     {error && <Banner tone="error" message={error} />}
     {notice && <p role="status" className="rounded-xl border border-success-border bg-success-soft p-4 text-success">{notice}</p>}
-    {memberships.map(org => <section key={org.id} className="rounded-lg border border-line bg-surface p-4 sm:p-6">
-      <p className="mb-2 flex items-center gap-2 text-xs text-muted"><Building2 className="h-4 w-4" />{t("membership.branch")}</p><h2 className="font-semibold">{org.name}</h2>
+    {workspaces.map(org => <section key={org.id} className="rounded-lg border border-line bg-surface p-4 sm:p-6">
+      <p className="mb-2 flex items-center gap-2 text-xs text-muted"><Building2 className="h-4 w-4" />{t(data.record.memberships.some(m => m.tenant_id === org.id && m.is_primary) ? "membership.record.primary" : "membership.record.other_access")}</p><h2 className="font-semibold">{org.name}</h2>
       {org.id === me.tenant_id ? <p className="mt-2 flex items-center gap-2 text-sm text-success"><CheckCircle2 className="h-4 w-4" />{t("membership.current")}</p>
         : <button disabled={busy} onClick={() => void enter(org.id)} className="mt-3 min-h-11 rounded-md border border-input px-4 text-foreground disabled:opacity-50">{t("membership.open")}</button>}
     </section>)}
@@ -86,12 +89,13 @@ export default function MemberHome() {
         {(me.is_admin || me.permissions?.includes("events.manage")) && <Link href="/member/activity"><ChartNoAxesCombined aria-hidden="true" /><span>{t("events.activity.title")}</span><ChevronRight aria-hidden="true" /></Link>}
       </div></>}
     </section>}
+    <div className="sdy-action-list"><Link href="/member/record"><Users aria-hidden="true" /><span>{t("membership.record.title")}</span><ChevronRight aria-hidden="true" /></Link><Link href="/member/notifications"><CheckCircle2 aria-hidden="true" /><span>{t("membership.record.notifications")}</span><ChevronRight aria-hidden="true" /></Link>{canAdmit && <Link href="/member/overview"><ChartNoAxesCombined aria-hidden="true" /><span>{t("membership.record.overview")}</span><ChevronRight aria-hidden="true" /></Link>}</div>
     <MembershipTransfers memberships={memberships} branches={branches} requests={data.transfers} reload={load} />
     {items.length > 0 && <section className="space-y-3" aria-label={t("membership.requests")}>{items.map(item => <div key={item.id} className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-medium">{item.provider}</h2><p className="mt-1 text-sm text-muted">{t(`membership.${item.status.toLowerCase()}`)}</p>
       {item.answer && <p className="mt-2 text-sm">{item.answer}</p>}
     </div>)}</section>}
-    {memberships.length === 0 && <form onSubmit={ask} className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
+    {!hasPrimary && <form onSubmit={ask} className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <div><h2 className="text-lg font-semibold">{t("membership.branch_pick")}</h2><p className="mt-2 text-sm text-muted">{t("membership.branch_hint")}</p></div>
       <label className="block space-y-2"><span className="text-sm font-medium">{t("membership.branch")}</span><select required value={slug} onChange={event => setSlug(event.target.value)} className={`${fieldClass} w-full min-h-11`}>
         <option value="">{t("membership.branch_pick")}</option>

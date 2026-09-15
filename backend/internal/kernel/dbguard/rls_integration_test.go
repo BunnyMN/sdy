@@ -17,6 +17,10 @@ var notIsolatedByTenant = map[string]string{
 	// them (00090, `directory_is_public_but_owned`). Isolating it by tenant
 	// would leave every deployment with a directory of one entry: its own.
 	"service_directory": "published to every organisation on purpose",
+	// People keep their own lifecycle history after leaving a branch. A branch
+	// manager can read only that branch's history. member_records_test.go
+	// exercises both rules through member_history_read under the tenant role.
+	"membership_history": "read by its subject across branches or by the current branch manager",
 }
 
 // Every module table carrying tenant_id must be protected. This table-driven

@@ -90,7 +90,7 @@ func newDuesFixture(t *testing.T) *duesFixture {
 		if _, err := pool.Exec(ctx, `INSERT INTO registry.users (id, email, name, password_hash) VALUES ($1, $2, 'Test member', 'x')`, id, id+"@example.test"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, `INSERT INTO workspace.memberships (tenant_id, user_id) VALUES ($1, $2), ($3, $2)`, f.tenant, id, f.other); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO workspace.memberships (tenant_id, user_id, is_primary, member_status, member_since) VALUES ($1, $2, true, 'active', now()), ($3, $2, false, 'none', NULL)`, f.tenant, id, f.other); err != nil {
 			t.Fatal(err)
 		}
 	}

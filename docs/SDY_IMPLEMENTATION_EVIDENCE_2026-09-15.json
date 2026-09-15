@@ -1,0 +1,132 @@
+{
+  "date": "2026-09-15",
+  "branch": "feat/admin-approved-transfers",
+  "base_commit": "90745acc",
+  "scope": "Local working-tree implementation; no commit, push or production deployment in this task.",
+  "environment": {
+    "os": "darwin/arm64",
+    "go": "1.26.6",
+    "node": "22.22.0",
+    "npm": "10.9.4",
+    "postgresql": "16.14",
+    "redis": "8.6.2",
+    "database": "sdy_implementation_v2",
+    "postgres_port": 55432,
+    "redis_port": 56379,
+    "database_disposable": true
+  },
+  "schema": {
+    "core": 113,
+    "events": 4,
+    "membership": 2
+  },
+  "modules": {
+    "events": "1.2.0",
+    "membership": "1.1.0"
+  },
+  "checks": {
+    "backend": {
+      "command": "go test -race -count=1 -p 1 -json ./...",
+      "exit_code": 0,
+      "tests_and_subtests": {
+        "pass": 822,
+        "fail": 0,
+        "skip": 0
+      },
+      "packages": {
+        "pass": 61,
+        "fail": 0,
+        "skip": 17
+      },
+      "package_skips_are_no_test_files": true
+    },
+    "vet": {
+      "command": "go vet ./...",
+      "exit_code": 0
+    },
+    "frontend_unit": {
+      "command": "npm test",
+      "files": 34,
+      "passed": 198,
+      "exit_code": 0
+    },
+    "frontend_build": {
+      "command": "npm run build -- --webpack",
+      "exit_code": 0
+    },
+    "typescript": {
+      "command": "npx tsc --noEmit",
+      "exit_code": 0,
+      "after_build": true
+    },
+    "lint": {
+      "command": "npm run lint",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 32
+    },
+    "browser": {
+      "command": "npx playwright test --workers=2",
+      "passed": 29,
+      "failed": 0,
+      "api_fixtures": true,
+      "member_viewport": [
+        390,
+        844
+      ]
+    },
+    "landing_browser": {
+      "command": "npx playwright test --config=playwright.landing.config.ts --workers=2",
+      "passed": 12,
+      "failed": 0
+    },
+    "api_boundary": "pass",
+    "pwa_cache_and_retry": "pass",
+    "shell_links": "pass",
+    "i18n": {
+      "command": "npm run i18n:check -- --warn",
+      "exit_code": 0,
+      "mn_en_complete": true,
+      "other_locale_missing_translations": 6625,
+      "strict_check_passes": false
+    },
+    "core_migrations": {
+      "fresh_up": 113,
+      "round_trip": [
+        113,
+        111,
+        113
+      ],
+      "pass": true
+    },
+    "module_migrations": {
+      "events": [
+        4,
+        3,
+        4
+      ],
+      "membership": [
+        2,
+        1,
+        2
+      ],
+      "pass": true
+    },
+    "backfill": {
+      "single_branch_primary": true,
+      "multi_branch_work_access_preserved": true,
+      "inactive_membership_not_reactivated": true
+    },
+    "preflight": {
+      "file": "deploy/scripts/sdy-membership-preflight.sql",
+      "local_pass": true,
+      "production_run": false
+    }
+  },
+  "raw_log_directory": "/private/tmp/sdy-implementation-20260915",
+  "limitations": [
+    "Browser APIs use fixtures; real session/RLS journeys are separate Go integration tests.",
+    "Production deployment and physical eID/Android/iPhone acceptance were not performed.",
+    "Push/SMS/email delivery, automatic membership expiry and cross-branch management aggregation are outside this implementation."
+  ]
+}

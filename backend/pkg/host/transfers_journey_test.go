@@ -152,6 +152,16 @@ func assertSDYTransfers(t *testing.T, pool *pgxpool.Pool, source, destination, a
 	if !strings.Contains(do(member, "GET", "/api/v1/me/transfers", "", 200).Body.String(), "ACCEPTED") {
 		t.Fatal("history lost after transfer")
 	}
+	for _, path := range []string{"/api/v1/me/dues-history", "/api/v1/me/participation-history"} {
+		w := do(member, "GET", path, "", 200)
+		if !strings.Contains(w.Body.String(), source) {
+			t.Fatalf("old branch history missing from %s: %s", path, w.Body.String())
+		}
+		other := do(admin, "GET", path+"?user_id="+member, "", 200)
+		if strings.Contains(other.Body.String(), source) {
+			t.Fatalf("history disclosed to another person: %s", other.Body.String())
+		}
+	}
 	// An admission queued before joining elsewhere also needs transfer approval.
 	var queued string
 	if err := pool.QueryRow(ctx, `INSERT INTO workspace.join_requests(tenant_id,user_id,message) VALUES($1,$2,'Old admission') RETURNING id::text`, source, member).Scan(&queued); err != nil {

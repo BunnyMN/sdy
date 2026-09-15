@@ -66,7 +66,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.1.0" }
+func (m *Module) Version() string { return "1.2.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -557,6 +557,12 @@ func (m *Module) attendance(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	permissions, err := m.permissions.GetUserPermissions(r.Context(), claims.WorkspaceID, claims.UserID)
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not check participant visibility")
+		return
+	}
+	canManage := claims.IsAdmin || permissions[PermManage]
 	id := chi.URLParam(r, "id")
 	var exists bool
 	if err := m.db.QueryRow(r.Context(),
@@ -591,6 +597,9 @@ func (m *Module) attendance(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.RegisteredAt, p.CheckedAt = stamp(registered), stampPtr(checked)
+		if !canManage {
+			p.Email, p.Note = "", ""
+		}
 		people = append(people, p)
 	}
 	if rows.Err() != nil {
@@ -707,6 +716,10 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusNotFound, "that person is not on this event's list")
 		return
 	}
+	if e.MyStatus != "registered" && e.MyStatus != in.Status && strings.TrimSpace(in.Note) == "" {
+		nexus.Error(w, http.StatusBadRequest, "provide a reason for the attendance correction")
+		return
+	}
 	if needsUnavailableSeat(e, in.Status) {
 		nexus.Error(w, http.StatusConflict, "this event is full")
 		return
@@ -733,7 +746,7 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.attendance.mark", id,
-		map[string]any{"user_id": userID, "status": in.Status})
+		map[string]any{"user_id": userID, "previous_status": e.MyStatus, "status": in.Status, "reason": strings.TrimSpace(in.Note)})
 	nexus.JSON(w, http.StatusOK, map[string]any{"status": in.Status})
 }
 

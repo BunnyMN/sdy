@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.membership",
   "entries": [
     {
+      "version": "1.1.0",
+      "released_at": "2026-09-15",
+      "kind": "feature",
+      "summary": {
+        "mn": "Үндсэн харьяалалд нэг сарын нэг хураамж, салбар дамнасан хувийн түүх.",
+        "en": "One monthly obligation at the primary branch, with personal history across branches."
+      },
+      "details": {
+        "mn": "Хураамжийг зөвхөн идэвхтэй үндсэн харьяалалд ногдуулна. Сарын дундуур шилжсэн ч нэг хүнд давхар хураамж үүсэхгүй. Өмнөх төлөлт, өр, залруулгын түүх хадгалагдаж, төлөлтийн шийдвэр апп дотор мэдэгдэнэ.",
+        "en": "Charges apply to active primary members. Transfers cannot produce two charges for the same person and month. Earlier balances, payments and corrections remain visible to their owner, and payment decisions generate in-app notifications."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.0.1",
       "released_at": "2026-09-11",
       "kind": "fix",
@@ -13,7 +29,9 @@
         "mn": "Шинэ сарын ногдуулалтад зөвхөн идэвхтэй гишүүнчлэл орно. Өмнөх ногдуулалт, төлөлт, үлдэгдлийн түүх хадгалагдана.",
         "en": "New monthly charges include only active memberships. Earlier charges, payments and balances are preserved."
       },
-      "authors": ["sdy"]
+      "authors": [
+        "sdy"
+      ]
     },
     {
       "version": "1.0.0",
