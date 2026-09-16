@@ -44,6 +44,20 @@ func (h *Handlers) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Memberships are checked live by Resolve. Organisation lifecycle state
+		// uses the same cache and invalidation bus as the acting workspace,
+		// keeping control-table locks off the ordinary request path.
+		allowed := claims.AllowedWorkspaceIDs[:0]
+		for _, id := range claims.AllowedWorkspaceIDs {
+			if id != claims.WorkspaceID {
+				if suspended, _ := h.TenantSuspended(r.Context(), id); suspended {
+					continue
+				}
+			}
+			allowed = append(allowed, id)
+		}
+		claims.AllowedWorkspaceIDs = allowed
+
 		ctx := WithUserContext(r.Context(), claims)
 		if claims.Impersonated {
 			// Everything this request records is marked as ours. It is done
@@ -65,9 +79,7 @@ func (h *Handlers) Middleware(next http.Handler) http.Handler {
 			// plane, through this same middleware.
 			ctx = nexus.WithPersonScope(ctx)
 		}
-		// The organisations this session reads across, straight from the
-		// session row. dbguard turns it into the policy's array; almost every
-		// session carries none and behaves exactly as it always has.
+		// Only the surviving selection reaches dbguard's RLS array.
 		ctx = nexus.WithAllowedWorkspaces(ctx, claims.AllowedWorkspaceIDs)
 
 		next.ServeHTTP(w, r.WithContext(ctx))

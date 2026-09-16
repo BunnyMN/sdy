@@ -121,6 +121,14 @@ test("менежер арга хэмжээ үүсгэж, оролцогч нэм
   await page.getByRole("button", { name: "Ирсэн", exact: true }).click();
   await expect(page.getByRole("button", { name: "Буцаах", exact: true })).toBeVisible();
   expect(state.people[0].status).toBe("attended");
+  await page.getByRole("button", { name: "Ирээгүй", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "Хадгалах", exact: true })).toBeDisabled();
+  await dialog.getByLabel("Өөрчлөлтийн шалтгаан", { exact: true }).fill("Зохион байгуулагчийн залруулга");
+  await dialog.getByRole("button", { name: "Хадгалах", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.people[0].status).toBe("absent");
+  expect(state.people[0].note).toBe("Зохион байгуулагчийн залруулга");
   await page.getByRole("button", { name: "Засах", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("Төлөв", { exact: true }).selectOption("done");

@@ -58,7 +58,9 @@ func TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory(t *testing.T) {
 	check(10, 1)
 	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"absent","note":"Correction"}`, f.tenant, f.users[0], true), 200)
 	check(0, 2)
-	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"attended"}`, f.tenant, f.users[0], true), 200)
+	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"attended"}`, f.tenant, f.users[0], true), 400)
+	check(0, 2)
+	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"attended","note":"Attendance confirmed with organiser"}`, f.tenant, f.users[0], true), 200)
 	check(10, 3)
 	other := f.request("GET", "/points", "", f.tenant, f.users[2], false)
 	status(t, other, 200)
@@ -77,6 +79,7 @@ func TestExpiredCheckinCodeDoesNotChangeAttendanceOrPoints(t *testing.T) {
 	f := newEventFixture(t)
 	e := f.create(t, 1)
 	user := f.users[1]
+	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Expired check-in","starts_at":"2026-10-01T02:00:00Z","points_value":10}`, f.tenant, f.users[0], true), 200)
 	status(t, f.request("POST", "/"+e.ID+"/register", "", f.tenant, user, false), 200)
 	issued := f.request("POST", "/"+e.ID+"/check-in-code", "", f.tenant, f.users[0], true)
 	status(t, issued, 200)
@@ -92,5 +95,25 @@ func TestExpiredCheckinCodeDoesNotChangeAttendanceOrPoints(t *testing.T) {
 	status(t, f.request("POST", "/"+e.ID+"/check-in", `{"token":"`+code.Token+`"}`, f.tenant, user, false), 409)
 	if f.read(t, e.ID, user).MyStatus != "registered" {
 		t.Fatal("expired code changed attendance")
+	}
+	var entries int
+	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM events_point_entries WHERE event_id=$1 AND user_id=$2`, e.ID, user).Scan(&entries); err != nil || entries != 0 {
+		t.Fatalf("expired code created points: %d %v", entries, err)
+	}
+}
+
+func TestParticipantContactsAndCorrectionNotesAreForOrganisers(t *testing.T) {
+	f := newEventFixture(t)
+	e := f.create(t, 2)
+	user := f.users[1]
+	status(t, f.request("POST", "/"+e.ID+"/register", "", f.tenant, user, false), 200)
+	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"attended","note":"Internal attendance note"}`, f.tenant, f.users[0], true), 200)
+	for _, manage := range []bool{false, true} {
+		w := f.request("GET", "/"+e.ID+"/attendance", "", f.tenant, f.users[0], manage)
+		status(t, w, 200)
+		exposed := strings.Contains(w.Body.String(), "Internal attendance note") || strings.Contains(w.Body.String(), user+"@example.test")
+		if exposed != manage {
+			t.Fatalf("participant visibility for organiser=%v: %s", manage, w.Body.String())
+		}
 	}
 }

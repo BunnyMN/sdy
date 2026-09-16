@@ -243,16 +243,16 @@ func TestCapacityIncludesOrganiserChanges(t *testing.T) {
 	mark := "/" + e.ID + "/attendance/" + member
 	status(t, f.request("POST", register, "", f.tenant, member, false), 200)
 	status(t, f.request("POST", "/"+e.ID+"/attendance", `{"user_id":"`+other+`"}`, f.tenant, admin, true), 409)
-	status(t, f.request("PUT", mark, `{"status":"attended"}`, f.tenant, admin, true), 200)
-	status(t, f.request("PUT", mark, `{"status":"absent"}`, f.tenant, admin, true), 200)
+	status(t, f.request("PUT", mark, `{"status":"attended","note":"Attendance confirmed"}`, f.tenant, admin, true), 200)
+	status(t, f.request("PUT", mark, `{"status":"absent","note":"Attendance corrected"}`, f.tenant, admin, true), 200)
 	status(t, f.request("POST", register, "", f.tenant, other, false), 200)
-	status(t, f.request("PUT", mark, `{"status":"attended"}`, f.tenant, admin, true), 409)
+	status(t, f.request("PUT", mark, `{"status":"attended","note":"Attendance confirmed"}`, f.tenant, admin, true), 409)
 	status(t, f.request("POST", "/"+e.ID+"/attendance", `{"user_id":"`+member+`","status":"registered"}`, f.tenant, admin, true), 409)
 	if got := f.read(t, e.ID, member); got.Registered != 1 || got.MyStatus != "absent" {
 		t.Fatalf("capacity/attendance changed after refusal: %+v", got)
 	}
 	status(t, f.request("DELETE", register, "", f.tenant, other, false), 200)
-	status(t, f.request("PUT", mark, `{"status":"registered"}`, f.tenant, admin, true), 200)
+	status(t, f.request("PUT", mark, `{"status":"registered","note":"Registration restored"}`, f.tenant, admin, true), 200)
 }
 
 func TestCapacityCannotBeReducedBelowAttendance(t *testing.T) {

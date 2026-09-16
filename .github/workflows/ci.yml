@@ -412,9 +412,9 @@ jobs:
       - name: Require the SDY registration and membership journey tests to run
         if: matrix.shard == 1
         run: |
-          go test -race -count=1 -p 1 -run 'TestConcurrentRegistrationCannotOverbook|TestSDYJoinInstallAndAttendanceJourney|TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory|TestDuesPrivacyReviewAndReversal|TestConcurrentDuesApprovalsCannotOverpay' -v \
-            ./internal/apps/events ./internal/apps/membership ./pkg/host | tee /tmp/sdy-journey.log
-          for test in TestConcurrentRegistrationCannotOverbook TestSDYJoinInstallAndAttendanceJourney TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory TestDuesPrivacyReviewAndReversal TestConcurrentDuesApprovalsCannotOverpay; do
+          go test -race -count=1 -p 1 -run 'TestTransferPreservesExistingWorkRolesInBothBranches|TestReadmissionDoesNotRestoreInactiveStaffPrivileges|TestMemberRecordsAndNotificationsArePersonScoped|TestPrimaryMembershipLifecyclePreservesIndependentStaffAccess|TestPrimaryMembershipCannotBeAssignedAcrossBranches|TestTransferRequesterCannotDecideTheirOwnRequest|TestTransferHistoryUsesIdentityNotMutableContactDetails|TestRecreatedMembershipCannotUseAnOldTransferRequest|TestTransferCannotChargeTheSamePersonTwiceInOneMonth|TestPartialDuesRejectionReversalAndWaiverBalance|TestConcurrentRegistrationCannotOverbook|TestSDYJoinInstallAndAttendanceJourney|TestSDYAdminApprovedTransferJourney|TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory|TestDuesPrivacyReviewAndReversal|TestConcurrentDuesApprovalsCannotOverpay|TestInactiveMembersKeepOldChargesWithoutNewDues|TestDeactivationEndsExistingWorkspaceSession|TestSavedWorkspaceSelectionLosesUnavailableMemberships|TestClosedSelectedOrganisationDoesNotReachRLS' -v \
+            ./db/migrations ./internal/apps/events ./internal/apps/membership ./internal/workspace/auth ./pkg/host | tee /tmp/sdy-journey.log
+          for test in TestTransferPreservesExistingWorkRolesInBothBranches TestReadmissionDoesNotRestoreInactiveStaffPrivileges TestMemberRecordsAndNotificationsArePersonScoped TestPrimaryMembershipLifecyclePreservesIndependentStaffAccess TestPrimaryMembershipCannotBeAssignedAcrossBranches TestTransferRequesterCannotDecideTheirOwnRequest TestTransferHistoryUsesIdentityNotMutableContactDetails TestRecreatedMembershipCannotUseAnOldTransferRequest TestTransferCannotChargeTheSamePersonTwiceInOneMonth TestPartialDuesRejectionReversalAndWaiverBalance TestConcurrentRegistrationCannotOverbook TestSDYJoinInstallAndAttendanceJourney TestSDYAdminApprovedTransferJourney TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory TestDuesPrivacyReviewAndReversal TestConcurrentDuesApprovalsCannotOverpay TestInactiveMembersKeepOldChargesWithoutNewDues TestDeactivationEndsExistingWorkspaceSession TestSavedWorkspaceSelectionLosesUnavailableMemberships TestClosedSelectedOrganisationDoesNotReachRLS; do
             if ! grep -Fq -- "--- PASS: $test " /tmp/sdy-journey.log; then
               echo "::error::$test did not pass — check TEST_DATABASE_URL and the test name"
               exit 1
@@ -499,6 +499,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: End-to-end
         run: npx playwright test
+      - name: SDY public landing — responsive and sign-in journey
+        run: npx playwright test --config playwright.landing.config.ts
       - name: Keep the traces of a failed run
         if: failure()
         uses: actions/upload-artifact@v7

@@ -860,10 +860,15 @@ func (s *Service) Routes(r chi.Router) {
 			pr.Post("/oauth2/consent", s.ssoProvider.HandleConsentDecision)
 
 			// Admission is operational; changing roles remains administrative.
+			pr.With(s.authn.RequireAdmin).Get("/membership/transfers", s.access.HandleTransferRequests)
+			pr.With(s.authn.RequireAdmin).Post("/membership/transfers/{id}", s.access.HandleDecideTransfer)
 			pr.Route("/membership", func(mr chi.Router) {
 				mr.Use(nexus.RequirePermission(s.permissions, "membership.manage"))
 				mr.Get("/join-requests", s.access.HandleJoinRequests)
 				mr.Post("/join-requests/{id}", s.access.HandleDecideJoinRequest)
+				mr.Get("/members", s.access.HandleMembers)
+				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/status", s.access.HandleMemberStatus)
+				mr.Get("/summary", s.access.HandleMemberSummary)
 			})
 
 			// Tenant access control. Mutations are deliberately admin-only;

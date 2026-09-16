@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -127,5 +128,60 @@ func TestSwitchingWithADeadSessionFails(t *testing.T) {
 
 	if _, _, err := store.SwitchTenant(ctx, token, second); !errors.Is(err, auth.ErrSessionInvalid) {
 		t.Fatalf("err=%v want=%v", err, auth.ErrSessionInvalid)
+	}
+}
+
+func TestDeactivationEndsExistingWorkspaceSession(t *testing.T) {
+	pool := openPool(t)
+	user, tenant := seedMember(t, pool)
+	ctx := context.Background()
+	store := auth.NewSessionStore(pool, time.Hour)
+	token, _, err := store.Create(ctx, user, tenant, "password", "test", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Resolve(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workspace.memberships SET active=false,deactivated_at=now() WHERE tenant_id=$1 AND user_id=$2`, tenant, user); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Resolve(ctx, token); !errors.Is(err, auth.ErrSessionInvalid) {
+		t.Fatalf("deactivated member's old session survived: %v", err)
+	}
+}
+
+func TestSavedWorkspaceSelectionLosesUnavailableMemberships(t *testing.T) {
+	pool := openPool(t)
+	user, current := seedMember(t, pool)
+	ctx := context.Background()
+	store := auth.NewSessionStore(pool, time.Hour)
+	token, _, err := store.Create(ctx, user, current, "password", "test", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []string{
+		`UPDATE workspace.memberships SET active=false,deactivated_at=now() WHERE tenant_id=$1`,
+		`DELETE FROM workspace.memberships WHERE tenant_id=$1`,
+	} {
+		other := seedTenant(t, pool, user, true)
+		if _, err := store.SetActiveTenants(ctx, token, []string{other}); err != nil {
+			t.Fatal(err)
+		}
+		claims, err := store.Resolve(ctx, token)
+		if err != nil || !slices.Contains(claims.AllowedWorkspaceIDs, other) {
+			t.Fatalf("initial selection=%v err=%v", claims.AllowedWorkspaceIDs, err)
+		}
+		if _, err := pool.Exec(ctx, change, other); err != nil {
+			t.Fatal(err)
+		}
+		claims, err = store.Resolve(ctx, token)
+		if err != nil || len(claims.AllowedWorkspaceIDs) != 1 || claims.AllowedWorkspaceIDs[0] != current {
+			t.Fatalf("stale access survived: selection=%v err=%v", claims.AllowedWorkspaceIDs, err)
+		}
+		allowed, err := store.SetActiveTenants(ctx, token, []string{other})
+		if err != nil || len(allowed) != 1 || allowed[0] != current {
+			t.Fatalf("unavailable organisation could be selected again: %v err=%v", allowed, err)
+		}
 	}
 }

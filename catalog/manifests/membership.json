@@ -1,7 +1,7 @@
 {
   "id": "mn.sdy.membership",
   "name": "Membership dues",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "platform": ">=1.0.0",
   "order": 20,
   "publisher": "sdy",

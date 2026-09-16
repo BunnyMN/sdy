@@ -5,6 +5,7 @@ import SiteHeader from "@/components/landing/SiteHeader";
 import { sectionNodes } from "@/components/landing/sections";
 import { landingSectionsFromEnv, type LandingSection } from "@/lib/landing";
 import { setupRequiredOnServer } from "@/lib/setup";
+import { brandFromEnv } from "@/lib/brandEnv";
 
 /**
  * One page per header menu item.
@@ -34,6 +35,10 @@ export default async function SectionScreen({ section }: { section: LandingSecti
   // organisation there is nothing here that is true yet, and the only person
   // who can be reading is the one who should be in the wizard.
   if (await setupRequiredOnServer()) redirect("/setup");
+  // Keep previously shared SDY public links on the member introduction.
+  if (brandFromEnv().shortName === "SDY") {
+    redirect(section === "trust" ? "/#data-access" : section === "architecture" ? "/#how-it-works" : "/#features");
+  }
   const sections = landingSectionsFromEnv();
   // A deployment that dropped the section dropped its menu item too; nothing
   // links here, and rendering a section the deployment decided not to have

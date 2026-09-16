@@ -12,7 +12,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/person/member"
+
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/httpx"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
@@ -30,11 +33,15 @@ import (
 func (s *Store) Routes(r chi.Router, gate func(http.Handler) http.Handler) {
 	r.Route("/api/v1/me", func(mr chi.Router) {
 		mr.Use(gate)
+		member.New(s.db).Routes(mr)
 		mr.Get("/items", s.HandleItems)
 		mr.Post("/join-requests", s.HandleAsk)
 		mr.Get("/directory", s.HandleDirectory)
 		mr.Get("/branches", s.HandleBranches)
 		mr.Post("/branch-requests", s.HandleAskBranch)
+		mr.Get("/transfers", s.HandleMyTransfers)
+		mr.Post("/transfers", s.HandleRequestTransfer)
+		mr.Post("/transfers/{id}/cancel", s.HandleCancelTransfer)
 	})
 }
 
@@ -119,6 +126,11 @@ func (s *Store) handleAsk(w http.ResponseWriter, r *http.Request, branchOnly boo
 	case errors.Is(err, ErrNotAsked):
 		httpx.Error(w, http.StatusNotFound, "no organisation answers to that name")
 	default:
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == "branch_transfer_required" {
+			httpx.Error(w, http.StatusConflict, pgErr.Message)
+			return
+		}
 		// Everything the function refuses is something the person can act on —
 		// already a member, the organisation is closed — so its own words go
 		// back rather than a number. They are database messages, which is not

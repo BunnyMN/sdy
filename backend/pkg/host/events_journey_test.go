@@ -22,6 +22,14 @@ import (
 // SDY-ийн бүтэн API урсгал. HTTP router, session, RLS, элсэлт, жинхэнэ
 // installer, role permission болон Events бүгд бодитоор ажиллана.
 func TestSDYJoinInstallAndAttendanceJourney(t *testing.T) {
+	runSDYMembershipJourney(t, false)
+}
+
+func TestSDYAdminApprovedTransferJourney(t *testing.T) {
+	runSDYMembershipJourney(t, true)
+}
+
+func runSDYMembershipJourney(t *testing.T, transfers bool) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set TEST_DATABASE_URL to a migrated test database")
@@ -92,6 +100,9 @@ func TestSDYJoinInstallAndAttendanceJourney(t *testing.T) {
 	}
 	// The same administrator belongs to another, uninstalled organisation.
 	exec(`INSERT INTO workspace.memberships (tenant_id,user_id) VALUES ($1,$2)`, other, admin)
+	if transfers {
+		exec(`INSERT INTO workspace.membership_roles(membership_id,role_id) SELECT m.id,r.id FROM workspace.memberships m JOIN workspace.roles r ON r.tenant_id=m.tenant_id AND r.code='admin' WHERE m.tenant_id=$1 AND m.user_id=$2 ON CONFLICT DO NOTHING`, other, admin)
+	}
 	cookies := map[string]*http.Cookie{}
 	do := func(user, method, path, body string, want int) *httptest.ResponseRecorder {
 		t.Helper()
@@ -122,6 +133,7 @@ func TestSDYJoinInstallAndAttendanceJourney(t *testing.T) {
 			t.Fatal("login did not set a session cookie")
 		}
 	}
+	do(admin, "POST", "/api/v1/auth/switch-tenant", `{"tenant_id":"`+org+`"}`, 200)
 	directory := do(member, "GET", "/api/v1/me/branches", "", 200)
 	if !strings.Contains(directory.Body.String(), "journey-"+org) {
 		t.Fatal("organisation without services is absent from the directory")
@@ -235,6 +247,10 @@ func TestSDYJoinInstallAndAttendanceJourney(t *testing.T) {
 	if !strings.Contains(mine.Body.String(), `"paid":10000`) {
 		t.Fatal(mine.Body.String())
 	}
+	assertSDYMemberRecordAPI(t, admin, manager, member, do)
 	do(admin, "POST", "/api/v1/auth/switch-tenant", `{"tenant_id":"`+other+`"}`, 200)
 	do(admin, "GET", path+"/attendance", "", 403)
+	if transfers {
+		assertSDYTransfers(t, pool, org, other, admin, manager, member, do)
+	}
 }

@@ -24,11 +24,9 @@ type InstalledApps = nexus.InstalledApps
 
 // Bootstrap builds every module this binary carries, in the order they need.
 //
-// It carries none, and that is the finished state rather than a gap: the
-// criterion ECOSYSTEM_GIT_STRATEGY set for the split was a platform that boots
-// with no business app at all and takes every one of them from a catalogue.
-// The function stays because it is the seam a distribution's own Bootstrap
-// replaces — see pkg/host.Options.Modules.
+// This SDY distribution carries Events and Membership. The upstream platform
+// may boot without business apps; a distribution assembles its own modules
+// through this seam (see pkg/host.Options.Modules).
 //
 // Where they went, and what each one left behind:
 //

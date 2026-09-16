@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.2.0",
+      "released_at": "2026-09-15",
+      "kind": "feature",
+      "summary": {
+        "mn": "Хувийн оролцооны түүх, апп доторх мэдэгдэл, шалтгаантай ирцийн залруулга.",
+        "en": "Personal participation history, in-app notifications and attendance corrections with a reason."
+      },
+      "details": {
+        "mn": "Салбар шилжсэн ч өөрийн ирц, онооны түүхээ харна. Арга хэмжээ болон ирцийн өөрчлөлтийн мэдэгдэл ирнэ. Батлагдсан ирцийг залруулахад шалтгаан шаардана; оролцогчийн имэйл, тэмдэглэлийг зөвхөн зохион байгуулагч харна.",
+        "en": "Members retain their own attendance and points history after a branch transfer. Event and attendance changes create in-app notifications. Corrections require a reason; participant email and notes are visible only to organisers."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.1.0",
       "released_at": "2026-09-10",
       "kind": "feature",

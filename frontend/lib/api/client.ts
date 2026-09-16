@@ -17,6 +17,12 @@ import { apiBase } from "@/lib/apiBase";
 
 export { apiBase };
 
+export interface MembershipTransfer {
+  id: string; from_tenant_id: string; from_name: string; tenant_id: string; to_name: string;
+  message: string; status: "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED"; created_at: string; decided_at?: string;
+  name?: string; email?: string;
+}
+
 export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   // Server-owned content (menu labels, app store copy) is translated by the
   // API, so every request carries the locale the user picked.
@@ -334,6 +340,11 @@ export const coreApi = {
       providers: Array<{ slug: string; name: string; code: string; title: string }>;
     }>(`/me/directory?code=${encodeURIComponent(code)}`),
   getBranches: () => request<{ branches: Array<{ slug: string; name: string; parent_slug?: string }> }>("/me/branches"),
+  getMyTransfers: () => request<{ requests: MembershipTransfer[] }>("/me/transfers"),
+  requestTransfer: (from_tenant_id: string, slug: string, message: string) => request<{ ok: boolean; id: string }>("/me/transfers", { method: "POST", body: JSON.stringify({ from_tenant_id, slug, message }) }),
+  cancelTransfer: (id: string) => request<{ ok: boolean }>(`/me/transfers/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  getTransferRequests: () => request<{ requests: MembershipTransfer[] }>("/membership/transfers"),
+  decideTransfer: (id: string, accept: boolean) => request<{ ok: boolean }>(`/membership/transfers/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ accept }) }),
   askToJoinBranch: (slug: string, message: string) => request<{ ok: boolean; joined: boolean; workspace_id: string; workspace_name: string }>("/me/branch-requests", { method: "POST", body: JSON.stringify({ slug, message }) }),
   getAdmissionRequests: () => request<{ requests: Array<{ id: string; user_id: string; name: string; email: string; message: string; status: string; created_at: string }> }>("/membership/join-requests"),
   decideAdmissionRequest: (id: string, accept: boolean) => request<{ ok: boolean }>(`/membership/join-requests/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ accept }) }),

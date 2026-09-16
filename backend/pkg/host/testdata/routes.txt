@@ -73,7 +73,13 @@ GET /api/v1/installed-apps
 GET /api/v1/me/branches
 GET /api/v1/me/directory
 GET /api/v1/me/items
+GET /api/v1/me/member-record
+GET /api/v1/me/notifications
+GET /api/v1/me/transfers
 GET /api/v1/membership/join-requests
+GET /api/v1/membership/members
+GET /api/v1/membership/summary
+GET /api/v1/membership/transfers
 GET /api/v1/menus
 GET /api/v1/oauth2/client-info
 GET /api/v1/oauth2/consent
@@ -169,7 +175,13 @@ POST /api/v1/devices/telemetry
 POST /api/v1/devices/token/rotate
 POST /api/v1/me/branch-requests
 POST /api/v1/me/join-requests
+POST /api/v1/me/notifications/read-all
+POST /api/v1/me/notifications/{id}/read
+POST /api/v1/me/transfers
+POST /api/v1/me/transfers/{id}/cancel
 POST /api/v1/membership/join-requests/{id}
+POST /api/v1/membership/members/{userID}/status
+POST /api/v1/membership/transfers/{id}
 POST /api/v1/oauth2/consent
 POST /api/v1/profile/identities/eid
 POST /api/v1/profile/identities/unlink
@@ -206,6 +218,7 @@ PUT /api/v1/admin/devices/staff-pin
 PUT /api/v1/admin/devices/status
 PUT /api/v1/core/me/preferences
 PUT /api/v1/core/organisation
+PUT /api/v1/me/member-record
 PUT /api/v1/profile/preferences
 PUT /api/v1/tenant/profile
 PUT /cp/api
@@ -232,6 +245,8 @@ TRACE /metrics
 [app] GET /api/v1/events/summary
 [app] GET /api/v1/events/{id}/
 [app] GET /api/v1/events/{id}/attendance
+[app] GET /api/v1/me/dues-history
+[app] GET /api/v1/me/participation-history
 [app] POST /api/v1/dues/charges
 [app] POST /api/v1/dues/charges/{id}/waive
 [app] POST /api/v1/dues/payments

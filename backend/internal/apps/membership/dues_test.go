@@ -90,7 +90,7 @@ func newDuesFixture(t *testing.T) *duesFixture {
 		if _, err := pool.Exec(ctx, `INSERT INTO registry.users (id, email, name, password_hash) VALUES ($1, $2, 'Test member', 'x')`, id, id+"@example.test"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, `INSERT INTO workspace.memberships (tenant_id, user_id) VALUES ($1, $2), ($3, $2)`, f.tenant, id, f.other); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO workspace.memberships (tenant_id, user_id, is_primary, member_status, member_since) VALUES ($1, $2, true, 'active', now()), ($3, $2, false, 'none', NULL)`, f.tenant, id, f.other); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -152,6 +152,24 @@ func (f *duesFixture) prepare(t *testing.T) []Charge {
 		charges[i] = result.Charges[0]
 	}
 	return charges
+}
+
+func TestInactiveMembersKeepOldChargesWithoutNewDues(t *testing.T) {
+	f := newDuesFixture(t)
+	f.prepare(t)
+	if _, err := f.pool.Exec(context.Background(), `UPDATE workspace.memberships SET active=false,deactivated_at=now() WHERE tenant_id=$1 AND user_id=$2`, f.tenant, f.users[1]); err != nil {
+		t.Fatal(err)
+	}
+	w := f.request("POST", "/charges", `{"period":"2026-10"}`, f.tenant, f.users[0], true)
+	status(t, w, 200)
+	if !strings.Contains(w.Body.String(), `"created":2`) {
+		t.Fatal("inactive membership was charged", w.Body.String())
+	}
+	var old, fresh int
+	err := f.pool.QueryRow(context.Background(), `SELECT count(*) FILTER(WHERE period='2026-09-01'),count(*) FILTER(WHERE period='2026-10-01') FROM membership_dues_charges WHERE tenant_id=$1 AND user_id=$2`, f.tenant, f.users[1]).Scan(&old, &fresh)
+	if err != nil || old != 1 || fresh != 0 {
+		t.Fatalf("inactive member old=%d fresh=%d err=%v", old, fresh, err)
+	}
 }
 
 func TestDuesPrivacyReviewAndReversal(t *testing.T) {

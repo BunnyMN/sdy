@@ -130,7 +130,9 @@ var platformTables = map[string]table{
 	// policy isolates by app.current_user, which is why it is the one table
 	// here that policy_shape_test.go's tenant_isolation list does not name.
 	// Migrations 00086 and 00093.
-	"person_items": {"operator", "a person's own requests"},
+	"person_items":         {"operator", "a person's own requests"},
+	"member_profiles":      {"operator", "a person's own member contact details"},
+	"member_notifications": {"operator", "a person's own in-app inbox"},
 	// Who does what, deployment-wide. In registry because it is neither one
 	// workspace's nor one person's: an organisation publishes into it and
 	// everybody reads it. Migration 00090.
@@ -164,6 +166,8 @@ var platformTables = map[string]table{
 	"installation_events":        {"workspace", "app store"},
 	"membership_roles":           {"workspace", "access control"},
 	"memberships":                {"workspace", "access control"},
+	"membership_transfers":       {"workspace", "access control"},
+	"membership_history":         {"workspace", "primary membership lifecycle history"},
 	"oauth2_access_tokens":       {"workspace", "OAuth2 provider"},
 	"oauth2_authorization_codes": {"workspace", "OAuth2 provider"},
 	"oauth2_clients":             {"workspace", "OAuth2 provider"},

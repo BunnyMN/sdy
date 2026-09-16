@@ -16,7 +16,7 @@ import { ArrowLeft, CalendarDays, Check, MapPin, Pencil, Plus, Undo2, UserPlus, 
 import { eventsApi, type AttendanceStatus, type EventInput, type EventRecord, type Participant } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { Screen, Panel, Loading, ErrorNote, Chip, useAccess } from "@/components/module/kit";
-import { Modal, selectClass } from "@/components/ui";
+import { Modal, selectClass, fieldClass } from "@/components/ui";
 import { EventForm, eventStatusTone, formatWhen } from "../shared";
 import CheckinCode from "@/components/membership/CheckinCode";
 
@@ -38,6 +38,8 @@ export default function EventPage() {
   const [adding, setAdding] = useState(false);
   const [members, setMembers] = useState<{ user_id: string; name: string; email: string }[]>([]);
   const [pick, setPick] = useState("");
+  const [correction, setCorrection] = useState<{ person: Participant; status: AttendanceStatus } | null>(null);
+  const [correctionReason, setCorrectionReason] = useState("");
 
   const load = useCallback(async () => {
     setFailed("");
@@ -77,6 +79,24 @@ export default function EventPage() {
         setFailed(err instanceof Error ? err.message : "—");
       }
     }
+  }
+
+  function mark(person: Participant, status: AttendanceStatus) {
+    if (person.status === "registered") {
+      void act(() => eventsApi.mark(id, person.user_id, status, person.note));
+    } else {
+      setCorrection({ person, status }); setCorrectionReason(""); setFailed("");
+    }
+  }
+
+  async function saveCorrection(e: React.FormEvent) {
+    e.preventDefault(); if (!correction) return;
+    setBusy(true); setFailed("");
+    try {
+      await eventsApi.mark(id, correction.person.user_id, correction.status, correctionReason.trim());
+      setCorrection(null); await load();
+    } catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
+    finally { setBusy(false); }
   }
 
   async function save(input: EventInput) {
@@ -174,17 +194,17 @@ export default function EventPage() {
                   <span className="flex gap-1">
                     {p.status !== "attended" && (
                       <button disabled={busy} title={t("events.action.mark_attended")}
-                        onClick={() => act(() => eventsApi.mark(id, p.user_id, "attended", p.note))}
+                        onClick={() => mark(p, "attended")}
                         className={`${btn} text-green-700`}><Check className="w-3.5 h-3.5" /> {t("events.action.mark_attended")}</button>
                     )}
                     {p.status !== "absent" && (
                       <button disabled={busy} title={t("events.action.mark_absent")}
-                        onClick={() => act(() => eventsApi.mark(id, p.user_id, "absent", p.note))}
+                        onClick={() => mark(p, "absent")}
                         className={btn}><X className="w-3.5 h-3.5" /> {t("events.action.mark_absent")}</button>
                     )}
                     {p.status !== "registered" && (
                       <button disabled={busy} title={t("events.action.mark_registered")}
-                        onClick={() => act(() => eventsApi.mark(id, p.user_id, "registered", p.note))}
+                        onClick={() => mark(p, "registered")}
                         className={btn}><Undo2 className="w-3.5 h-3.5" /> {t("events.action.mark_registered")}</button>
                     )}
                   </span>
@@ -195,6 +215,15 @@ export default function EventPage() {
         )}
       </Panel>
 
+      {correction && <Modal label={t("membership.record.correction")} onClose={() => { if (!busy) setCorrection(null); }}>
+        <form onSubmit={saveCorrection} className="space-y-4">
+          <h2 className="text-lg font-semibold">{t("membership.record.correction")}</h2>
+          <p>{correction.person.name} · {t(`events.attendance.${correction.status}`)}</p>
+          <label className="block space-y-2"><span>{t("membership.record.reason")}</span><textarea required maxLength={500} rows={3} value={correctionReason} onChange={e => setCorrectionReason(e.target.value)} className={`${fieldClass} w-full`} /></label>
+          {failed && <ErrorNote>{failed}</ErrorNote>}
+          <div className="flex gap-3"><button disabled={busy || !correctionReason.trim()} className="min-h-11 rounded-md bg-accent px-4 text-on-accent disabled:opacity-50">{t("dues.save")}</button><button type="button" disabled={busy} onClick={() => setCorrection(null)} className="min-h-11 rounded-md border border-input px-4">{t("membership.back")}</button></div>
+        </form>
+      </Modal>}
       {editing && (
         <Modal onClose={() => setEditing(false)} size="lg">
           <EventForm initial={event} onSave={save} onCancel={() => setEditing(false)} busy={busy} />

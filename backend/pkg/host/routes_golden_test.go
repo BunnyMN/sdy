@@ -120,6 +120,9 @@ func appModulePatterns(t *testing.T) map[string]bool {
 	passthrough := func(next http.Handler) http.Handler { return next }
 	for _, module := range nexus.List() {
 		module.RegisterRoutes(bare, passthrough)
+		if personal, ok := module.(personalModule); ok {
+			personal.RegisterPersonalRoutes(bare, passthrough)
+		}
 	}
 
 	found := map[string]bool{}

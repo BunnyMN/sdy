@@ -21,6 +21,7 @@ import (
 // boundary between the two planes, and ownership_test.go checks its own list
 // of them against this one. Two lists of the same five names drift.
 var narrowPolicies = map[string]string{
+	"membership_transfers": "destination administrators only; requester history uses a self-only function",
 	// Read-only views for the console and the tenant's own quota screen.
 	// One organisation's figures, shown to that organisation; widening them
 	// would show an operator's impersonation record to a sibling tenant.

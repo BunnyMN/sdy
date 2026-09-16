@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import SiteFooter from "@/components/landing/SiteFooter";
 import SiteHeader from "@/components/landing/SiteHeader";
 import Storefront from "@/components/landing/Storefront";
+import SdyLanding from "@/components/landing/SdyLanding";
+import { brandFromEnv } from "@/lib/brandEnv";
 import { sectionNodes } from "@/components/landing/sections";
 import { SECTION_LINKS, landingSectionsFromEnv } from "@/lib/landing";
 import { setupRequiredOnServer } from "@/lib/setup";
@@ -64,7 +66,20 @@ import { fetchStorefrontOnServer } from "@/lib/storefront";
 // arrive.
 export const dynamic = "force-dynamic";
 
+export function generateMetadata() {
+  if (brandFromEnv().shortName !== "SDY") return {};
+  return {
+    title: "SDY — Гишүүнчлэл, оролцоо нэг дор",
+    description: "SDY-ийн салбартаа элсэж, арга хэмжээнд оролцон, ирц, оноо, сарын хураамжаа нэг дороос хянаарай. e-ID Mongolia апп ашиглан нэвтэрнэ.",
+  };
+}
+
 export default async function LandingPage() {
+  const brand = brandFromEnv();
+  if (brand.shortName === "SDY") {
+    if (await setupRequiredOnServer()) redirect("/setup");
+    return <SdyLanding brand={brand} />;
+  }
   // Three questions of the same API, asked together: one page render, one wait.
   const [apps, localSignIn, setupRequired] = await Promise.all([
     fetchStorefrontOnServer(),

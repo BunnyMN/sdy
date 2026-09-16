@@ -38,7 +38,7 @@ func New(p nexus.Platform) *Module {
 }
 func (*Module) ID() string                       { return ID }
 func (*Module) Name() string                     { return "Membership" }
-func (*Module) Version() string                  { return "1.0.0" }
+func (*Module) Version() string                  { return "1.1.0" }
 func (*Module) Dependencies() []nexus.Dependency { return nil }
 func (*Module) Permissions() []nexus.PermissionDefinition {
 	return []nexus.PermissionDefinition{
