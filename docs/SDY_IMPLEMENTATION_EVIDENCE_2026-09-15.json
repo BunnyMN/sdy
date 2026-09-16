@@ -128,5 +128,11 @@
     "Browser APIs use fixtures; real session/RLS journeys are separate Go integration tests.",
     "Production deployment and physical eID/Android/iPhone acceptance were not performed.",
     "Push/SMS/email delivery, automatic membership expiry and cross-branch management aggregation are outside this implementation."
-  ]
+  ],
+  "follow_up_deployment": {
+    "date": "2026-09-16",
+    "release_commit": "72112a977c18a9d31d82b207903b4a94c3804193",
+    "report": "SDY_PRODUCTION_2026-09-16.md",
+    "evidence": "SDY_PRODUCTION_EVIDENCE_2026-09-16.json"
+  }
 }

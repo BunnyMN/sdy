@@ -1,0 +1,364 @@
+{
+  "date": "2026-09-16",
+  "url": "https://e-sdy.mn",
+  "release_commit": "72112a977c18a9d31d82b207903b4a94c3804193",
+  "main_merge_commit": "b6c25135e467fc6e6a70e5a70df0b92ad81f16c5",
+  "source_tree": "5ba5d230ef44e45d22c6bbac25b2cc42ef7f6701",
+  "pull_request": "https://github.com/BunnyMN/sdy/pull/9",
+  "checks": {
+    "backend": {
+      "command": "go test -race -count=1 -p 1 -json ./...",
+      "exit_code": 0,
+      "tests_and_subtests": {
+        "pass": 822,
+        "fail": 0,
+        "skip": 0
+      },
+      "packages": {
+        "pass": 61,
+        "fail": 0,
+        "skip": 17
+      },
+      "package_skips_are_no_test_files": true
+    },
+    "vet": {
+      "command": "go vet ./...",
+      "exit_code": 0
+    },
+    "frontend_unit": {
+      "command": "npm test",
+      "files": 34,
+      "passed": 198,
+      "exit_code": 0
+    },
+    "frontend_build": {
+      "command": "npm run build -- --webpack",
+      "exit_code": 0
+    },
+    "typescript": {
+      "command": "npx tsc --noEmit",
+      "exit_code": 0,
+      "after_build": true
+    },
+    "lint": {
+      "command": "npm run lint",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 32
+    },
+    "browser": {
+      "command": "npx playwright test --workers=2",
+      "passed": 29,
+      "failed": 0,
+      "api_fixtures": true,
+      "member_viewport": [
+        390,
+        844
+      ]
+    },
+    "landing_browser": {
+      "command": "npx playwright test --config=playwright.landing.config.ts --workers=2",
+      "passed": 12,
+      "failed": 0
+    },
+    "api_boundary": "pass",
+    "pwa_cache_and_retry": "pass",
+    "shell_links": "pass",
+    "i18n": {
+      "command": "npm run i18n:check -- --warn",
+      "exit_code": 0,
+      "mn_en_complete": true,
+      "other_locale_missing_translations": 6625,
+      "strict_check_passes": false
+    },
+    "core_migrations": {
+      "fresh_up": 113,
+      "round_trip": [
+        113,
+        111,
+        113
+      ],
+      "pass": true
+    },
+    "module_migrations": {
+      "events": [
+        4,
+        3,
+        4
+      ],
+      "membership": [
+        2,
+        1,
+        2
+      ],
+      "pass": true
+    },
+    "backfill": {
+      "single_branch_primary": true,
+      "multi_branch_work_access_preserved": true,
+      "inactive_membership_not_reactivated": true
+    },
+    "preflight": {
+      "file": "deploy/scripts/sdy-membership-preflight.sql",
+      "production_run": true,
+      "duplicate_user_month_charges": 0,
+      "ambiguous_legacy_primary_users": 1
+    },
+    "golangci_lint": {
+      "version": "2.1.6",
+      "issues": 0,
+      "exit_code": 0
+    },
+    "production_docker_build": {
+      "backend": "pass",
+      "frontend": "pass",
+      "frontend_builder": "Turbopack (standard npm run build)",
+      "platform": "linux/amd64"
+    },
+    "hostname_isolation_smoke": "pass",
+    "migration_round_trips_source": "Verified during the preceding implementation task; full backend/unit/browser suites repeated for this release."
+  },
+  "server": {
+    "production": {
+      "sha": "72112a977c18a9d31d82b207903b4a94c3804193",
+      "deployed_at_utc": "2026-09-16T04:15:43Z",
+      "schema": {
+        "core": 113,
+        "events": 4,
+        "membership": 2,
+        "primary_members": 1,
+        "updated_installations": 10
+      },
+      "images": {
+        "backend": {
+          "tag": "ghcr.io/bunnymn/sdy/backend:72112a977c18a9d31d82b207903b4a94c3804193",
+          "id": "sha256:f93fb565c0629a5a0d90aff0bffc8d8e1a04b99495cde3279ef369ffd8324445"
+        },
+        "frontend": {
+          "tag": "ghcr.io/bunnymn/sdy/frontend:72112a977c18a9d31d82b207903b4a94c3804193",
+          "id": "sha256:5aea7faea5d8dee313a7a059c278112a5902aa566dcb2c6854df630d13a40dcc"
+        }
+      },
+      "data_preserved": true,
+      "before": {
+        "roles": "e6f8c6918f40dad3b8ae121f61f5b4ca",
+        "users": 3,
+        "events": 1,
+        "charges": 0,
+        "tenants": 29,
+        "payments": 0,
+        "attendance": 0,
+        "memberships": 30,
+        "work_access": "c6575acbb252fbe13d042ca6ca926bd9"
+      },
+      "backup": {
+        "file": "/var/backups/sdy/release-20260915-membership/cutover.dump",
+        "bytes": 367683,
+        "sha256": "fb6ac6259c9b24374a90e99c6a5f6cad9229ecd24a0b3ddf1394f67981f64918"
+      },
+      "protected_routes": true,
+      "frontend_routes": true
+    },
+    "rehearsed": {
+      "sha": "72112a977c18a9d31d82b207903b4a94c3804193",
+      "restored_data_unchanged": true,
+      "schema": {
+        "core": 113,
+        "events": 4,
+        "membership": 2,
+        "primary_members": 1,
+        "updated_installations": 10
+      },
+      "journey": {
+        "profile_privacy": true,
+        "manager_boundary": true,
+        "qr_idempotency": true,
+        "payment_review": true,
+        "notifications": true,
+        "transfer_and_archived_history": true,
+        "same_month_dues": true,
+        "lifecycle": true
+      },
+      "frontend_routes": true
+    },
+    "built": {
+      "sha": "72112a977c18a9d31d82b207903b4a94c3804193",
+      "images": {
+        "backend": "sha256:f93fb565c0629a5a0d90aff0bffc8d8e1a04b99495cde3279ef369ffd8324445",
+        "frontend": "sha256:5aea7faea5d8dee313a7a059c278112a5902aa566dcb2c6854df630d13a40dcc"
+      }
+    },
+    "image-backup": {
+      "file": "/var/backups/sdy/release-20260915-membership/release-images.tar",
+      "bytes": 691962368,
+      "sha256": "fb7604a51efadade337fced47854a77b88101bab16b5a8e8e240f9bdb4cb4716",
+      "release": "72112a977c18a9d31d82b207903b4a94c3804193"
+    },
+    "database-properties": {
+      "timezone": "UTC",
+      "search_path": "workspace, registry, operator"
+    },
+    "containers": {
+      "backend": {
+        "status": "running",
+        "health": "healthy",
+        "restarts": 0
+      },
+      "frontend": {
+        "status": "running",
+        "health": null,
+        "restarts": 0
+      },
+      "postgres": {
+        "status": "running",
+        "health": "healthy",
+        "restarts": 0
+      },
+      "redis": {
+        "status": "running",
+        "health": "healthy",
+        "restarts": 0
+      }
+    }
+  },
+  "public_https": {
+    "checked_at_utc": "2026-09-16T04:16:25.094738+00:00",
+    "https_verified": true,
+    "eid_enabled": true,
+    "results": [
+      {
+        "path": "/",
+        "url": "https://e-sdy.mn/",
+        "status": 200,
+        "bytes": 61533
+      },
+      {
+        "path": "/login",
+        "url": "https://e-sdy.mn/login",
+        "status": 200,
+        "bytes": 23145
+      },
+      {
+        "path": "/member/record",
+        "url": "https://e-sdy.mn/member/record",
+        "status": 200,
+        "bytes": 22390
+      },
+      {
+        "path": "/member/history",
+        "url": "https://e-sdy.mn/member/history",
+        "status": 200,
+        "bytes": 22392
+      },
+      {
+        "path": "/member/notifications",
+        "url": "https://e-sdy.mn/member/notifications",
+        "status": 200,
+        "bytes": 22404
+      },
+      {
+        "path": "/member/members",
+        "url": "https://e-sdy.mn/member/members",
+        "status": 200,
+        "bytes": 22392
+      },
+      {
+        "path": "/member/overview",
+        "url": "https://e-sdy.mn/member/overview",
+        "status": 200,
+        "bytes": 22394
+      },
+      {
+        "path": "/api/v1/me/member-record",
+        "url": "https://e-sdy.mn/api/v1/me/member-record",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/me/notifications",
+        "url": "https://e-sdy.mn/api/v1/me/notifications",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/me/participation-history",
+        "url": "https://e-sdy.mn/api/v1/me/participation-history",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/me/dues-history",
+        "url": "https://e-sdy.mn/api/v1/me/dues-history",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/membership/members",
+        "url": "https://e-sdy.mn/api/v1/membership/members",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/membership/summary",
+        "url": "https://e-sdy.mn/api/v1/membership/summary",
+        "status": 401,
+        "bytes": 48
+      },
+      {
+        "path": "/api/v1/auth/sso/config",
+        "url": "https://e-sdy.mn/api/v1/auth/sso/config",
+        "status": 200,
+        "bytes": 110
+      },
+      {
+        "path": "/_next/static/chunks/26g4tn5b226u5.js",
+        "url": "https://e-sdy.mn/_next/static/chunks/26g4tn5b226u5.js",
+        "status": 200,
+        "bytes": 31996
+      },
+      {
+        "path": "/_next/static/chunks/1sww-sgdk2qi3.js",
+        "url": "https://e-sdy.mn/_next/static/chunks/1sww-sgdk2qi3.js",
+        "status": 200,
+        "bytes": 234756
+      },
+      {
+        "path": "/_next/static/chunks/2zx3q7e7c69qs.js",
+        "url": "https://e-sdy.mn/_next/static/chunks/2zx3q7e7c69qs.js",
+        "status": 200,
+        "bytes": 155744
+      },
+      {
+        "path": "/",
+        "url": "https://www.e-sdy.mn/",
+        "status": 200,
+        "bytes": 61533
+      }
+    ]
+  },
+  "ci": {
+    "github_actions": "jobs did not start because of account billing/spending limit",
+    "local_and_server_checks": "passed"
+  },
+  "registry": {
+    "published": false,
+    "push_error": "unauthorized",
+    "images_built_on_production_host": true,
+    "compose_application_pull_policy": "missing",
+    "offline_archive": {
+      "file": "/var/backups/sdy/release-20260915-membership/release-images.tar",
+      "bytes": 691962368,
+      "sha256": "fb7604a51efadade337fced47854a77b88101bab16b5a8e8e240f9bdb4cb4716",
+      "release": "72112a977c18a9d31d82b207903b4a94c3804193"
+    }
+  },
+  "local_test_database": "sdy_release_20260915",
+  "local_logs": "/private/tmp/sdy-production-20260915",
+  "remote_evidence": "/var/backups/sdy/release-20260915-membership",
+  "limitations": [
+    "Physical eID/Android/iPhone acceptance was not performed; public eID configuration is enabled.",
+    "Authenticated HTTP workflows used synthetic identities only in the isolated restored database; production checks were read-only.",
+    "Browser tests use API fixtures; PostgreSQL/session/RLS behavior was independently tested.",
+    "One legacy multi-branch person still needs an administrator to select a primary branch."
+  ]
+}
