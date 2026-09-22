@@ -32,7 +32,7 @@ export default function MemberRecordPage() {
     catch { setError(t("membership.load_failed")); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
+  return <div className="max-w-[720px] space-y-6 pb-6">
     <h1 className="font-semibold">{t("membership.record.title")}</h1>
     <Link href="/member/history" className="inline-flex min-h-11 items-center text-accent underline">{t("membership.record.personal_history")}</Link>
     {error && <Banner tone="error" message={error} />}

@@ -63,7 +63,7 @@ export default function MemberHome() {
   const memberships = workspaces.filter(org => data.record.memberships.some(m => m.tenant_id === org.id && m.is_primary && m.status === "active"));
   const hasPrimary = data.record.memberships.some(m => m.is_primary);
   const canAdmit = me.is_admin || me.permissions?.includes("membership.manage");
-  return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
+  return <div className="max-w-[720px] space-y-6 pb-6">
     <header className="flex items-start justify-between gap-3">
       <div><h1 className="font-semibold">{t("membership.home")}</h1><p className="mt-2 text-sm text-muted">{t("membership.welcome", { name: profile.name })}</p></div>
       <button type="button" title={t("membership.refresh")} aria-label={t("membership.refresh")} onClick={() => void load()} className="rounded-xl border border-line p-3"><RefreshCw className="h-5 w-5" /></button>

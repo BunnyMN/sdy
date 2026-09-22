@@ -40,7 +40,7 @@ export default function MemberCheckin() {
     } catch (err) { setError(err instanceof Error ? err.message : "—"); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-lg space-y-5 rounded-lg border border-line bg-surface p-6">
+  return <div className="max-w-lg space-y-5 rounded-lg border border-line bg-surface p-6">
     <h1 className="text-2xl font-semibold">{t("events.checkin.title")}</h1>
     {error && <Banner tone="error" message={error} />}
     {done ? <><p role="status" className="text-success">{t("events.checkin.success")}</p><Link href="/member/participation" className="inline-block py-3 text-accent">{t("events.participation")}</Link></>

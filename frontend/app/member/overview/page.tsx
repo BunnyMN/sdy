@@ -35,7 +35,7 @@ export default function OverviewPage() {
   if (access.loading) return <Loading />;
   if (!access.allowed) return <p>{t("membership.no_access")}</p>;
   const cards = (values: Record<string, number | null>, prefix: string, money = false) => <dl className="grid grid-cols-2 gap-3">{Object.entries(values).filter(([, value]) => value !== null).map(([key, value]) => <div key={key} className="rounded-lg border border-line bg-surface p-4 sm:p-6"><dt className="text-sm text-muted">{t(`${prefix}.${key}`)}</dt><dd className="mt-3 break-words text-2xl font-semibold tabular-nums">{money ? memberMoney(value!) : value}</dd></div>)}</dl>;
-  return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
+  return <div className="max-w-[720px] space-y-6 pb-6">
     <h1>{t("membership.record.overview")}</h1>
     {error && <Banner tone="error" message={error} />}
     {!members && !error && <Loading />}

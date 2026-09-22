@@ -46,7 +46,7 @@ export default function DuesFinance() {
   }
   if (loading) return <Loading />;
   if (!allowed) return <p>{t("dues.no_access")}</p>;
-  return <div className="mx-auto max-w-4xl space-y-5">
+  return <div className="max-w-4xl space-y-5">
     <h1 className="text-2xl font-semibold">{t("dues.finance")}</h1>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-success-soft p-4 text-success">{notice}</p>}
     {settings && <details className="rounded-lg border border-line bg-surface p-4 sm:p-6" open={!settings.enabled}>

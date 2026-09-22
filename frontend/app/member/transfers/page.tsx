@@ -32,7 +32,7 @@ export default function TransferRequests() {
   }
   if (loading) return <Loading />;
   if (!isAdmin) return <div className="space-y-4"><h1>{t("membership.no_access_title")}</h1><p>{t("membership.transfer_admin_required")}</p><Link href="/member" className="inline-flex min-h-11 items-center rounded-md border border-input px-4">{t("membership.back")}</Link></div>;
-  return <div className="mx-auto max-w-[720px] space-y-4">
+  return <div className="max-w-[720px] space-y-4">
     <header><h1 className="text-2xl font-semibold">{t("membership.transfer_requests")}</h1><p className="mt-2 text-sm text-muted">{t("membership.transfer_review_hint")}</p></header>
     <button disabled={busy} onClick={() => void load()} className="min-h-11 rounded-lg border border-line px-4">{t("membership.refresh")}</button>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="text-success">{notice}</p>}

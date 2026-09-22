@@ -65,7 +65,11 @@
 .sdy-header-organisation { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; color: var(--gerege-muted); }
 .sdy-header-organisation span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sdy-header-organisation svg { width: 16px; height: 16px; flex-shrink: 0; }
-.sdy-member-layout { display: flex; max-width: 1536px; margin-inline: auto; min-height: calc(100dvh - 56px); }
+.sdy-member-layout { display: flex; min-height: calc(100dvh - 56px); }
+/* The shell is full-bleed on purpose. Capping this row and centring it left
+   the sidebar — a panel with its own background and border — floating in the
+   middle of the page on anything wider than 1536px, while the header above it
+   still ran edge to edge. The reading column below keeps the line length. */
 .sdy-member-sidebar { position: sticky; top: 56px; display: flex; flex-direction: column; gap: 8px; flex: 0 0 240px; align-self: flex-start; height: calc(100dvh - 56px); padding: 24px 16px; background: var(--gerege-chrome); border-right: 1px solid var(--gerege-border); }
 .sdy-nav-caption { margin: 8px 8px 0; font-size: var(--sdy-text-caption); color: var(--gerege-muted); }
 .sdy-member-sidebar nav { display: grid; gap: 8px; margin-bottom: 16px; }
@@ -76,7 +80,10 @@
 .sdy-member-sidebar a[aria-current="page"] svg { color: currentColor; }
 .sdy-appearance { margin-top: auto; }
 .sdy-member-main { flex: 1; min-width: 0; padding: 24px 32px 48px; }
-.sdy-member-main > div { max-width: 720px; margin-inline: auto; }
+.sdy-member-main > div { max-width: 720px; }
+/* Left-aligned, not centred: centring the column inside the main area opened a
+   288px dead band between the sidebar and the first card, which grew with the
+   screen. The column starts where the sidebar ends and the space goes right. */
 .sdy-member-main h1 { font-size: var(--sdy-text-title); line-height: var(--sdy-text-title-line); font-weight: 600; overflow-wrap: anywhere; }
 .sdy-member-main h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
 .sdy-member-main strong { font-weight: 600; }

@@ -25,7 +25,7 @@ export default function PersonalHistoryPage() {
     } catch { setError(t("membership.load_failed")); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
+  return <div className="max-w-[720px] space-y-6 pb-6">
     <header><h1>{t("membership.record.personal_history")}</h1><p className="mt-2 text-sm text-muted">{t("membership.record.personal_history_hint")}</p></header>
     {error && <Banner tone="error" message={error} />}
     {!events && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <Loading />)}

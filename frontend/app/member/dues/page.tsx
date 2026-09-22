@@ -37,7 +37,7 @@ export default function MemberDues() {
     catch (err) { setError(err instanceof Error ? err.message : "—"); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-[720px] space-y-5">
+  return <div className="max-w-[720px] space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-semibold">{t("dues.title")}</h1>{finance && <Link className="min-h-11 rounded-lg border border-line px-4 py-3 text-sm" href="/member/finance">{t("dues.finance")}</Link>}</header>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-success-soft p-4 text-success">{notice}</p>}
     {!data && !error && <Loading />}

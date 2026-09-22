@@ -44,7 +44,7 @@ export default function NotificationsPage() {
       window.location.assign(target.pathname);
     } catch { setError(t("membership.load_failed")); setBusy(false); }
   }
-  return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
+  return <div className="max-w-[720px] space-y-6 pb-6">
     <header className="flex flex-wrap items-center justify-between gap-3"><h1>{t("membership.record.notifications")}</h1>
       {!!data?.unread && <button disabled={busy} onClick={() => void mark()} className="min-h-11 rounded-md border border-input px-4">{t("membership.record.read_all")} ({data.unread})</button>}
     </header>

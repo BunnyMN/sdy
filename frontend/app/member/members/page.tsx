@@ -40,7 +40,7 @@ export default function MembersPage() {
   if (loading) return <Loading />;
   if (!allowed) return <p>{t("membership.no_access")}</p>;
   const transitions: MemberStatus[] = editing?.status === "none" ? ["active"] : editing?.is_primary ? ["active", "suspended", "expired", "left", "alumni"] : ["active", "left", "alumni"];
-  return <div className="mx-auto max-w-[720px] space-y-5 pb-6">
+  return <div className="max-w-[720px] space-y-5 pb-6">
     <header><h1>{t("membership.record.members")}</h1><p className="mt-2 text-sm text-muted">{t("membership.record.staff_hint")}</p></header>
     <form onSubmit={e => { e.preventDefault(); setQuery(search.trim()); }} className="flex gap-2"><label className="flex-1"><span className="sr-only">{t("membership.record.search")}</span><input value={search} maxLength={100} onChange={e => setSearch(e.target.value)} placeholder={t("membership.record.search")} className={`${fieldClass} min-h-11 w-full`} /></label><button className="min-h-11 rounded-md border border-input px-4">{t("membership.record.search_button")}</button></form>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="text-success">{notice}</p>}

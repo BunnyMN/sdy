@@ -262,7 +262,7 @@ test("менежерт шилжилт шийдвэрлэх дэлгэц нээг
 
 test("гишүүний UI нь Gerege-ийн хэмжээс, dark mode болон жижиг дэлгэцийг дэмжинэ", async ({ page, baseURL }, testInfo) => {
   await memberAPI(page);
-  for (const width of [320, 768, 1280]) {
+  for (const width of [320, 768, 1280, 2560]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base(baseURL!)}/member`);
     await expect(page.getByRole("heading", { name: "Миний гишүүнчлэл", exact: true })).toBeVisible();
@@ -285,6 +285,10 @@ test("гишүүний UI нь Gerege-ийн хэмжээс, dark mode боло�
       } else {
         await expect(page.locator(".sdy-member-sidebar")).toBeVisible();
         await expect(page.locator(".sdy-member-tabs")).toBeHidden();
+        // The shell is full-bleed: on a wide screen the sidebar stays against the
+        // left edge rather than floating towards the middle of the page.
+        const sidebar = (await page.locator(".sdy-member-sidebar").boundingBox())!;
+        expect(sidebar.x).toBe(0);
       }
       await page.screenshot({ path: testInfo.outputPath(`member-${width}-${dark ? "dark" : "light"}.png`), fullPage: true });
     }

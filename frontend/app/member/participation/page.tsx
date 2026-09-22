@@ -33,7 +33,7 @@ export default function ParticipationPage() {
     } catch (err) { setError(err instanceof Error ? err.message : "—"); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-[720px] space-y-5">
+  return <div className="max-w-[720px] space-y-5">
     <h1 className="text-2xl font-semibold">{t("events.participation")}</h1>
     {error && <Banner tone="error" message={error} />}
     {!participation && !error && <Loading />}

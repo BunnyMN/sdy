@@ -28,7 +28,7 @@ export default function AdmissionRequests() {
   }
   if (loading) return <Loading />;
   if (!allowed) return <p>{t("membership.no_access")}</p>;
-  return <div className="mx-auto max-w-[720px] space-y-4">
+  return <div className="max-w-[720px] space-y-4">
     <header><h1 className="text-2xl font-semibold">{t("membership.requests")}</h1><p className="mt-2 text-sm text-muted">{t("membership.requests_hint")}</p></header>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="text-success">{notice}</p>}
     {!requests && !error && <Loading />}
