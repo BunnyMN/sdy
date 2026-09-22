@@ -35,7 +35,7 @@ name: Deploy to Production (e-sdy.mn)
 #   PLATFORM_ACCESS_MODE        public | private (анхдагч private); e-sdy.mn дээр public
 #   EID_MOCK_MODE               анхдагч false
 #   EID_APP_CALLBACKS           анхдагч gerege-nexus://auth
-#   EID_BASE_URL                анхдагч https://eidmongolia.mn/v3
+#   EID_BASE_URL                анхдагч https://ca.eidmongolia.mn/v3
 #   GOOGLE_LOGIN_TENANT, GOOGLE_LOGIN_ALLOWED_DOMAINS
 #
 # Хост дээр урьдчилан байх ёстой (docs/MZH.md → «Сервер»): Docker, nginx
@@ -73,7 +73,7 @@ env:
   PLATFORM_ACCESS_MODE: ${{ vars.PLATFORM_ACCESS_MODE || 'private' }}
   EID_MOCK_MODE: ${{ vars.EID_MOCK_MODE || 'false' }}
   EID_APP_CALLBACKS: ${{ vars.EID_APP_CALLBACKS || 'gerege-nexus://auth' }}
-  EID_BASE_URL: ${{ vars.EID_BASE_URL || 'https://eidmongolia.mn/v3' }}
+  EID_BASE_URL: ${{ vars.EID_BASE_URL || 'https://ca.eidmongolia.mn/v3' }}
   REDIS_URL: ${{ vars.REDIS_URL || 'redis://redis:6379/0' }}
   APP_DIR: /opt/sdy
   STACK: sdy
