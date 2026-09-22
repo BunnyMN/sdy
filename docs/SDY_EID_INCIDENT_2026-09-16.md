@@ -1,7 +1,6 @@
 # SDY eID нэвтрэлт — 2026-09-16
 
-**Төлөв: шалтгаан тогтоогдож, API хаяг батлагдсан (2026-09-22). Production-д
-хэрэгжүүлэх ажил үлдсэн — GitHub Actions төлбөрийн улмаас зогссон.**
+**Төлөв: 2026-09-22-нд хаагдсан. Production-д QR нэвтрэлт сэргэсэн.**
 Хэрэглэгчийн зураг: 13:48, Улаанбаатар. Оношилгоо: 13:49–13:54.
 
 ## 2026-09-22 — шинэ RP API secret-ээр батлагдсан хаяг
@@ -27,17 +26,29 @@
 анхдагчийг шинэчилсэн: `.env.example`, `docker-compose.prod.yml`,
 `.github/workflows/deploy.yml`, `eidrp.go` (`defaultBase`), `eidmongolia.go`.
 
-**Хэрэгжүүлэлтийн төлөв:**
+**Хэрэгжүүлэлт:**
 
 - BunnyMN/sdy repo-д `vars.EID_BASE_URL=https://ca.eidmongolia.mn/v3` болон
   `secrets.EID_RP_SECRET` (шинэ түлхүүр) тавигдсан.
-- Production host руу хараахан хүрээгүй. GitHub Actions ажиллахгүй байна:
-  бүх run 3–6 секундэд «recent account payments have failed or your spending
-  limit needs to be increased» гэж унасан. Тиймээс `/opt/sdy/.env`-ийн
-  `EID_BASE_URL`/`EID_RP_SECRET`-ийг гараар шинэчилж backend-ийг restart хийх,
-  эсвэл billing сэргээгээд deploy ажиллуулах шаардлагатай.
-- Чат түүхэнд орсон тул нэвтрэлт сэргэсний дараа RP secret-ийг eID-ээс
-  шинээр солиулах.
+- Production `/opt/sdy/.env` шинэчлэгдэж backend дахин асав.
+- Батлагдсан: `POST https://e-sdy.mn/api/v1/auth/eid/start` → **200**,
+  `session_id` + `verification_code` буцаж байна (өмнө нь 502).
+- Утсаар бүрэн нэвтрэх (QR уншуулж, PIN оруулаад гишүүний нүүрт буцаж ирэх)
+  шалгалтыг хэрэглэгч өөрийн төхөөрөмж дээр хийж баталгаажуулна.
+
+**Үлдсэн ажил:**
+
+- `fix(eid): point the relying-party client at ca.eidmongolia.mn` commit
+  `3cba2c02` нь `feat/admin-approved-transfers` салбарт байна; main-д нийлэх
+  хүртэл repo-гийн анхдагч хаяг хуучин хэвээр (runtime-д GitHub variable дарж
+  байгаа тул production-д нөлөөгүй).
+- RP secret чат мессежээр дамжсан тул eID-ээс шинээр солиулж, GitHub secret-ийг
+  дахин шинэчлэх.
+
+**GitHub Actions:** төлбөр унасан биш — GitHub Free-ийн 2,000 минут дуусаж,
+spending limit $0 байснаас job-ууд эхлээгүй (`sdy` $12.29, `Basu` $1.09;
+хязгаар 10-р сарын 1-нд шинэчлэгдэнэ). 2026-09-22-нд repo-г public болгосноор
+Actions минут тоологдохоо больж CI/deploy сэргэсэн.
 
 ## 2026-09-18 — санал болгосон шинэ API хаягийг шалгасан
 
