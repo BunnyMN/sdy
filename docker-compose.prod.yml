@@ -192,7 +192,7 @@ services:
       # eID can use real RP credentials while the rest of the public showcase
       # keeps demo data and mock DAN/XYP connectors enabled.
       EID_MOCK_MODE: ${EID_MOCK_MODE:-false}
-      EID_BASE_URL: ${EID_BASE_URL:-https://ca.eidmongolia.mn/v3}
+      EID_BASE_URL: ${EID_BASE_URL:-https://rp.eidmongolia.mn/v3}
       # The Gerege Core directory: the register lookups behind the first-run
       # wizard and the organisation screen. One long-lived read-only bearer;
       # the console can rotate it at runtime as `core.api_token`, and this is

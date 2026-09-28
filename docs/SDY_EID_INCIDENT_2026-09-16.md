@@ -123,3 +123,16 @@ GitHub Actions billing нь тусдаа асуудал; энэ provider-ийн 
 Нотолгооны raw файл: `/private/tmp/sdy-eid-20260916/probe-results.json`.
 [Гараар шалгах зааврын T02](SDY_MANUAL_TEST_2026-09-16.md): desktop Chrome дээр
 хэрэглэгчийн мэдээлсэн **FAIL**. Android/iPhone бүрэн нэвтрэлтийг шалгасан гэж тооцохгүй.
+
+## 2026-09-28 — RP API `rp.eidmongolia.mn` руу шилжсэн
+
+eID-ийн RP API-ийн хаяг `https://rp.eidmongolia.mn/v3` болж солигдсон. TLS бүрэн
+баталгаажсан, Bearer secret-гүй хүсэлтэд ca.-тай адил 401 JSON хариулдаг.
+
+- `vars.EID_BASE_URL=https://rp.eidmongolia.mn/v3` (BunnyMN/sdy) шинэчлэгдсэн.
+- Production `/opt/sdy/.env` шинэчилж (`.env.bak-*` хуулбартай) зөвхөн backend
+  дахин асаасан; image `72112a97` хэвээр.
+- Батлагдсан: `POST https://e-sdy.mn/api/v1/auth/eid/start` → **200**,
+  `session_id` + `verification_code` буцсан.
+- Кодын анхдагч хаяг (`eidrp.go`, `eidmongolia.go`, compose, deploy.yml,
+  `.env.example`) `rp.` болж шинэчлэгдсэн.

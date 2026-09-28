@@ -68,7 +68,7 @@ const (
 )
 
 const (
-	defaultBase   = "https://ca.eidmongolia.mn/v3"
+	defaultBase   = "https://rp.eidmongolia.mn/v3"
 	defaultRPName = "gerege-nexus"
 	// defaultCertLevel is the *lowest* certificate this platform will accept.
 	// Asking for QUALIFIED turns away citizens whose sign-in certificate is
