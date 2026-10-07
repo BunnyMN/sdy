@@ -42,7 +42,7 @@ func newTestUsecase(t *testing.T, handler http.HandlerFunc) (*usecase, *memoryCa
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	store := newMemoryCache()
-	built, err := NewUsecase(store, Config{V3BaseURL: server.URL, RPUUID: "rp", RPName: "Gerege Nexus", APISecret: "rp_sk"})
+	built, err := NewUsecase(store, Config{BaseURL: server.URL, RPUUID: "rp", RPName: "Gerege Nexus", APISecret: "rp_sk"})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}

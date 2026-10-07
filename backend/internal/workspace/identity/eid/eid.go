@@ -108,14 +108,34 @@ type EIDService struct {
 	rpClient     coreeid.Client
 	mockMu       sync.Mutex
 	mockSessions map[string]mockSession
+	// links holds each device-link session's signing material, by session id.
+	// Its secret signs every QR link and must never reach a browser, so the
+	// links are made here and handed out ready-made.
+	linksMu sync.Mutex
+	links   map[string]*coreeid.DeviceLinkSession
 }
 
 type StartResult struct {
-	SessionID        string `json:"session_id"`
-	DeviceLinkURL    string `json:"device_link_url,omitempty"`
+	SessionID string `json:"session_id"`
+	// DeviceLinkURL is the QR link for now. QRLinks continues it: entry i is
+	// the link to show i seconds after this answer arrives. A QR link is good
+	// for about twenty seconds and eID asks for a new one every second; a
+	// minute's worth at once spares the browser a request per second.
+	DeviceLinkURL string   `json:"device_link_url,omitempty"`
+	QRLinks       []string `json:"qr_links,omitempty"`
+	// AppLink opens the eID app on the same phone (Web2App) and brings the
+	// citizen back to the callback. Present only for a session started with one.
+	AppLink          string `json:"app_link,omitempty"`
 	VerificationCode string `json:"verification_code"`
 	ExpiresAt        string `json:"expires_at"`
 }
+
+// QRBatch is how many seconds of QR links one answer carries.
+const QRBatch = 60
+
+// deviceLinkLifetime is how long eID keeps a session (ten minutes) and so how
+// long its signing material is worth holding.
+const deviceLinkLifetime = 10 * time.Minute
 
 type PollResult struct {
 	State    string       `json:"state"`
@@ -171,6 +191,7 @@ func NewEIDService() *EIDService {
 			valueOr(os.Getenv("EID_CERT_LEVEL"), "ADVANCED"),
 		),
 		mockSessions: make(map[string]mockSession),
+		links:        make(map[string]*coreeid.DeviceLinkSession),
 	}
 }
 
@@ -195,7 +216,67 @@ func (s *EIDService) startDeviceLink(ctx context.Context, callbackURL string) (*
 	if err != nil {
 		return nil, err
 	}
-	return normalizeStart(started), nil
+	out := normalizeStart(started)
+	if dl := started.DeviceLink; dl != nil {
+		s.keepDeviceLink(started.SessionID, dl)
+		if out.QRLinks, err = qrLinks(dl, time.Now()); err != nil {
+			return nil, err
+		}
+		out.DeviceLinkURL = out.QRLinks[0]
+		if dl.CallbackURL != "" {
+			if out.AppLink, err = dl.AppLink(); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
+}
+
+// QRLinks continues a device-link session's QR codes from now. ok is false for
+// a session this server did not start, or one past eID's lifetime.
+func (s *EIDService) QRLinks(sessionID string) (links []string, ok bool, err error) {
+	if s.mockMode {
+		s.mockMu.Lock()
+		_, found := s.mockSessions[sessionID]
+		s.mockMu.Unlock()
+		if !found {
+			return nil, false, nil
+		}
+		return []string{sessionID}, true, nil
+	}
+	s.linksMu.Lock()
+	dl := s.links[sessionID]
+	s.linksMu.Unlock()
+	if dl == nil || time.Since(dl.ReceivedAt) > deviceLinkLifetime {
+		return nil, false, nil
+	}
+	links, err = qrLinks(dl, time.Now())
+	return links, err == nil, err
+}
+
+func (s *EIDService) keepDeviceLink(sessionID string, dl *coreeid.DeviceLinkSession) {
+	s.linksMu.Lock()
+	defer s.linksMu.Unlock()
+	// Swept on the way in: a sign-in page is opened far more rarely than
+	// this map would need a timer for.
+	for id, held := range s.links {
+		if time.Since(held.ReceivedAt) > deviceLinkLifetime {
+			delete(s.links, id)
+		}
+	}
+	s.links[sessionID] = dl
+}
+
+func qrLinks(dl *coreeid.DeviceLinkSession, now time.Time) ([]string, error) {
+	links := make([]string, QRBatch)
+	for i := range links {
+		link, err := dl.QRLink(now.Add(time.Duration(i) * time.Second))
+		if err != nil {
+			return nil, err
+		}
+		links[i] = link
+	}
+	return links, nil
 }
 
 // StartByNationalID pushes an approval request to the citizen's eID Mongolia app.
@@ -266,7 +347,7 @@ func (s *EIDService) startSignature(ctx context.Context, nationalID, displayText
 // notification and enter a PIN had the browser abandon a session eID was
 // still waiting on. The relying party's own EXPIRED state is what ends a wait.
 func normalizeStart(started *coreeid.StartResult) *StartResult {
-	return &StartResult{SessionID: started.SessionID, DeviceLinkURL: started.DeviceLinkURL, VerificationCode: started.VerificationCode, ExpiresAt: started.ExpiresAt}
+	return &StartResult{SessionID: started.SessionID, VerificationCode: started.VerificationCode, ExpiresAt: started.ExpiresAt}
 }
 
 // Configured reports whether this rail can actually start a session: either
@@ -285,11 +366,12 @@ func (s *EIDService) startMock(nationalID string, deviceLink bool) *StartResult 
 	s.mockMu.Lock()
 	s.mockSessions[sessionID] = mockSession{created: time.Now(), identity: EIDIdentity{CivilID: "CID-" + nationalID, RegNumber: nationalID, FirstName: "Баталгаажсан", LastName: "Иргэн", Email: strings.ToLower(nationalID) + "@eidmongolia.mn", AuthMethod: AuthMethodPKISignature, VerifiedStatus: true, AuthenticatedAt: time.Now()}}
 	s.mockMu.Unlock()
-	link := ""
+	result := &StartResult{SessionID: sessionID, VerificationCode: "2026", ExpiresAt: time.Now().Add(2 * time.Minute).Format(time.RFC3339)}
 	if deviceLink {
-		link = sessionID
+		result.DeviceLinkURL = sessionID
+		result.QRLinks = []string{sessionID}
 	}
-	return &StartResult{SessionID: sessionID, DeviceLinkURL: link, VerificationCode: "2026", ExpiresAt: time.Now().Add(2 * time.Minute).Format(time.RFC3339)}
+	return result
 }
 
 // Poll long-polls the authoritative RP session and returns a normalized state.

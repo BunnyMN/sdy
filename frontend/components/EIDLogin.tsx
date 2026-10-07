@@ -19,7 +19,12 @@ type Method="id"|"qr";
 type Phase="idle"|"starting"|"waiting"|"expired"|"refused"|"error"|"success";
 // expires_at is absent for push sessions: eID reports no deadline for them, and
 // the API no longer invents one.
-type Start={session_id:string;device_link_url?:string;verification_code:string;expires_at?:string};
+type Start={session_id:string;device_link_url?:string;qr_links?:string[];app_link?:string;verification_code:string;expires_at?:string};
+// eID's v3 QR link names the seconds since the session began and is good for
+// about twenty, so the code on screen changes every second. The API sends a
+// minute of links at a time (entry i is for i seconds after they arrived) and
+// is asked for the next minute this many seconds before they run out.
+const QR_REFILL_AHEAD=15;
 
 // The API holds every /auth/eid/poll open for up to 25s and answers the moment
 // the citizen approves, so this gap is the only stretch where an approval is
@@ -111,11 +116,14 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
     setError("");setStart(null);setPhase("starting");
     try{
       const cb=mobile()?callbackURL():"";
-      const data=binding
+      const data:Start=binding
         ?await api.bindingEIDStart(binding,selected==="qr"?undefined:nationalId.trim().toUpperCase())
         :(selected==="qr"?await api.startEID(cb):await api.startEIDByNationalID(nationalId.trim().toUpperCase(),cb));
       if(ticket.current!==mine)return;
-      if(selected==="qr"&&mobile())window.location.href=`geregesmartid://approve?sessionId=${encodeURIComponent(data.session_id)}`;
+      // Same phone: eID's v3 Web2App link opens the app and brings the citizen
+      // back to /auth/eid/callback. The old geregesmartid:// scheme is no longer
+      // read by the eID app.
+      if(selected==="qr"&&mobile()&&data.app_link)window.location.href=data.app_link;
       void watch(data);
     }catch(e:any){
       if(ticket.current!==mine)return;
@@ -135,6 +143,27 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
     return ()=>clearInterval(id);
   },[phase,start,stop]);
 
+  /* Turns the QR over every second, from the links the API already sent, and
+     asks for the next minute before they run out. A refill that fails leaves
+     the last link up; the poll decides when the session is over. */
+  const [qrLink,setQrLink]=useState("");
+  useEffect(()=>{
+    if(phase!=="waiting"||method!=="qr"||!start){setQrLink("");return}
+    let links=start.qr_links?.length?start.qr_links:start.device_link_url?[start.device_link_url]:[];
+    let since=Date.now(),refilling=false,retryAt=0,live=true;
+    const tick=()=>{
+      const index=Math.floor((Date.now()-since)/1000);
+      setQrLink(links[Math.min(index,links.length-1)]??"");
+      if(!refilling&&links.length>1&&index>=links.length-QR_REFILL_AHEAD&&Date.now()>=retryAt){
+        refilling=true;
+        api.eidQR(start.session_id).then(res=>{if(live&&res.qr_links?.length){links=res.qr_links;since=Date.now();tick()}}).catch(()=>{retryAt=Date.now()+5000}).finally(()=>{refilling=false});
+      }
+    };
+    tick();
+    const id=setInterval(tick,1000);
+    return ()=>{live=false;clearInterval(id)};
+  },[phase,method,start]);
+
   useEffect(()=>()=>{stop()},[stop]);
   const cancel=()=>{stop();setPhase("idle");setStart(null);setError("")};
   const switchMethod=(value:Method)=>{stop();setMethod(value);setPhase("idle");setStart(null);setError("");if(value==="qr")void begin("qr")};
@@ -149,7 +178,7 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
     {method==="id"&&!pending&&<form onSubmit={e=>{e.preventDefault();void begin("id")}}><label htmlFor="eid-rd">{t("auth.eid.reg_number")}</label><input id="eid-rd" value={nationalId} onChange={e=>setNationalId(e.target.value.toUpperCase())} placeholder={t("auth.eid.reg_number_placeholder")} autoComplete="off" required minLength={8}/><button className="eid-primary"><Smartphone/> {t("auth.eid.send_request")}</button></form>}
     {phase==="starting"&&<div className="eid-status"><RefreshCw className="animate-spin"/> {t("auth.message.starting")}</div>}
     {phase==="waiting"&&start&&<div className="eid-wait">
-      {method==="qr"&&start.device_link_url&&<div className="eid-qr"><QRCodeSVG value={start.device_link_url} size={compact?154:190} level="M"/></div>}
+      {method==="qr"&&qrLink&&<div className="eid-qr"><QRCodeSVG value={qrLink} size={compact?154:190} level="L"/></div>}
       <p>{t(method==="qr"?"auth.message.scan_qr":"auth.message.sent_push")}</p><small>{t("auth.eid.verification_code")}</small><strong>{start.verification_code}</strong><span><ShieldCheck/> {t("auth.eid.confirm_hint")}</span>
       {hasDeadline(start)&&<span className="eid-countdown">{t("auth.message.expires_in",{time:clock(left)})}</span>}
     </div>}

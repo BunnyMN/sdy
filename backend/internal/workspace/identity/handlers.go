@@ -106,6 +106,31 @@ func validEIDCallback(raw string) (string, error) {
 	return callback.String(), nil
 }
 
+// HandleEIDQR continues a device-link session's QR codes. The page showing a
+// QR asks for the next minute's links before the last ones run out; the
+// session secret that signs them stays here. Sign-in and the binding flow
+// share it: a link proves nothing until the poll that belongs to each says so.
+func (h *Handlers) HandleEIDQR(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if httpx.DecodeLimited(r, &req, 8<<10) != nil || strings.TrimSpace(req.SessionID) == "" {
+		httpx.Error(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+	links, ok, err := h.eidSvc.QRLinks(strings.TrimSpace(req.SessionID))
+	if err != nil {
+		slog.Warn("eID QR links could not be built", "error", err)
+		httpx.Error(w, http.StatusBadGateway, "eID Mongolia session could not be started")
+		return
+	}
+	if !ok {
+		httpx.Error(w, http.StatusNotFound, "eID session expired")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"device_link_url": links[0], "qr_links": links})
+}
+
 func (h *Handlers) HandleEIDPoll(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`

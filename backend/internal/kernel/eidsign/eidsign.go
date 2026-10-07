@@ -17,7 +17,7 @@
 //  1. the citizen hands over a PDF; the server overlays their signature image
 //     and their organisation's stamp — before hashing, so both are part of what
 //     gets signed — and takes the SHA-256;
-//  2. the digest goes to eID's /v3 signature endpoint, which pushes a PIN2
+//  2. the digest goes to eID's RP-API signature endpoint, which pushes a PIN2
 //     prompt to the citizen's phone;
 //  3. the citizen approves on the phone. That approval is the legal consent;
 //  4. the server polls the session until it is terminal;
@@ -102,7 +102,7 @@ type cache interface {
 // Config is the relying party as eID knows it, plus this server's own signing
 // certificate.
 type Config struct {
-	V3BaseURL string // https://eidmongolia.mn — the /v3 is added per path
+	BaseURL   string // the full RP-API base, https://rp.eidmongolia.mn (no /v3); see eidrp.ResolveBase
 	RPUUID    string
 	RPName    string
 	APISecret string // sent as Bearer; empty means the registry is off and none is needed
@@ -561,7 +561,7 @@ func (u *usecase) stampV3(ctx context.Context, v3SessionID, filename string, pdf
 	}
 	query := url.Values{}
 	query.Set("fileName", filename)
-	endpoint := strings.TrimRight(u.cfg.V3BaseURL, "/") + "/v3/signature/stamp/" +
+	endpoint := strings.TrimRight(u.cfg.BaseURL, "/") + "/signature/stamp/" +
 		url.PathEscape(v3SessionID) + "?" + query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(pdfBytes))
@@ -709,7 +709,7 @@ func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName,
 	if err != nil {
 		return "", "", fmt.Errorf("eidsign: encode the request: %w", err)
 	}
-	endpoint := strings.TrimRight(u.cfg.V3BaseURL, "/") + "/v3/signature/notification/etsi/" + url.PathEscape(etsi)
+	endpoint := strings.TrimRight(u.cfg.BaseURL, "/") + "/signature/notification/etsi/" + url.PathEscape(etsi)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
 		return "", "", err
@@ -757,7 +757,7 @@ type v3PollResult struct {
 }
 
 func (u *usecase) pollV3(ctx context.Context, v3SessionID string) (v3PollResult, error) {
-	endpoint := strings.TrimRight(u.cfg.V3BaseURL, "/") + "/v3/session/" +
+	endpoint := strings.TrimRight(u.cfg.BaseURL, "/") + "/session/" +
 		url.PathEscape(v3SessionID) + "?timeoutMs=1000"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {

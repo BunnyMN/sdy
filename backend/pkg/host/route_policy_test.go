@@ -80,6 +80,10 @@ var publicRoutes = []string{
 	"/api/v1/auth/eid/start",
 	"/api/v1/auth/eid/start-id",
 	"/api/v1/auth/eid/poll",
+	// The next minute of QR links for a device-link session already started
+	// here. A link is signed with a secret that never leaves the server and
+	// proves nothing until the poll above completes.
+	"/api/v1/auth/eid/qr",
 	"/api/v1/auth/dan/login",
 	// Choosing a password from an invitation or a reset, and stepping into an
 	// organisation as an operator. Both journeys begin in the control plane,

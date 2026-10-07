@@ -724,6 +724,8 @@ func (s *Service) Routes(r chi.Router) {
 		// reach their phone, and sharing that budget with sign-in attempts made
 		// a busy office throttle itself out of signing in at all.
 		api.With(security.SharedRateLimitMiddleware(s.pollLimiter, s.sharedPoll)).Post("/auth/eid/poll", s.identity.RequireLocalLogin(s.identity.HandleEIDPoll))
+		// One request a minute while a QR is on screen, so the poll budget.
+		api.With(security.SharedRateLimitMiddleware(s.pollLimiter, s.sharedPoll)).Post("/auth/eid/qr", s.identity.HandleEIDQR)
 		api.With(security.SharedRateLimitMiddleware(s.loginLimiter, s.sharedLogin)).Post("/auth/dan/login", s.identity.RequireLocalLogin(s.identity.HandleDANLogin))
 		api.Post("/auth/logout", s.authn.HandleLogout)
 

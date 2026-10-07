@@ -206,11 +206,15 @@ export const coreApi = {
       body: JSON.stringify({ code, redirect_uri: redirectURI, reg_number: regNumber, otp_code: otpCode, auth_method: authMethod }),
     }),
 
-  startEID: (callbackUrl = "") => request<{session_id:string;device_link_url?:string;verification_code:string;expires_at:string}>("/auth/eid/start",{method:"POST",body:JSON.stringify({callbackUrl})}),
+  startEID: (callbackUrl = "") => request<{session_id:string;device_link_url?:string;qr_links?:string[];app_link?:string;verification_code:string;expires_at:string}>("/auth/eid/start",{method:"POST",body:JSON.stringify({callbackUrl})}),
   startEIDByNationalID: (nationalId:string,callbackUrl = "") => request<{session_id:string;device_link_url?:string;verification_code:string;expires_at:string}>("/auth/eid/start-id",{method:"POST",body:JSON.stringify({national_id:nationalId,callbackUrl})}),
   // The poll is a long poll the API holds open for up to 25s, so the caller
   // passes a signal to drop it the moment the citizen cancels or leaves.
   pollEID: (sessionId:string,signal?:AbortSignal) => request<{state:string;expires_at?:string;identity?:any}>("/auth/eid/poll",{method:"POST",body:JSON.stringify({session_id:sessionId}),signal}),
+  // The next minute of QR links for a device-link session. eID wants a fresh
+  // link every second, signed with a secret only the API holds, so the API
+  // hands them out a minute at a time.
+  eidQR: (sessionId:string) => request<{device_link_url:string;qr_links:string[]}>("/auth/eid/qr",{method:"POST",body:JSON.stringify({session_id:sessionId})}),
 
   loginWithDAN: (danToken?: string, regNumber?: string, otpCode?: string) =>
     request<{ expires_at: string; user: any; dan_profile: any }>("/auth/dan/login", {
@@ -282,7 +286,7 @@ export const coreApi = {
     }),
 
   bindingEIDStart: (binding: string, nationalId?: string) =>
-    request<{session_id:string;device_link_url?:string;verification_code:string;expires_at?:string}>(
+    request<{session_id:string;device_link_url?:string;qr_links?:string[];verification_code:string;expires_at?:string}>(
       "/auth/bind/eid/start",
       { method: "POST", body: JSON.stringify({ binding, national_id: nationalId }) },
     ),

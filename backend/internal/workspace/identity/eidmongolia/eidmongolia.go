@@ -114,7 +114,7 @@ func New(db *pgxpool.Pool) (*Service, error) {
 	)
 
 	signer, err := signuc.NewUsecase(&stateStore{db: db}, signuc.Config{
-		V3BaseURL:     strings.TrimSuffix(firstNonEmpty(os.Getenv("EID_SIGN_BASE_URL"), os.Getenv("EID_BASE_URL"), "https://eidmongolia.mn/v3"), "/v3"),
+		BaseURL:       coreeid.ResolveBase(firstNonEmpty(os.Getenv("EID_SIGN_BASE_URL"), os.Getenv("EID_BASE_URL"))),
 		RPUUID:        os.Getenv("EID_RP_UUID"),
 		RPName:        firstNonEmpty(os.Getenv("EID_RP_NAME"), config.BrandName()),
 		APISecret:     os.Getenv("EID_RP_SECRET"),

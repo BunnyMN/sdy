@@ -2,9 +2,11 @@ package eidrp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -144,10 +146,10 @@ func TestRepresentationsTreatsNotFoundAsNone(t *testing.T) {
 
 // The initiate body, which is the part that fails quietly.
 //
-// Authentication's challenge field is `rpChallenge`. Sending signing's
-// `digest`/`hashType` instead leaves the server with an empty challenge, and
-// what the citizen then sees is their approval failing inside the eID app with
-// a message about processing — nowhere near the mistake.
+// Authentication's challenge is `signatureProtocolParameters.rpChallenge`.
+// Sending signing's `digest` instead leaves the server with an empty
+// challenge, and what the citizen then sees is their approval failing inside
+// the eID app with a message about processing — nowhere near the mistake.
 func TestTheInitiateBodyCarriesTheAuthenticationChallenge(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -163,32 +165,106 @@ func TestTheInitiateBodyCarriesTheAuthenticationChallenge(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := NewClient(server.URL, "rp-uuid", "Gerege Nexus", "rp_sk_test", "")
 
-	started, err := client.Initiate(context.Background(), "111949212017", "Нэвтрэх", "gerege-nexus://auth")
+	started, err := client.Initiate(context.Background(), "111949212017", "Нэвтрэх", "https://e-sdy.mn/auth/eid/callback")
 	if err != nil {
 		t.Fatalf("initiate: %v", err)
 	}
 	if started.SessionID != "s-9" || started.VerificationCode != "0489" {
 		t.Fatalf("the answer was not read: %+v", started)
 	}
-	if challenge, _ := body["rpChallenge"].(string); challenge == "" {
-		t.Error("rpChallenge is empty; the citizen's approval would fail inside the app")
+	params, _ := body["signatureProtocolParameters"].(map[string]any)
+	if challenge, _ := params["rpChallenge"].(string); challenge == "" {
+		t.Errorf("rpChallenge is empty; the citizen's approval would fail inside the app: %v", body)
 	}
-	if _, wrong := body["digest"]; wrong {
+	if _, wrong := params["digest"]; wrong {
 		t.Error("the signing challenge was sent to an authentication endpoint")
+	}
+	if _, old := body["rpChallenge"]; old {
+		t.Error("the challenge was sent at the top level, the pre-v3 shape")
 	}
 	if body["signatureProtocol"] != "ACSP_V2" || body["certificateLevel"] != "ADVANCED" {
 		t.Errorf("protocol %v, level %v", body["signatureProtocol"], body["certificateLevel"])
 	}
-	if body["initialCallbackUrl"] != "gerege-nexus://auth" {
-		t.Errorf("native callback was not passed to eID: %v", body["initialCallbackUrl"])
+	if body["initialCallbackUrl"] != "https://e-sdy.mn/auth/eid/callback" {
+		t.Errorf("callback was not passed to eID: %v", body["initialCallbackUrl"])
 	}
-	// The text the eID app shows, capped at sixty characters by the protocol.
-	interactions, _ := body["interactions"].([]any)
-	if len(interactions) != 1 {
-		t.Fatalf("interactions: %v", body["interactions"])
+	// The text the eID app shows, as base64 of the interactions' JSON.
+	encoded, _ := body["interactions"].(string)
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("interactions are not base64: %v", body["interactions"])
 	}
-	first, _ := interactions[0].(map[string]any)
-	if first["type"] != "displayTextAndPIN" || first["displayText60"] != "Нэвтрэх" {
-		t.Errorf("the approval screen would show %v", first)
+	var interactions []map[string]any
+	if err := json.Unmarshal(decoded, &interactions); err != nil || len(interactions) != 1 {
+		t.Fatalf("interactions: %s", decoded)
+	}
+	if interactions[0]["type"] != "displayTextAndPIN" || interactions[0]["displayText60"] != "Нэвтрэх" {
+		t.Errorf("the approval screen would show %v", interactions[0])
+	}
+}
+
+// A device-link initiate returns what the v3 link is built from, and the
+// secret that signs it stays in the server-side session.
+func TestQRInitiateKeepsTheDeviceLinkMaterial(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if r.URL.Path != "/authentication/device-link/anonymous" {
+			t.Errorf("initiate went to %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionID":      "s-qr",
+			"sessionToken":   "wGIrqveE6AuGDATZKmR1mtAZ",
+			"sessionSecret":  "B98ODiVCebRedSwdTk51zFSaGYyHtY1H2A0ocAi3/Ps=",
+			"deviceLinkBase": "https://ca.eidmongolia.mn/dl",
+			"vc":             "48213",
+		})
+	}))
+	t.Cleanup(server.Close)
+	client := NewClient(server.URL, "rp-uuid", "SDY Mongolia", "rp_sk_test", "")
+
+	started, err := client.QRInitiate(context.Background(), "Нэвтрэх", "", "")
+	if err != nil {
+		t.Fatalf("initiate: %v", err)
+	}
+	dl := started.DeviceLink
+	if started.SessionID != "s-qr" || started.VerificationCode != "48213" || dl == nil {
+		t.Fatalf("the answer was not read: %+v", started)
+	}
+	params, _ := body["signatureProtocolParameters"].(map[string]any)
+	if dl.RPChallenge != params["rpChallenge"] || dl.Interactions != body["interactions"] || dl.RPName != "SDY Mongolia" {
+		t.Errorf("the link would be signed over values other than those sent: %+v vs %v", dl, body)
+	}
+	link, err := dl.QRLink(dl.ReceivedAt)
+	if err != nil || !strings.HasPrefix(link, "https://ca.eidmongolia.mn/dl?deviceLinkType=QR&elapsedSeconds=0&") || strings.Contains(link, dl.SessionSecret) {
+		t.Errorf("QR link %q, %v", link, err)
+	}
+}
+
+// An answer without device-link material cannot become a link the app opens.
+func TestQRInitiateWithoutLinkMaterialFails(t *testing.T) {
+	client := serve(t, "/authentication/device-link/anonymous", map[string]any{"sessionID": "s-old", "vc": "7270"})
+	if _, err := client.QRInitiate(context.Background(), "", "", ""); err == nil {
+		t.Fatal("a session with no sessionToken/sessionSecret was accepted")
+	}
+}
+
+// Every address the API used to live at now answers 404. A deployment whose
+// environment still names one is pointed at the current host instead.
+func TestResolveBaseMovesRetiredAddresses(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                               DefaultBase,
+		"https://eidmongolia.mn/v3":      DefaultBase,
+		"https://eidmongolia.mn/v3/":     DefaultBase,
+		"https://ca.eidmongolia.mn":      DefaultBase,
+		"https://ca.eidmongolia.mn/v3":   DefaultBase,
+		"https://rp.eidmongolia.mn/v3":   DefaultBase,
+		"https://rp.eidmongolia.mn/":     "https://rp.eidmongolia.mn",
+		"http://127.0.0.1:9999":          "http://127.0.0.1:9999",
+		"https://staging.example.mn/rp/": "https://staging.example.mn/rp",
+	} {
+		if got := ResolveBase(in); got != want {
+			t.Errorf("ResolveBase(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

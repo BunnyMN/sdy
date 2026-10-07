@@ -18,18 +18,27 @@
 //     the PKI panel, representation writes) is somebody else's product, carried
 //     along and compiled in.
 //
-// The wire protocol is eID Mongolia v3 (Smart-ID compatible, ACSP_V2) and is
-// unchanged. What is here is the same protocol, read into this platform's own
-// types, in a file the team that depends on it can edit:
+// The wire protocol is eID Mongolia's RP-API (Smart-ID RP-API v3 compatible,
+// ACSP_V2), read into this platform's own types, in a file the team that
+// depends on it can edit:
 //
-//	POST {base}/authentication/device-link/anonymous            QR sign-in
+//	POST {base}/authentication/device-link/anonymous            QR / Web2App sign-in
 //	POST {base}/authentication/notification/etsi/PNOMN-{civil}  push sign-in
 //	GET  {base}/session/{id}?timeoutMs=25000                    long-poll
 //	GET  {base}/organization/representations/etsi/{personEtsi}  the citizen's organisations
 //
+// {base} is https://rp.eidmongolia.mn with no /v3. The API left
+// https://eidmongolia.mn/v3 on 2026-09-28 and the old address now answers 404
+// with a web page, which reached the citizen as "session could not be started".
+//
 // Authorization is `Bearer <rp secret>` and the relying party names itself in
 // the body. A COMPLETE response says only that the session ended; the terminal
 // result is in `result.endResult`, which this maps onto the four states below.
+//
+// Since 2026-10-02 the eID app reads only device link v3: an HTTPS link carrying
+// an HMAC over the session, signed with a per-session secret that must never
+// leave this server. A QR link also carries the seconds since the session
+// started and is refreshed every second. See devicelink.go.
 package eidrp
 
 import (
@@ -68,7 +77,7 @@ const (
 )
 
 const (
-	defaultBase   = "https://eidmongolia.mn/v3"
+	DefaultBase   = "https://rp.eidmongolia.mn"
 	defaultRPName = "gerege-nexus"
 	// defaultCertLevel is the *lowest* certificate this platform will accept.
 	// Asking for QUALIFIED turns away citizens whose sign-in certificate is
@@ -133,7 +142,10 @@ type StartResult struct {
 	SessionID        string
 	VerificationCode string
 	ExpiresAt        string
-	DeviceLinkURL    string
+	// DeviceLink is filled for a device-link initiate. It holds the session
+	// secret, so it stays on this server: what goes to a browser is a link
+	// built from it, never the struct.
+	DeviceLink *DeviceLinkSession
 }
 
 // SessionResult is one poll. Identity is filled only on COMPLETE.
@@ -183,9 +195,7 @@ type client struct {
 // defaults above; the UUID and secret are the relying-party credentials eID
 // issued, and the secret travels in the Authorization header and never in a log.
 func NewClient(base, rpUUID, rpName, secret, certLevel string) Client {
-	if base = strings.TrimRight(strings.TrimSpace(base), "/"); base == "" {
-		base = defaultBase
-	}
+	base = ResolveBase(base)
 	if rpName = strings.TrimSpace(rpName); rpName == "" {
 		rpName = defaultRPName
 	}
@@ -198,6 +208,37 @@ func NewClient(base, rpUUID, rpName, secret, certLevel string) Client {
 	}
 }
 
+// ResolveBase returns the RP-API base to call.
+//
+// Empty means the default. The addresses the API used to live at are mapped
+// onto the default rather than called, because every one of them now answers
+// 404: a deployment whose environment still names one (this repository's own
+// deploy defaults did, until the move) keeps signing people in instead of
+// failing until somebody edits a secret store. Any other value — a test
+// server, a staging host — is taken as given.
+func ResolveBase(base string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if base == "" {
+		return DefaultBase
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+	path := strings.TrimRight(u.Path, "/")
+	switch strings.ToLower(u.Hostname()) {
+	case "eidmongolia.mn", "www.eidmongolia.mn", "ca.eidmongolia.mn", "e-id.mn", "www.e-id.mn":
+		if path == "" || path == "/v3" {
+			return DefaultBase
+		}
+	case "rp.eidmongolia.mn":
+		if path == "/v3" {
+			return DefaultBase
+		}
+	}
+	return base
+}
+
 // interaction is what the eID app shows the citizen while it asks them to
 // approve. displayText60 is capped at sixty characters by the protocol.
 type interaction struct {
@@ -205,25 +246,36 @@ type interaction struct {
 	DisplayText60 string `json:"displayText60,omitempty"`
 }
 
-// authInitiateBody is the ACSP_V2 initiate request.
+// authInitiateBody is the ACSP_V2 initiate request in the RP-API v3 shape.
 //
-// The challenge field is `rpChallenge` — authentication's, not signing's
-// `digest`/`hashType`. Sending the wrong one leaves the server with an empty
+// The challenge is `signatureProtocolParameters.rpChallenge` — authentication's,
+// not signing's `digest`. Sending the wrong one leaves the server with an empty
 // challenge, and the citizen's approval then fails inside the app with a
 // message about processing rather than about anything they did.
+//
+// Interactions travel as base64 of their JSON. That exact string is also part
+// of the device link's authCode, which is why it is built once and kept.
 type authInitiateBody struct {
-	RelyingPartyUUID  string        `json:"relyingPartyUUID"`
-	RelyingPartyName  string        `json:"relyingPartyName"`
-	CertificateLevel  string        `json:"certificateLevel"`
-	SignatureProtocol string        `json:"signatureProtocol"`
-	RPChallenge       string        `json:"rpChallenge"`
-	Interactions      []interaction `json:"interactions"`
-	// RPApp is the name the eID app shows on its approval screen.
-	RPApp    string `json:"rp_app,omitempty"`
-	RPAppURL string `json:"rp_app_url,omitempty"`
+	RelyingPartyUUID            string             `json:"relyingPartyUUID"`
+	RelyingPartyName            string             `json:"relyingPartyName"`
+	CertificateLevel            string             `json:"certificateLevel"`
+	SignatureProtocol           string             `json:"signatureProtocol"`
+	SignatureProtocolParameters protocolParameters `json:"signatureProtocolParameters"`
+	Interactions                string             `json:"interactions"`
 	// InitialCallbackURL is the same-device return address. Empty means
-	// cross-device: the browser polls and eID sends the phone nowhere.
+	// cross-device: the browser polls and eID sends the phone nowhere. eID
+	// accepts only an https URL on one of the RP's registered callback hosts.
 	InitialCallbackURL string `json:"initialCallbackUrl,omitempty"`
+}
+
+type protocolParameters struct {
+	RPChallenge                  string                 `json:"rpChallenge"`
+	SignatureAlgorithm           string                 `json:"signatureAlgorithm"`
+	SignatureAlgorithmParameters algorithmHashParameter `json:"signatureAlgorithmParameters"`
+}
+
+type algorithmHashParameter struct {
+	HashAlgorithm string `json:"hashAlgorithm"`
 }
 
 func (c *client) newAuthBody(displayText, callbackURL string) (authInitiateBody, error) {
@@ -240,16 +292,35 @@ func (c *client) newAuthBody(displayText, callbackURL string) (authInitiateBody,
 	if runes := []rune(text); len(runes) > 60 {
 		text = string(runes[:60])
 	}
+	interactions, err := encodeInteractions([]interaction{{Type: "displayTextAndPIN", DisplayText60: text}})
+	if err != nil {
+		return authInitiateBody{}, err
+	}
 	return authInitiateBody{
-		RelyingPartyUUID:   c.rpUUID,
-		RelyingPartyName:   c.rpName,
-		CertificateLevel:   c.certLevel,
-		SignatureProtocol:  "ACSP_V2",
-		RPChallenge:        challenge,
-		Interactions:       []interaction{{Type: "displayTextAndPIN", DisplayText60: text}},
-		RPApp:              c.rpName,
+		RelyingPartyUUID:  c.rpUUID,
+		RelyingPartyName:  c.rpName,
+		CertificateLevel:  c.certLevel,
+		SignatureProtocol: "ACSP_V2",
+		SignatureProtocolParameters: protocolParameters{
+			RPChallenge:                  challenge,
+			SignatureAlgorithm:           "rsassa-pss",
+			SignatureAlgorithmParameters: algorithmHashParameter{HashAlgorithm: "SHA-512"},
+		},
+		Interactions:       interactions,
 		InitialCallbackURL: callbackURL,
 	}, nil
+}
+
+// encodeInteractions is base64 of the interactions' JSON, without HTML
+// escaping: the text is the citizen's to read, and `<` should arrive as `<`.
+func encodeInteractions(list []interaction) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(list); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(bytes.TrimRight(buf.Bytes(), "\n")), nil
 }
 
 func (c *client) QRInitiate(ctx context.Context, displayText, callbackURL, _ string) (*StartResult, error) {
@@ -264,21 +335,41 @@ func (c *client) QRInitiate(ctx context.Context, displayText, callbackURL, _ str
 	if err := checkInitiateStatus(raw, status); err != nil {
 		return nil, err
 	}
+	receivedAt := time.Now()
 	var out struct {
-		SessionID    string          `json:"sessionID"`
-		SessionToken string          `json:"sessionToken"`
-		VC           json.RawMessage `json:"vc"`
+		SessionID      string          `json:"sessionID"`
+		SessionToken   string          `json:"sessionToken"`
+		SessionSecret  string          `json:"sessionSecret"`
+		DeviceLinkBase string          `json:"deviceLinkBase"`
+		VC             json.RawMessage `json:"vc"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil || out.SessionID == "" {
 		return nil, fmt.Errorf("eid initiate: no session id in the answer: %s", snippet(raw))
 	}
-	// What the QR encodes is the bare session id, not a device-link URL. The
-	// eID app's scanner reads a UUID and resolves it against its own server; a
-	// `https://…/dl?deviceLinkType=…` URL is something it cannot parse.
+	if out.SessionToken == "" || out.SessionSecret == "" || out.DeviceLinkBase == "" {
+		// Without these there is no link the eID app will open, and showing
+		// anything else would be a QR code that silently does nothing.
+		return nil, fmt.Errorf("eid initiate: the answer carries no device-link material (sessionToken, sessionSecret, deviceLinkBase)")
+	}
+	dl := &DeviceLinkSession{
+		Base:          out.DeviceLinkBase,
+		SessionToken:  out.SessionToken,
+		SessionSecret: out.SessionSecret,
+		RPChallenge:   body.SignatureProtocolParameters.RPChallenge,
+		RPName:        body.RelyingPartyName,
+		Interactions:  body.Interactions,
+		CallbackURL:   body.InitialCallbackURL,
+		ReceivedAt:    receivedAt,
+	}
+	// Built once here so that a session whose material eID's links would
+	// reject fails at start, where the citizen can retry, not on the QR.
+	if _, err := dl.QRLink(receivedAt); err != nil {
+		return nil, err
+	}
 	return &StartResult{
 		SessionID:        out.SessionID,
 		VerificationCode: parseVerificationCode(out.VC),
-		DeviceLinkURL:    out.SessionID,
+		DeviceLink:       dl,
 	}, nil
 }
 
