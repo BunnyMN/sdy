@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowRight, Building2, CalendarDays, CheckCircle2, ChevronRight, Fingerprint, Smartphone, Wallet } from "lucide-react";
 import type { Brand } from "@/lib/brand";
 import SdyLandingHeader from "./SdyLandingHeader";
+import SdyEventSlides from "./SdyEventSlides";
 import styles from "./sdy-landing.module.css";
 
 const features = [
@@ -30,6 +31,7 @@ export default function SdyLanding({ brand }: { brand: Brand }) {
       <a href="#main-content" className={styles.skip}>Үндсэн агуулга руу очих</a>
       <SdyLandingHeader brand={brand} />
       <main id="main-content" tabIndex={-1}>
+        <SdyEventSlides />
         <section className={`${styles.container} ${styles.hero}`} aria-labelledby="landing-title">
           <div className={styles.heroCopy}>
             <p className={styles.eyebrow}><span aria-hidden="true" /> Таны оролцоо эндээс эхэлнэ</p>

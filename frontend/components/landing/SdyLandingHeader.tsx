@@ -23,7 +23,7 @@ export default function SdyLandingHeader({ brand }: { brand: Brand }) {
         <Link href="/" className={styles.brand} aria-label={`${brand.name} — Нүүр`}>
           {/* Runtime brand assets can be local or hosted by the deployment. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={brand.logoUrl} width={40} height={40} alt="" />
+          <img src={brand.logoUrl} width={52} height={52} alt="" />
           <span><strong>{brand.shortName}</strong><small>Гишүүний цахим систем</small></span>
         </Link>
         <nav className={styles.desktopNav} aria-label="Үндсэн цэс">
