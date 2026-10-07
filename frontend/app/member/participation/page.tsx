@@ -34,7 +34,8 @@ export default function ParticipationPage() {
     finally { setBusy(false); }
   }
   return <div className="mx-auto max-w-[720px] space-y-5">
-    <h1 className="text-2xl font-semibold">{t("events.participation")}</h1>
+    <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-semibold">{t("events.participation")}</h1>
+      <Link href="/member/leaderboard" className="min-h-11 rounded-lg border border-line px-4 py-3 text-sm">{t("events.leaderboard.link")}</Link></header>
     {error && <Banner tone="error" message={error} />}
     {!participation && !error && <Loading />}
     {points && <div className="rounded-lg border border-line bg-surface p-4 sm:p-6"><p className="text-sm text-muted">{t("events.points.total")}</p><p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{points.total}</p></div>}

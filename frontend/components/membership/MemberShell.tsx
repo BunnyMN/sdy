@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Settings, Users, Wallet, WifiOff } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Settings, Trophy, Users, Wallet, WifiOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useBrand } from "@/lib/brandContext";
 import type { api } from "@/lib/api";
@@ -42,6 +42,9 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
     ...(can("membership.finance") ? [{ href: "/member/finance", label: t("dues.finance"), icon: Wallet }] : []),
     ...(user.is_admin ? [{ href: "/settings/access", label: t("access.view.title"), icon: Settings }] : []),
   ] : [];
+  // Sidebar only: the phone's bottom bar keeps its five, and reaches the
+  // leaderboard from the attendance screen.
+  const sidebarExtra = company ? [{ href: "/member/leaderboard", label: t("events.leaderboard.title"), icon: Trophy, active: pathname === "/member/leaderboard" }] : [];
   const back = pathname.startsWith("/module/events/") ? "/module/events" : "/member";
 
   useEffect(() => {
@@ -90,7 +93,7 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
     <div className="sdy-member-layout">
       <aside className="sdy-member-sidebar">
         <p className="sdy-nav-caption">{t("membership.home")}</p>
-        <nav aria-label={t("membership.home")}>{navigation.map(({ href, label, icon: Icon, active }) => <Link key={href} href={href} aria-current={active ? "page" : undefined}><Icon aria-hidden="true" />{label}</Link>)}</nav>
+        <nav aria-label={t("membership.home")}>{[...navigation, ...sidebarExtra].map(({ href, label, icon: Icon, active }) => <Link key={href} href={href} aria-current={active ? "page" : undefined}><Icon aria-hidden="true" />{label}</Link>)}</nav>
         {staff.length > 0 && <><p className="sdy-nav-caption">{t("membership.management")}</p><nav aria-label={t("membership.management")}>{staff.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}><Icon aria-hidden="true" />{label}</Link>)}</nav></>}
         <Link href="/settings/appearance" className="sdy-appearance"><Settings aria-hidden="true" />{t("web.menu.appearance")}</Link>
       </aside>

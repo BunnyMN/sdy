@@ -19,6 +19,8 @@ import { Screen, Panel, Loading, ErrorNote, Chip, useAccess } from "@/components
 import { Modal, selectClass, fieldClass } from "@/components/ui";
 import { EventForm, eventStatusTone, formatWhen } from "../shared";
 import CheckinCode from "@/components/membership/CheckinCode";
+import EventDiscussion from "@/components/events/EventDiscussion";
+import EventTasks from "@/components/events/EventTasks";
 
 const attendanceTone: Record<AttendanceStatus, "slate" | "emerald" | "amber" | "rose" | "blue"> = {
   registered: "blue",
@@ -214,6 +216,9 @@ export default function EventPage() {
           </ul>
         )}
       </Panel>
+
+      <EventDiscussion eventID={id} />
+      <EventTasks eventID={id} closed={event.status !== "planned"} />
 
       {correction && <Modal label={t("membership.record.correction")} onClose={() => { if (!busy) setCorrection(null); }}>
         <form onSubmit={saveCorrection} className="space-y-4">

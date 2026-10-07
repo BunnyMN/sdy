@@ -135,14 +135,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON events_tasks, events_task_assignments TO
 CREATE OR REPLACE FUNCTION workspace.events_history_is_final() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
 BEGIN
-    IF TG_TABLE_NAME = 'events_motions' AND OLD.status = 'decided' THEN
-        RAISE EXCEPTION 'a decided motion is final' USING ERRCODE = 'check_violation';
-    END IF;
-    IF TG_TABLE_NAME = 'events_motions' AND OLD.status = 'voting' AND
-       (NEW.title, NEW.body, NEW.content_hash) IS DISTINCT FROM (OLD.title, OLD.body, OLD.content_hash) THEN
-        RAISE EXCEPTION 'a motion under vote cannot be edited' USING ERRCODE = 'check_violation';
-    END IF;
-    IF TG_TABLE_NAME = 'events_motion_votes' AND OLD.status = 'signed' THEN
+    -- Branch on the table before touching a column: PL/pgSQL does not
+    -- short-circuit AND, so NEW.title in a condition read for a vote row fails.
+    IF TG_TABLE_NAME = 'events_motions' THEN
+        IF OLD.status = 'decided' THEN
+            RAISE EXCEPTION 'a decided motion is final' USING ERRCODE = 'check_violation';
+        END IF;
+        IF OLD.status = 'voting' THEN
+            IF (NEW.title, NEW.body, NEW.content_hash) IS DISTINCT FROM (OLD.title, OLD.body, OLD.content_hash) THEN
+                RAISE EXCEPTION 'a motion under vote cannot be edited' USING ERRCODE = 'check_violation';
+            END IF;
+        END IF;
+    ELSIF OLD.status = 'signed' THEN
         RAISE EXCEPTION 'a signed vote is final' USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;

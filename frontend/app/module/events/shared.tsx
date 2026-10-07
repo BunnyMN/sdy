@@ -53,6 +53,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
   const [endsAt, setEndsAt] = useState(toLocalInput(initial?.ends_at ?? null));
   const [capacity, setCapacity] = useState(initial?.capacity ? String(initial.capacity) : "");
   const [points, setPoints] = useState(String(initial?.points_value ?? 0));
+  const [votePoints, setVotePoints] = useState(String(initial?.vote_points ?? 0));
   const [status, setStatus] = useState<EventStatus>(initial?.status ?? "planned");
   const [failed, setFailed] = useState("");
 
@@ -65,7 +66,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
       await onSave({
         title: title.trim(), description: description.trim(), location: location.trim(),
         starts_at: starts, ends_at: fromLocalInput(endsAt),
-        capacity: capacity.trim() ? Number(capacity) : null, status, points_value: Number(points),
+        capacity: capacity.trim() ? Number(capacity) : null, status, points_value: Number(points), vote_points: Number(votePoints),
       });
     } catch (err: unknown) {
       setFailed(err instanceof Error ? err.message : "—");
@@ -115,6 +116,10 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
           <label htmlFor={`${formID}-points`} className={label}>{t("events.field.points")}</label>
           <input id={`${formID}-points`} type="number" required min={0} max={100000} step={1} value={points} onChange={e => setPoints(e.target.value)} className={fieldClass} />
           <p className="mt-1 text-xs text-muted">{t("events.field.points_hint")}</p>
+        </div>
+        <div>
+          <label htmlFor={`${formID}-vote-points`} className={label}>{t("events.field.vote_points")}</label>
+          <input id={`${formID}-vote-points`} type="number" required min={0} max={100000} step={1} value={votePoints} onChange={e => setVotePoints(e.target.value)} className={fieldClass} />
         </div>
       </div>
       {failed && <ErrorNote>{failed}</ErrorNote>}

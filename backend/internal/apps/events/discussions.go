@@ -174,6 +174,7 @@ func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
 		"can_manage":     m.canManage(r.Context(), claims),
 		"event_status":   event.Status,
 		"event_attended": event.MyStatus == "attended",
+		"me":             claims.UserID,
 	})
 }
 
