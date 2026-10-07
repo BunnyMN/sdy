@@ -159,6 +159,7 @@ POST /api/v1/auth/credential/redeem
 POST /api/v1/auth/dan/login
 POST /api/v1/auth/eid/login
 POST /api/v1/auth/eid/poll
+POST /api/v1/auth/eid/qr
 POST /api/v1/auth/eid/start
 POST /api/v1/auth/eid/start-id
 POST /api/v1/auth/impersonation/redeem
