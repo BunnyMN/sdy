@@ -196,7 +196,11 @@ test("шилжүүлгээ мэдээлэх нь төлсөн гэж шууд т
   await page.getByRole("button", { name: "Шилжүүлгээ мэдээлэх", exact: true }).click();
   await page.getByLabel("Банкны гүйлгээний дугаар").fill("TEST-123");
   await page.locator("form").getByRole("button", { name: "Шилжүүлгээ мэдээлэх", exact: true }).click();
-  await expect(page.getByText("Баталгаажуулалт хүлээж байна", { exact: true })).toBeVisible();
+  // The report shows as the charge's first part and in the transfer history,
+  // pending in both, and nothing is counted as paid.
+  const part = page.getByRole("listitem").filter({ hasText: "1-р хэсэг" });
+  await expect(part.getByText("Баталгаажуулалт хүлээж байна", { exact: true })).toBeVisible();
+  await expect(page.getByText("Баталгаажуулалт хүлээж байна", { exact: true })).toHaveCount(2);
   await expect(page.getByText(/Төлсөн: 0₮/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Хураамжийн санхүү", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
