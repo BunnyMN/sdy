@@ -128,6 +128,11 @@ type SignatureRequest struct {
 	DisplayText string
 	// DocumentName names the artifact in the rail's own records.
 	DocumentName string
+	// CallbackURL, when set, asks for a same-device ceremony: the session's
+	// AppLink opens the eID app on the phone the citizen is holding, and after
+	// PIN2 the app returns here. Empty is a push to the citizen's phone, which
+	// they answer by opening the app themselves.
+	CallbackURL string
 }
 
 // DocumentSignatureRequest is one PDF ceremony.
@@ -166,6 +171,9 @@ type SignatureSession struct {
 	// that the person approving can see they are approving this request and not
 	// one that arrived at the same moment.
 	VerificationCode string
+	// AppLink opens the signing app directly; set only when the request named
+	// a CallbackURL and the rail can open the app.
+	AppLink string
 }
 
 // SignatureState is where a ceremony has got to. The strings are the rail's

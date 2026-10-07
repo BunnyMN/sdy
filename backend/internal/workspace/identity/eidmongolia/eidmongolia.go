@@ -187,6 +187,15 @@ func (s *Service) SignDigest(ctx context.Context, regNo, fullName, digestHex, di
 	return s.sign.InitDigest(ctx, regNo, fullName, digestHex, displayText, docName)
 }
 
+// SignDigestOnDevice is SignDigest for a citizen holding the phone: the
+// result's AppLink opens the eID app, which returns to callbackURL.
+func (s *Service) SignDigestOnDevice(ctx context.Context, regNo, fullName, digestHex, displayText, docName, callbackURL string) (InitResult, error) {
+	if displayText == "" {
+		displayText = s.displayText
+	}
+	return s.sign.InitDigestOnDevice(ctx, regNo, fullName, digestHex, displayText, docName, callbackURL)
+}
+
 // PollSign returns the ceremony's state: running, completed, failed, expired
 // or rejected.
 func (s *Service) PollSign(ctx context.Context, ownerRegNo, sessionID string) (string, error) {

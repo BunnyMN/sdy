@@ -41,7 +41,13 @@ func (r signingRail) SignDigest(ctx context.Context, request nexus.SignatureRequ
 	if !r.Enabled() {
 		return nexus.SignatureSession{}, nexus.ErrSigningUnavailable
 	}
-	started, err := r.eid.SignDigest(ctx, request.RegNumber, request.FullName,
+	sign := r.eid.SignDigest
+	if request.CallbackURL != "" {
+		sign = func(ctx context.Context, regNo, fullName, digestHex, displayText, docName string) (eidmongolia.InitResult, error) {
+			return r.eid.SignDigestOnDevice(ctx, regNo, fullName, digestHex, displayText, docName, request.CallbackURL)
+		}
+	}
+	started, err := sign(ctx, request.RegNumber, request.FullName,
 		request.DigestHex, request.DisplayText, request.DocumentName)
 	if err != nil {
 		return nexus.SignatureSession{}, err
@@ -49,6 +55,7 @@ func (r signingRail) SignDigest(ctx context.Context, request nexus.SignatureRequ
 	return nexus.SignatureSession{
 		SessionID:        started.SessionID,
 		VerificationCode: started.VerificationCode,
+		AppLink:          started.AppLink,
 	}, nil
 }
 

@@ -256,3 +256,31 @@ func TestDigestSignatureUsesTheV3Body(t *testing.T) {
 		t.Errorf("interactions %q (%v)", decoded, err)
 	}
 }
+
+// A same-device signature: the device-link endpoint, the callback in the body,
+// and a Web2App link that opens the eID app — signed with the session secret,
+// which itself never leaves this package.
+func TestDigestSignatureOnTheDeviceOpensTheApp(t *testing.T) {
+	var body map[string]any
+	var path string
+	u, _ := newTestUsecase(t, func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		_, _ = w.Write([]byte(`{"sessionID":"s-2","sessionToken":"tok_abc","sessionSecret":"c2VjcmV0LXNlY3JldA==","deviceLinkBase":"https://ca.eidmongolia.mn/dl","vc":{"type":"alphaNumeric5","value":"48213"}}`))
+	})
+	callback := "https://e-sdy.mn/auth/eid/callback?return=%2Fmodule%2Fevents%2Fe1"
+	started, err := u.InitDigestOnDevice(context.Background(), "МА74101813", "Иргэн", strings.Repeat("ab", 32), "Санал", "Санал", callback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "/signature/device-link/etsi/PNOMN-МА74101813" || body["initialCallbackUrl"] != callback {
+		t.Fatalf("asked %s with %v", path, body["initialCallbackUrl"])
+	}
+	if started.VerificationCode != "48213" || !strings.HasPrefix(started.AppLink, "https://ca.eidmongolia.mn/dl?deviceLinkType=Web2App&sessionToken=tok_abc&sessionType=sign&") ||
+		!strings.Contains(started.AppLink, "&authCode=") || strings.Contains(started.AppLink, "c2VjcmV0") {
+		t.Fatalf("started %+v", started)
+	}
+	if _, err := u.InitDigestOnDevice(context.Background(), "МА74101813", "Иргэн", strings.Repeat("ab", 32), "Санал", "Санал", ""); err == nil {
+		t.Fatal("a device-link signature started without a callback")
+	}
+}

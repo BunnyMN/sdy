@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -412,9 +413,17 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Choice string `json:"choice"`
+		// CallbackURL, from a phone, asks for the eID app to be opened directly
+		// and to return here afterwards. Only this site's eID callback page.
+		CallbackURL string `json:"callback_url"`
 	}
 	if err := decode(r, &in); err != nil || choiceWords[in.Choice] == "" {
 		nexus.Error(w, http.StatusBadRequest, "choice must be yes, no or abstain")
+		return
+	}
+	callback, err := sameSiteCallback(r, in.CallbackURL)
+	if err != nil {
+		nexus.Error(w, http.StatusBadRequest, "invalid callback URL")
 		return
 	}
 	ctx := r.Context()
@@ -462,6 +471,7 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 		RegNumber: regNumber, FullName: name, DigestHex: digestHex,
 		DisplayText:  "Санал: " + choiceShort[in.Choice] + " — " + mo.Title,
 		DocumentName: "Хэлэлцүүлгийн санал",
+		CallbackURL:  callback,
 	})
 	if err != nil {
 		nexus.Error(w, http.StatusBadGateway, "eID Mongolia could not start the signature")
@@ -483,7 +493,27 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "you have already voted on this issue")
 		return
 	}
-	nexus.JSON(w, http.StatusAccepted, map[string]any{"session_id": session.SessionID, "verification_code": session.VerificationCode, "state": "signing"})
+	nexus.JSON(w, http.StatusAccepted, map[string]any{"session_id": session.SessionID, "verification_code": session.VerificationCode,
+		"app_link": session.AppLink, "state": "signing"})
+}
+
+// sameSiteCallback accepts only this site's own eID callback page, on the host
+// the request came to, over https (http only when the request itself was, in
+// development). eID returns the phone there after PIN2.
+func sameSiteCallback(r *http.Request, raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Path != "/auth/eid/callback" || !strings.EqualFold(u.Host, r.Host) {
+		return "", errors.New("callback not allowed")
+	}
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	if u.Scheme != "https" && (secure || u.Scheme != "http") {
+		return "", errors.New("callback not allowed")
+	}
+	return u.String(), nil
 }
 
 // pollVote asks eID about the caller's signature and, once it is given and
@@ -493,19 +523,18 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The session is optional: the caller has one vote per motion, and a page
+	// opened again after the eID app returned no longer holds the session id.
 	var in struct {
 		SessionID string `json:"session_id"`
 	}
-	if err := decode(r, &in); err != nil || strings.TrimSpace(in.SessionID) == "" {
-		nexus.Error(w, http.StatusBadRequest, "session_id is required")
-		return
-	}
+	_ = decode(r, &in)
 	ctx := r.Context()
 	eventID, motionID := chi.URLParam(r, "id"), chi.URLParam(r, "motionID")
 	var status, digestHex string
-	err := m.db.QueryRow(ctx, `SELECT status, digest_hex FROM events_motion_votes
-		WHERE tenant_id=$1 AND motion_id=$2 AND event_id=$3 AND user_id=$4 AND sign_session_id=$5`,
-		claims.WorkspaceID, motionID, eventID, claims.UserID, in.SessionID).Scan(&status, &digestHex)
+	err := m.db.QueryRow(ctx, `SELECT status, digest_hex, COALESCE(sign_session_id,'') FROM events_motion_votes
+		WHERE tenant_id=$1 AND motion_id=$2 AND event_id=$3 AND user_id=$4 AND ($5 = '' OR sign_session_id=$5)`,
+		claims.WorkspaceID, motionID, eventID, claims.UserID, strings.TrimSpace(in.SessionID)).Scan(&status, &digestHex, &in.SessionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, http.StatusNotFound, "no such signature")
 		return
