@@ -683,18 +683,29 @@ func (u *usecase) setRPAuth(req *http.Request) {
 // startV3Sign opens the signature session and pushes PIN2 to the citizen.
 func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName, onBehalfOfOrg, displayText, fileName string) (sessionID, code string, err error) {
 	_ = displayName // eID takes the name from the certificate, not from us
+	// The RP-API v3 shape (eid-mongolia-sdk src/sign.ts): a raw digest
+	// signature, its parameters nested, and the interactions as base64 of
+	// their JSON. The flat ACSP_V2/digest/hashType body this replaced is what
+	// eID accepted before its 2026-09-28 move to rp.eidmongolia.mn.
+	interactions, err := json.Marshal([]map[string]string{
+		{"type": "displayTextAndPIN", "displayText60": clampDisplayText(displayText)},
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("eidsign: encode the interactions: %w", err)
+	}
 	body := map[string]any{
 		"relyingPartyUUID": u.cfg.RPUUID,
 		"relyingPartyName": u.cfg.RPName,
 		// QUALIFIED, unlike sign-in's ADVANCED. Accepting ADVANCED here would
 		// quietly produce something that is not a qualified signature.
 		"certificateLevel":  "QUALIFIED",
-		"signatureProtocol": "ACSP_V2",
-		"digest":            digestB64,
-		"hashType":          "SHA256",
-		"interactions": []map[string]string{
-			{"type": "displayTextAndPIN", "displayText60": clampDisplayText(displayText)},
+		"signatureProtocol": "RAW_DIGEST_SIGNATURE",
+		"signatureProtocolParameters": map[string]any{
+			"digest":                       digestB64,
+			"signatureAlgorithm":           "rsassa-pss",
+			"signatureAlgorithmParameters": map[string]string{"hashAlgorithm": "SHA-256"},
 		},
+		"interactions": base64.StdEncoding.EncodeToString(interactions),
 	}
 	if onBehalfOfOrg != "" {
 		body["onBehalfOf"] = onBehalfOfOrg

@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.3.0",
+      "released_at": "2026-10-07",
+      "kind": "feature",
+      "summary": {
+        "mn": "Хэлэлцүүлэг ба eID-ээр зурсан санал хураалт, ажил хуваарилалт, оноо ба тэргүүлэгчдийн самбар.",
+        "en": "Discussions with eID-signed votes, task assignment, points and a leaderboard."
+      },
+      "details": {
+        "mn": "Гишүүд арга хэмжээн дээр асуудал дэвшүүлж, ирц нь батлагдсан гишүүд санал бүрээ eID тоон гарын үсгээр зурна; өгсөн саналын олонхоор шийдэгдэж, шийдвэр ба зурагдсан санал арга хэмжээ бүрт түүх болж үлдэнэ. Менежер ажил үүргийг оноотойгоор хуваарилж, гишүүн хүлээн авах эсвэл татгалзана; гүйцэтгэл батлагдахад оноо орно. Салбарын тэргүүлэгчдийн самбар сар, жил, бүх цагаар.",
+        "en": "Members raise issues on an event; members whose attendance was confirmed sign each vote with eID. A simple majority of votes cast decides, and decisions and signed votes stay with the event as its record. Managers assign tasks with points, members accept or decline, and confirmed work earns its points. A branch leaderboard by month, year or all time."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.2.0",
       "released_at": "2026-09-15",
       "kind": "feature",

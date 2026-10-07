@@ -236,16 +236,22 @@ TRACE /cp/api
 TRACE /cp/api/*
 TRACE /metrics
 [app] DELETE /api/v1/events/{id}/register
+[app] DELETE /api/v1/events/{id}/tasks/{taskID}
+[app] DELETE /api/v1/events/{id}/tasks/{taskID}/assignments/{userID}
 [app] GET /api/v1/dues/finance
 [app] GET /api/v1/dues/mine
 [app] GET /api/v1/dues/settings
 [app] GET /api/v1/events/
+[app] GET /api/v1/events/leaderboard
 [app] GET /api/v1/events/members
 [app] GET /api/v1/events/mine
 [app] GET /api/v1/events/points
 [app] GET /api/v1/events/summary
 [app] GET /api/v1/events/{id}/
 [app] GET /api/v1/events/{id}/attendance
+[app] GET /api/v1/events/{id}/motions
+[app] GET /api/v1/events/{id}/motions/{motionID}/votes
+[app] GET /api/v1/events/{id}/tasks
 [app] GET /api/v1/me/dues-history
 [app] GET /api/v1/me/participation-history
 [app] POST /api/v1/dues/charges
@@ -256,7 +262,21 @@ TRACE /metrics
 [app] POST /api/v1/events/{id}/attendance
 [app] POST /api/v1/events/{id}/check-in
 [app] POST /api/v1/events/{id}/check-in-code
+[app] POST /api/v1/events/{id}/motions
+[app] POST /api/v1/events/{id}/motions/{motionID}/close
+[app] POST /api/v1/events/{id}/motions/{motionID}/open
+[app] POST /api/v1/events/{id}/motions/{motionID}/vote
+[app] POST /api/v1/events/{id}/motions/{motionID}/vote/poll
+[app] POST /api/v1/events/{id}/motions/{motionID}/withdraw
 [app] POST /api/v1/events/{id}/register
+[app] POST /api/v1/events/{id}/tasks
+[app] POST /api/v1/events/{id}/tasks/{taskID}/assign
+[app] POST /api/v1/events/{id}/tasks/{taskID}/assignments/{userID}/done
+[app] POST /api/v1/events/{id}/tasks/{taskID}/assignments/{userID}/undo
+[app] POST /api/v1/events/{id}/tasks/{taskID}/respond
+[app] POST /api/v1/events/{id}/tasks/{taskID}/volunteer
 [app] PUT /api/v1/dues/settings
 [app] PUT /api/v1/events/{id}/
 [app] PUT /api/v1/events/{id}/attendance/{userID}
+[app] PUT /api/v1/events/{id}/motions/{motionID}
+[app] PUT /api/v1/events/{id}/tasks/{taskID}
