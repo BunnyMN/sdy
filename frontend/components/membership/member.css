@@ -1,20 +1,27 @@
 /* Gerege Design Research 00/08/11/14: touch controls 44, form width 720,
-   card padding 16/24, radius 6/8, neutral surfaces and one accent. */
+   card padding 16/24, radius 6/8, neutral surfaces and one accent.
+   SDY: the accent is the red of the SDY Darkhan-Uul mark (#9c1d25 family) and
+   the neutrals are graphite rather than the platform's navy, so the member
+   app reads as the union's own rather than as the platform underneath. The
+   Tailwind tokens (accent, surface, line, muted…) resolve to these variables,
+   so every member screen follows without touching its markup. */
 .sdy-member-shell {
-  --gerege-bg: hsl(0 0% 100%);
+  --gerege-bg: hsl(240 5% 98%);
   --gerege-surface: hsl(0 0% 100%);
-  --gerege-surface-2: hsl(210 40% 96%);
-  --gerege-chrome: hsl(210 40% 98%);
-  --gerege-fg: hsl(222 47% 11%);
-  --gerege-muted: hsl(215 19% 35%);
-  --gerege-fg-subtle: hsl(215 16% 45%);
-  --gerege-border: hsl(214 32% 91%);
-  --gerege-border-input: hsl(215 16% 55%);
-  --gerege-blue: hsl(238 50% 49%);
+  --gerege-surface-2: hsl(240 5% 95%);
+  --gerege-chrome: hsl(0 0% 100%);
+  --gerege-fg: hsl(240 10% 10%);
+  --gerege-muted: hsl(240 4% 34%);
+  --gerege-fg-subtle: hsl(240 4% 44%);
+  --gerege-border: hsl(240 6% 89%);
+  --gerege-border-input: hsl(240 4% 55%);
+  --gerege-blue: hsl(356 72% 40%);
   --gerege-on-blue: hsl(0 0% 100%);
-  --gerege-blue-soft: hsl(232 100% 97%);
-  --gerege-ring: hsl(238 55% 58%);
-  --gerege-surface-hover: hsl(210 40% 96%);
+  --gerege-blue-soft: hsl(356 85% 96%);
+  --gerege-ring: hsl(356 72% 46%);
+  --gerege-surface-hover: hsl(240 5% 95%);
+  --sdy-silver: linear-gradient(180deg, hsl(220 10% 96%), hsl(220 6% 72%));
+  --sdy-sidebar-w: 264px;
   --sdy-text-caption: .75rem;
   --sdy-text-body: .875rem;
   --sdy-text-body-line: 1.5rem;
@@ -38,6 +45,8 @@
 .sdy-signin .signin-shell__nav { min-height:56px; padding:8px 24px; }
 .sdy-signin button { min-height:44px; border-radius:6px; }
 .sdy-signin .signin-btn--eid { color:var(--gerege-on-blue); }
+/* Instructions in the accent colour read as an error once the accent is red. */
+.sdy-signin .signin-instruction { color:var(--gerege-muted); }
 .sdy-signin .admin-login input { background:var(--gerege-surface); color:var(--gerege-fg); font-size:1rem; min-height:44px; }
 .sdy-signin .admin-login label { border-color:var(--gerege-border-input); border-radius:6px; }
 .sdy-signin .admin-login button { background:var(--gerege-surface); color:var(--gerege-fg); border:1px solid var(--gerege-border-input); }
@@ -47,36 +56,50 @@
 .sdy-signin :is(button,input,a):focus-visible { outline:2px solid var(--gerege-ring); outline-offset:2px; box-shadow:0 0 0 2px var(--gerege-bg); }
 @media(max-width:640px) { .sdy-signin .signin-shell__body { padding:24px 16px; } .sdy-signin .signin-card { padding:16px; } .sdy-signin .signin-shell__nav { padding-inline:16px; } }
 .dark .sdy-member-shell {
-  --gerege-bg: hsl(229 50% 6%); --gerege-chrome: hsl(222 47% 9%);
-  --gerege-surface: hsl(222 47% 11%); --gerege-surface-2: hsl(217 33% 13%);
-  --gerege-fg: hsl(210 40% 98%); --gerege-muted: hsl(213 27% 84%);
-  --gerege-fg-subtle: hsl(215 20% 65%); --gerege-border: hsl(217 33% 17%);
-  --gerege-border-input: hsl(215 16% 45%); --gerege-blue: hsl(238 60% 67%);
-  --gerege-on-blue: hsl(229 50% 6%); --gerege-blue-soft: hsl(238 50% 16%);
-  --gerege-ring: hsl(238 60% 67%); --gerege-surface-hover: hsl(217 33% 17%); color-scheme: dark;
+  --gerege-bg: hsl(240 6% 6%); --gerege-chrome: hsl(240 5% 8%);
+  --gerege-surface: hsl(240 5% 10%); --gerege-surface-2: hsl(240 4% 14%);
+  --gerege-fg: hsl(0 0% 97%); --gerege-muted: hsl(240 5% 76%);
+  --gerege-fg-subtle: hsl(240 4% 63%); --gerege-border: hsl(240 4% 18%);
+  --gerege-border-input: hsl(240 4% 42%); --gerege-blue: hsl(356 70% 52%);
+  --gerege-on-blue: hsl(0 0% 100%); --gerege-blue-soft: hsl(356 45% 15%);
+  --gerege-ring: hsl(356 80% 62%); --gerege-surface-hover: hsl(240 4% 14%); color-scheme: dark;
 }
-.sdy-member-header { position: sticky; top: 0; z-index: var(--z-sticky); display: flex; align-items: center; gap: 24px; min-height: 56px; padding: env(safe-area-inset-top) 24px 0; border-bottom: 1px solid var(--gerege-border); background: var(--gerege-bg); }
+.sdy-member-header { position: sticky; top: 0; z-index: var(--z-sticky); display: flex; align-items: center; gap: 24px; min-height: 64px; padding: env(safe-area-inset-top) 24px 0; border-top: 3px solid hsl(356 72% 40%); border-bottom: 1px solid var(--gerege-border); background: var(--gerege-chrome); }
 .sdy-member-header button,.sdy-member-header [role="menuitem"] { min-height: 44px; min-width: 44px; }
 .sdy-member-brand { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 44px; }
-.sdy-member-brand img { object-fit: contain; flex-shrink: 0; }
-.sdy-member-brand strong,.sdy-member-brand small { display: block; line-height: 1.25rem; }
-.sdy-member-brand strong { font-weight: 600; }
+.sdy-member-brand img { width: 40px; height: 40px; object-fit: cover; flex-shrink: 0; border-radius: 8px; box-shadow: 0 0 0 1px hsl(0 0% 0% / 8%); }
+.sdy-member-brand > span { min-width: 0; }
+.sdy-member-brand strong,.sdy-member-brand small { display: block; line-height: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sdy-member-brand strong { font-weight: 700; letter-spacing: -.01em; }
 .sdy-member-brand small { color: var(--gerege-muted); font-size: var(--sdy-text-caption); }
 .sdy-header-organisation { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; color: var(--gerege-muted); }
 .sdy-header-organisation span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sdy-header-organisation svg { width: 16px; height: 16px; flex-shrink: 0; }
-.sdy-member-layout { display: flex; max-width: 1536px; margin-inline: auto; min-height: calc(100dvh - 56px); }
-.sdy-member-sidebar { position: sticky; top: 56px; display: flex; flex-direction: column; gap: 8px; flex: 0 0 240px; align-self: flex-start; height: calc(100dvh - 56px); padding: 24px 16px; background: var(--gerege-chrome); border-right: 1px solid var(--gerege-border); }
-.sdy-nav-caption { margin: 8px 8px 0; font-size: var(--sdy-text-caption); color: var(--gerege-muted); }
-.sdy-member-sidebar nav { display: grid; gap: 8px; margin-bottom: 16px; }
-.sdy-member-sidebar a { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px; border-radius: 6px; }
+.sdy-member-layout { display: flex; min-height: calc(100dvh - 67px); }
+.sdy-member-sidebar { position: sticky; top: 67px; display: flex; flex-direction: column; gap: 4px; flex: 0 0 var(--sdy-sidebar-w); align-self: flex-start; height: calc(100dvh - 67px); overflow-y: auto; padding: 20px 16px; background: var(--gerege-chrome); border-right: 1px solid var(--gerege-border); }
+.sdy-nav-caption { margin: 12px 8px 4px; font-size: .6875rem; line-height: 1rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--gerege-fg-subtle); }
+.sdy-member-sidebar nav { display: grid; gap: 2px; margin-bottom: 12px; }
+.sdy-member-sidebar a { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border-radius: 6px; transition: background-color 120ms ease-out, color 120ms ease-out; }
 .sdy-member-sidebar svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--gerege-muted); }
 .sdy-member-sidebar a:hover { background: var(--gerege-surface-2); }
-.sdy-member-sidebar a[aria-current="page"] { color: var(--gerege-blue); background: var(--gerege-blue-soft); box-shadow: inset 3px 0 var(--gerege-blue); font-weight: 500; }
+.sdy-member-sidebar a[aria-current="page"] { color: var(--gerege-blue); background: var(--gerege-blue-soft); box-shadow: inset 3px 0 var(--gerege-blue); font-weight: 600; }
 .sdy-member-sidebar a[aria-current="page"] svg { color: currentColor; }
 .sdy-appearance { margin-top: auto; }
-.sdy-member-main { flex: 1; min-width: 0; padding: 24px 32px 48px; }
+.sdy-member-main { flex: 1; min-width: 0; padding: 32px 40px 56px; }
 .sdy-member-main > div { max-width: 720px; margin-inline: auto; }
+@media(min-width:1440px) {
+  .sdy-member-main > div,.sdy-member-main > div[class~="max-w-[720px]"] { max-width: 960px; }
+  .sdy-member-main form { max-width: 720px; }
+}
+@media(min-width:1680px) {
+  .sdy-member-main > div,.sdy-member-main > div[class~="max-w-[720px]"] { max-width: 1120px; }
+}
+.sdy-member-main section.rounded-lg,.sdy-member-main .rounded-xl.border { transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
+.sdy-member-main section.rounded-lg:hover { border-color: color-mix(in oklab, var(--gerege-blue) 30%, var(--gerege-border)); }
+.sdy-org-grid { display: grid; gap: 16px; }
+@media(min-width:1024px) { .sdy-org-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sdy-member-main .sdy-org-current { border-color: color-mix(in oklab, var(--gerege-blue) 45%, var(--gerege-border)); box-shadow: inset 3px 0 var(--gerege-blue); }
+.sdy-member-main .sdy-org-enter:hover:not(:disabled) { border-color: var(--gerege-blue); color: var(--gerege-blue); background: var(--gerege-blue-soft); }
 .sdy-member-main h1 { font-size: var(--sdy-text-title); line-height: var(--sdy-text-title-line); font-weight: 600; overflow-wrap: anywhere; }
 .sdy-member-main h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
 .sdy-member-main strong { font-weight: 600; }

@@ -71,11 +71,11 @@ export default function MemberHome() {
     <p className="text-xs text-muted tabular-nums">{t("membership.updated", { time: updated })}</p>
     {error && <Banner tone="error" message={error} />}
     {notice && <p role="status" className="rounded-xl border border-success-border bg-success-soft p-4 text-success">{notice}</p>}
-    {workspaces.map(org => <section key={org.id} className="rounded-lg border border-line bg-surface p-4 sm:p-6">
+    {workspaces.length > 0 && <div className="sdy-org-grid">{workspaces.map(org => <section key={org.id} className={`rounded-lg border border-line bg-surface p-4 sm:p-6${org.id === me.tenant_id ? " sdy-org-current" : ""}`}>
       <p className="mb-2 flex items-center gap-2 text-xs text-muted"><Building2 className="h-4 w-4" />{t(data.record.memberships.some(m => m.tenant_id === org.id && m.is_primary) ? "membership.record.primary" : "membership.record.other_access")}</p><h2 className="font-semibold">{org.name}</h2>
       {org.id === me.tenant_id ? <p className="mt-2 flex items-center gap-2 text-sm text-success"><CheckCircle2 className="h-4 w-4" />{t("membership.current")}</p>
-        : <button disabled={busy} onClick={() => void enter(org.id)} className="mt-3 min-h-11 rounded-md border border-input px-4 text-foreground disabled:opacity-50">{t("membership.open")}</button>}
-    </section>)}
+        : <button disabled={busy} onClick={() => void enter(org.id)} className="sdy-org-enter mt-3 min-h-11 rounded-md border border-input px-4 text-foreground disabled:opacity-50">{t("membership.open")}</button>}
+    </section>)}</div>}
     {me.workspace_kind === "organisation" && <section className="space-y-4">
       <h2>{t("membership.my_activity")}</h2>
       <div className="sdy-action-list">{[

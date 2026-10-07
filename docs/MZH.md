@@ -28,7 +28,7 @@ default, `.env` жишээ, `brand/copy.json`, `frontend/public/sdy/` ба эн�
 | Хаана | Юу |
 | --- | --- |
 | `brand/copy.json` | СДМЗХ-ны нэр (mn/en), нүүр хуудасны гарчиг, тайлбар, нэвтрэлт/хамгаалалт/дэд бүтцийн хэсгүүдийн үг хэллэг, OAuth зөвшөөрлийн дэлгэц |
-| `frontend/public/sdy/` | SDY Mongolia wordmark, лого, icon-ууд (`sdyLogo.jpg`-аас) |
+| `frontend/public/sdy/` | SDY Darkhan-Uul wordmark, лого, icon-ууд (`brand/sdy-darkhan-uul.jpg`-аас) |
 | `docker-compose.yml` | `BRAND_*`, `BRAND_COPY_FILE=/brand/copy.json`, `LANDING_SECTIONS` default нь СДМЗХ-ных |
 | `.env.example`, `deploy/.env.prod.example` | Мөн адил утгууд, тайлбартай |
 | `makefile` | `make dev-frontend` / `dev-backend` гараар ажиллуулахад ч ижил брэнд |
@@ -81,8 +81,10 @@ docker compose up -d
 
 ## Лого ба өнгө
 
-`frontend/public/sdy/` — SDY Mongolia (est. 1997) тэмдэг, `sdyLogo.jpg`
-mockup-аас гаргаж авсан:
+`frontend/public/sdy/` — SDY Darkhan-Uul тэмдэг, `brand/sdy-darkhan-uul.jpg`-аас
+гаргаж авсан (2026-10-07; өмнөх SDY Mongolia тэмдгийн эх нь `brand/sdyLogo.jpg`).
+Лого/icon нь мөнгөлөг үсгийг төвд нь авч тайрсан улаан квадрат, wordmark нь
+улаан даавуунаас салгасан тунгалаг мөнгөлөг үсэг:
 
 | Файл | Хаана |
 | --- | --- |
@@ -96,6 +98,12 @@ mockup-аас гаргаж авсан:
 дэлгэцүүдийн палитр эдгээрээс гардаг (`app/layout.tsx` → `--brand-*` CSS
 хувьсагч → `globals.css`); тохируулаагүй суулгац Gerege Nexus-ийн navy/gold
 хэвээр.
+
+Гишүүний апп (`/member`, арга хэмжээ) ба нэвтрэх дэлгэц өөрийн палитртай:
+`components/membership/member.css` — графит саарал суурь, ганц онцлох өнгө нь
+логоны улаан (`--gerege-blue` хувьсагчийн нэр хэвээр, утга нь улаан). Tailwind-ийн
+`accent`, `surface`, `line`, `muted` эдгээр хувьсагчаас уншдаг тул дэлгэц бүр
+дагана.
 
 ## Үг хэллэг засах
 
