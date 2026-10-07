@@ -66,7 +66,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.2.0" }
+func (m *Module) Version() string { return "1.3.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -110,6 +110,7 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.With(read).Get("/mine", m.myParticipation)
 		er.With(read).Get("/points", m.myPoints)
 		er.With(manage).Get("/summary", m.summary)
+		er.With(read).Get("/leaderboard", m.leaderboard)
 		er.Route("/{id}", func(one chi.Router) {
 			one.With(read).Get("/", m.get)
 			one.With(manage).Put("/", m.update)
@@ -120,6 +121,32 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 			one.With(read).Get("/attendance", m.attendance)
 			one.With(manage).Post("/attendance", m.addParticipant)
 			one.With(manage).Put("/attendance/{userID}", m.mark)
+
+			// Discussion: anyone in the branch proposes; managers open and
+			// close the vote; members whose attendance was confirmed vote,
+			// each vote signed with their own eID.
+			one.With(read).Get("/motions", m.motions)
+			one.With(read).Post("/motions", m.propose)
+			one.With(read).Put("/motions/{motionID}", m.editMotion)
+			one.With(manage).Post("/motions/{motionID}/open", m.openVote)
+			one.With(manage).Post("/motions/{motionID}/close", m.closeVote)
+			one.With(read).Post("/motions/{motionID}/withdraw", m.withdrawMotion)
+			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/vote", m.vote)
+			one.With(read).Post("/motions/{motionID}/vote/poll", m.pollVote)
+			one.With(read).Get("/motions/{motionID}/votes", m.votes)
+
+			// Tasks: managers create and assign; members accept, decline or
+			// volunteer; a manager confirms the work, which awards its points.
+			one.With(read).Get("/tasks", m.tasks)
+			one.With(manage).Post("/tasks", m.createTask)
+			one.With(manage).Put("/tasks/{taskID}", m.updateTask)
+			one.With(manage).Delete("/tasks/{taskID}", m.deleteTask)
+			one.With(manage).Post("/tasks/{taskID}/assign", m.assignTask)
+			one.With(read).Post("/tasks/{taskID}/volunteer", m.volunteer)
+			one.With(read).Post("/tasks/{taskID}/respond", m.respondTask)
+			one.With(manage).Post("/tasks/{taskID}/assignments/{userID}/done", m.completeTask)
+			one.With(manage).Post("/tasks/{taskID}/assignments/{userID}/undo", m.undoTask)
+			one.With(manage).Delete("/tasks/{taskID}/assignments/{userID}", m.removeAssignment)
 		})
 	})
 }
@@ -144,6 +171,8 @@ type Event struct {
 	// MyStatus is the caller's own row, or "" when they have none.
 	MyStatus    string `json:"my_status"`
 	PointsValue int    `json:"points_value"`
+	// VotePoints is what each signed vote in this event's discussion earns.
+	VotePoints int `json:"vote_points"`
 }
 
 type Participant struct {
@@ -165,11 +194,15 @@ type eventInput struct {
 	Capacity    *int    `json:"capacity"`
 	Status      string  `json:"status"`
 	PointsValue *int    `json:"points_value,omitempty"`
+	VotePoints  *int    `json:"vote_points,omitempty"`
 }
 
 func (in *eventInput) validate() (start time.Time, end *time.Time, err error) {
 	if in.PointsValue != nil && (*in.PointsValue < 0 || *in.PointsValue > 100000) {
 		return start, nil, errors.New("points must be between 0 and 100000")
+	}
+	if in.VotePoints != nil && (*in.VotePoints < 0 || *in.VotePoints > 100000) {
+		return start, nil, errors.New("vote points must be between 0 and 100000")
 	}
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Title == "" {
@@ -232,7 +265,8 @@ const eventColumns = `
 	       e.status, e.created_by::text, e.created_at,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status <> 'absent')::int,
 	       (SELECT count(*) FROM events_attendance a WHERE a.event_id = e.id AND a.status = 'attended')::int,
-	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), ''), e.points_value
+	       COALESCE((SELECT a.status FROM events_attendance a WHERE a.event_id = e.id AND a.user_id = $2::uuid), ''), e.points_value,
+	       e.vote_points
 	  FROM events_events e
 	 WHERE e.tenant_id = $1::uuid`
 
@@ -241,7 +275,8 @@ func scanEvent(row pgx.Row) (Event, error) {
 	var starts, created time.Time
 	var ends *time.Time
 	if err := row.Scan(&e.ID, &e.Title, &e.Description, &e.Location, &starts, &ends, &e.Capacity,
-		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus, &e.PointsValue); err != nil {
+		&e.Status, &e.CreatedBy, &created, &e.Registered, &e.Attended, &e.MyStatus, &e.PointsValue,
+		&e.VotePoints); err != nil {
 		return e, err
 	}
 	e.StartsAt, e.EndsAt, e.CreatedAt = stamp(starts), stampPtr(ends), stamp(created)
@@ -385,11 +420,11 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 	}
 	var id string
 	if err := m.db.QueryRow(r.Context(), `
-		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by, points_value)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, COALESCE($10,0))
+		INSERT INTO events_events (tenant_id, title, description, location, starts_at, ends_at, capacity, status, created_by, points_value, vote_points)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, COALESCE($10,0), COALESCE($11,0))
 		RETURNING id::text`,
 		claims.WorkspaceID, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status, claims.UserID, in.PointsValue).Scan(&id); err != nil {
+		start, end, in.Capacity, in.Status, claims.UserID, in.PointsValue, in.VotePoints).Scan(&id); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not create the event")
 		return
 	}
@@ -439,10 +474,11 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 	tag, err := tx.Exec(r.Context(), `
 		UPDATE events_events
 		   SET title = $3, description = $4, location = $5, starts_at = $6, ends_at = $7,
-		       capacity = $8, status = $9, points_value = COALESCE($10, points_value), updated_at = NOW()
+		       capacity = $8, status = $9, points_value = COALESCE($10, points_value),
+		       vote_points = COALESCE($11, vote_points), updated_at = NOW()
 		 WHERE tenant_id = $1::uuid AND id = $2::uuid`,
 		claims.WorkspaceID, id, in.Title, strings.TrimSpace(in.Description), strings.TrimSpace(in.Location),
-		start, end, in.Capacity, in.Status, in.PointsValue)
+		start, end, in.Capacity, in.Status, in.PointsValue, in.VotePoints)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not update the event")
 		return

@@ -2,7 +2,9 @@ package eidsign
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -219,5 +221,38 @@ func TestProductionRefusesAnEphemeralDocumentSigner(t *testing.T) {
 	}
 	if _, err := resolveSigner(Config{}); err != nil {
 		t.Fatalf("development should fall back to a self-signed key: %v", err)
+	}
+}
+
+// The signature initiate in eID's RP-API v3 shape: a raw digest signature
+// with its parameters nested and the interactions as base64 JSON. The flat
+// ACSP_V2/digest/hashType body eID accepted before 2026-09-28 is refused now.
+func TestDigestSignatureUsesTheV3Body(t *testing.T) {
+	var body map[string]any
+	var path string
+	u, _ := newTestUsecase(t, func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		_, _ = w.Write([]byte(`{"sessionID":"s-1","vc":{"type":"numeric4","value":"1234"}}`))
+	})
+	if _, err := u.InitDigest(context.Background(), "МА74101813", "Иргэн", strings.Repeat("ab", 32), "Санал: Зөвшөөрөв", "Санал"); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/signature/notification/etsi/PNOMN-МА74101813" {
+		t.Errorf("signed at %s", path)
+	}
+	params, _ := body["signatureProtocolParameters"].(map[string]any)
+	digest, _ := params["digest"].(string)
+	raw, _ := base64.StdEncoding.DecodeString(digest)
+	if body["signatureProtocol"] != "RAW_DIGEST_SIGNATURE" || len(raw) != 32 || params["signatureAlgorithm"] != "rsassa-pss" {
+		t.Fatalf("body %v", body)
+	}
+	if _, old := body["digest"]; old {
+		t.Error("the pre-v3 top-level digest was sent")
+	}
+	encoded, _ := body["interactions"].(string)
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || !strings.Contains(string(decoded), `"displayText60":"Санал: Зөвшөөрөв"`) {
+		t.Errorf("interactions %q (%v)", decoded, err)
 	}
 }
