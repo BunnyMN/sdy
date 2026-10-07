@@ -82,9 +82,11 @@ export const participationApi = {
     request<Motion>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}`, { method: "PUT", body: JSON.stringify(input) }),
   motionAction: (eventID: string, motionID: string, action: "open" | "close" | "withdraw", note?: string) =>
     request<Motion>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/${action}`, post(note === undefined ? undefined : { note })),
-  vote: (eventID: string, motionID: string, choice: VoteChoice) =>
-    request<{ session_id: string; verification_code: string; state: string }>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/vote`, post({ choice })),
-  pollVote: (eventID: string, motionID: string, sessionID: string) =>
+  /** callbackUrl, from a phone: the answer's app_link opens the eID app, which returns there. */
+  vote: (eventID: string, motionID: string, choice: VoteChoice, callbackUrl = "") =>
+    request<{ session_id: string; verification_code: string; app_link?: string; state: string }>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/vote`, post({ choice, callback_url: callbackUrl })),
+  /** An empty sessionID asks about the caller's own vote on the motion, whatever its session. */
+  pollVote: (eventID: string, motionID: string, sessionID = "") =>
     request<{ state: "signing" | "signed" | "failed"; reason?: string; points?: number }>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/vote/poll`, post({ session_id: sessionID })),
   votes: (eventID: string, motionID: string) => request<{ votes: SignedVote[] }>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/votes`),
 

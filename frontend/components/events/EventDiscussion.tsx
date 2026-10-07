@@ -14,6 +14,16 @@ import { useI18n } from "@/lib/i18n";
 import { Chip, ConfirmDialog, ErrorNote, Panel } from "@/components/module/kit";
 import { Modal, fieldClass } from "@/components/ui";
 import { memberDate } from "@/lib/memberFormat";
+import { browserHint } from "@/components/EIDLogin";
+
+function onPhone() { return typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
+
+/* On a phone the eID app is opened directly and returns to the callback page,
+   which sends the member back here; the vote is then picked up below. */
+function voteCallback(eventID: string) {
+  const back = encodeURIComponent(`/module/events/${eventID}#discussion`);
+  return `${window.location.origin}/auth/eid/callback?return=${back}${browserHint(navigator.userAgent).replace("?", "&")}`;
+}
 
 const choices: VoteChoice[] = ["yes", "no", "abstain"];
 const POLL_EVERY = 2000;
@@ -24,7 +34,7 @@ function statusKey(m: Motion) {
 }
 const statusTone = { proposed: "slate", voting: "blue", approved: "emerald", rejected: "rose", withdrawn: "amber" } as const;
 
-type Signing = { motion: Motion; choice: VoteChoice; code: string; phase: "waiting" | "done" | "failed"; message?: string };
+type Signing = { motion: Motion; choice: VoteChoice; code: string; phase: "waiting" | "done" | "failed"; message?: string; onPhone?: boolean };
 
 export default function EventDiscussion({ eventID }: { eventID: string }) {
   const { t } = useI18n();
@@ -67,25 +77,48 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
   async function vote(motion: Motion, choice: VoteChoice) {
     setFailed(""); const mine = ++ticket.current;
     try {
-      const started = await participationApi.vote(eventID, motion.id, choice);
-      setSigning({ motion, choice, code: started.verification_code, phase: "waiting" });
-      const deadline = Date.now() + POLL_FOR;
-      while (ticket.current === mine && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, POLL_EVERY));
-        if (ticket.current !== mine) return;
-        try {
-          const state = await participationApi.pollVote(eventID, motion.id, started.session_id);
-          if (state.state === "signed") { setSigning(s => s && { ...s, phase: "done" }); await load(); return; }
-          if (state.state === "failed") { setSigning(s => s && { ...s, phase: "failed" }); await load(); return; }
-        } catch (err) {
-          setSigning(s => s && { ...s, phase: "failed", message: err instanceof Error ? err.message : "" }); await load(); return;
-        }
-      }
-      if (ticket.current === mine) setSigning(s => s && { ...s, phase: "failed" });
+      const phone = onPhone();
+      const started = await participationApi.vote(eventID, motion.id, choice, phone ? voteCallback(eventID) : "");
+      setSigning({ motion, choice, code: started.verification_code, phase: "waiting", onPhone: phone && !!started.app_link });
+      if (phone && started.app_link) window.location.href = started.app_link;
+      await watchVote(motion, started.session_id, mine);
     } catch (err) {
       setSigning(null); setFailed(err instanceof Error ? err.message : "—");
     }
   }
+
+  /* Ask the API about the vote every two seconds until eID answers or three
+     minutes pass. Without a session id it asks about the caller's own vote,
+     which is how a page reopened after the eID app picks it up again. */
+  async function watchVote(motion: Motion, sessionID: string, mine: number) {
+    const deadline = Date.now() + POLL_FOR;
+    while (ticket.current === mine && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, POLL_EVERY));
+      if (ticket.current !== mine) return;
+      try {
+        const state = await participationApi.pollVote(eventID, motion.id, sessionID);
+        if (state.state === "signed") { setSigning(s => s && { ...s, phase: "done" }); await load(); return; }
+        if (state.state === "failed") { setSigning(s => s && { ...s, phase: "failed" }); await load(); return; }
+      } catch (err) {
+        setSigning(s => s && { ...s, phase: "failed", message: err instanceof Error ? err.message : "" }); await load(); return;
+      }
+    }
+    if (ticket.current === mine) setSigning(s => s && { ...s, phase: "failed" });
+  }
+
+  // A vote left signing — the eID app was opened and the page came back —
+  // is picked up once, without its session id.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!data || resumed.current) return;
+    const pending = data.motions.find(m => m.status === "voting" && m.my_vote?.status === "signing");
+    if (!pending?.my_vote) return;
+    resumed.current = true;
+    const mine = ++ticket.current;
+    setSigning({ motion: pending, choice: pending.my_vote.choice, code: "", phase: "waiting" });
+    void watchVote(pending, "", mine);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   async function showRoll(motion: Motion) {
     if (rolls[motion.id]) { setRolls(r => { const next = { ...r }; delete next[motion.id]; return next; }); return; }
@@ -195,9 +228,9 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
           <h2 className="text-lg font-semibold">{t("events.discussion.signing_title")}</h2>
           <p className="text-sm text-muted">{signing.motion.title} · <strong className="text-foreground">{t(`events.discussion.chose.${signing.choice}`)}</strong></p>
           {signing.phase === "waiting" && <>
-            <p className="text-sm">{t("events.discussion.signing_body")}</p>
-            <p className="text-xs text-muted">{t("events.discussion.signing_code")}</p>
-            <p className="text-4xl font-bold tracking-widest tabular-nums">{signing.code}</p>
+            <p className="text-sm">{t(signing.onPhone ? "events.discussion.signing_body_phone" : "events.discussion.signing_body")}</p>
+            {signing.code && <><p className="text-xs text-muted">{t("events.discussion.signing_code")}</p>
+            <p className="text-4xl font-bold tracking-widest tabular-nums">{signing.code}</p></>}
             <p className="text-xs text-muted">{t("events.discussion.signing_wait")}</p>
           </>}
           {signing.phase === "done" && <p className="flex items-center justify-center gap-2 font-semibold text-success"><CheckCircle2 className="h-5 w-5" />{t("events.discussion.signing_done")}</p>}

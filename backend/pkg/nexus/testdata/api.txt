@@ -289,11 +289,13 @@
   SignatureCeremony.SessionID string
   SignatureCeremony.VerificationCode string
   SignatureCounter.Signed(rail string, ok bool)
+  SignatureRequest.CallbackURL string
   SignatureRequest.DigestHex string
   SignatureRequest.DisplayText string
   SignatureRequest.DocumentName string
   SignatureRequest.FullName string
   SignatureRequest.RegNumber string
+  SignatureSession.AppLink string
   SignatureSession.SessionID string
   SignatureSession.VerificationCode string
   SignedDocument.FileName string

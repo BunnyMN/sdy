@@ -34,6 +34,17 @@ import (
 const digestSize = 32
 
 func (u *usecase) InitDigest(ctx context.Context, regNo, fullName, digestHex, displayText, docName string) (InitResult, error) {
+	return u.initDigest(ctx, regNo, fullName, digestHex, displayText, docName, "")
+}
+
+func (u *usecase) InitDigestOnDevice(ctx context.Context, regNo, fullName, digestHex, displayText, docName, callbackURL string) (InitResult, error) {
+	if strings.TrimSpace(callbackURL) == "" {
+		return InitResult{}, errors.New("eidsign: a device-link signature needs a callback")
+	}
+	return u.initDigest(ctx, regNo, fullName, digestHex, displayText, docName, strings.TrimSpace(callbackURL))
+}
+
+func (u *usecase) initDigest(ctx context.Context, regNo, fullName, digestHex, displayText, docName, callbackURL string) (InitResult, error) {
 	if strings.TrimSpace(regNo) == "" {
 		return InitResult{}, ErrNoRegNumber
 	}
@@ -47,10 +58,11 @@ func (u *usecase) InitDigest(ctx context.Context, regNo, fullName, digestHex, di
 	// it asked to have signed — a contract's name, "Шилжүүлэг" — so it says so.
 	// Left empty it is omitted entirely, and eID falls back to guessing from
 	// the interaction text, which for this flow is generic and yields "—".
-	v3SessionID, code, err := u.startV3Sign(ctx, toEtsi(regNo), digestB64, fullName, "", displayText, docName)
+	started, err := u.startV3Signature(ctx, toEtsi(regNo), digestB64, "", displayText, docName, callbackURL)
 	if err != nil {
 		return InitResult{}, err
 	}
+	v3SessionID, code := started.SessionID, started.Code
 
 	sessionID := randID()
 	// No document is stored, so this session can never be downloaded.
@@ -64,7 +76,7 @@ func (u *usecase) InitDigest(ctx context.Context, regNo, fullName, digestHex, di
 		return InitResult{}, err
 	}
 	slog.InfoContext(ctx, "eidsign: a digest ceremony has started", "session_id", sessionID)
-	return InitResult{SessionID: sessionID, DocumentHash: digestB64, VerificationCode: code}, nil
+	return InitResult{SessionID: sessionID, DocumentHash: digestB64, VerificationCode: code, AppLink: started.AppLink}, nil
 }
 
 // VerifiedDigest returns the digest the citizen signed.

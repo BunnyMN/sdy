@@ -17,6 +17,10 @@ export default function EIDCallback() {
   const [error, setError] = useState("");
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    // A signature (a discussion vote) returns here too, carrying where it
+    // started. That page picks the signature up; there is no login to finish.
+    const back = params.get("return") || "";
+    if (back.startsWith("/") && !back.startsWith("//") && !back.startsWith("/\\")) { location.replace(back); return; }
     const sid = params.get("sessionId") || params.get("session_id");
     if (!sid) { setError("eID session олдсонгүй"); return; }
     let stopped = false, running = false;

@@ -62,6 +62,8 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	pdfcpumodel "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	pdfcputypes "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
+
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/eidrp"
 )
 
 // What can go wrong, as errors a caller can match on.
@@ -132,6 +134,10 @@ type Usecase interface {
 	// therefore responsible for displayText actually describing what is being
 	// approved — it is the only thing the citizen reads before entering PIN2.
 	InitDigest(ctx context.Context, regNo, fullName, digestHex, displayText, docName string) (InitResult, error)
+	// InitDigestOnDevice is InitDigest for a citizen holding the phone: it
+	// opens a device-link session and returns, in AppLink, the Web2App link
+	// that opens the eID app directly. callbackURL is where the app returns.
+	InitDigestOnDevice(ctx context.Context, regNo, fullName, digestHex, displayText, docName, callbackURL string) (InitResult, error)
 	// VerifiedDigest returns the signed digest once the ceremony has completed.
 	VerifiedDigest(ctx context.Context, ownerRegNo, sessionID string) (string, error)
 	// Poll advances the session and reports its state.
@@ -145,6 +151,8 @@ type InitResult struct {
 	DocumentHash     string `json:"document_hash"`
 	VerificationCode string `json:"verification_code"`
 	Filename         string `json:"filename"`
+	// AppLink opens the eID app for this session; set for device-link sessions.
+	AppLink string `json:"app_link,omitempty"`
 }
 
 type DownloadResult struct {
@@ -683,6 +691,26 @@ func (u *usecase) setRPAuth(req *http.Request) {
 // startV3Sign opens the signature session and pushes PIN2 to the citizen.
 func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName, onBehalfOfOrg, displayText, fileName string) (sessionID, code string, err error) {
 	_ = displayName // eID takes the name from the certificate, not from us
+	started, err := u.startV3Signature(ctx, etsi, digestB64, onBehalfOfOrg, displayText, fileName, "")
+	return started.SessionID, started.Code, err
+}
+
+// v3Started is an opened signature session. AppLink is set only for a
+// device-link session: the Web2App link that opens the eID app on the phone
+// the citizen is already holding.
+type v3Started struct {
+	SessionID string
+	Code      string
+	AppLink   string
+}
+
+// startV3Signature opens a signature session. With no callback it is a push
+// (signature/notification): eID notifies the phone and the citizen opens the
+// app. With a callback it is a device link (signature/device-link): the
+// answer carries what a v3 Web2App link is signed with, the link opens the
+// eID app directly, and after PIN2 the app returns to the callback.
+func (u *usecase) startV3Signature(ctx context.Context, etsi, digestB64, onBehalfOfOrg, displayText, fileName, callbackURL string) (v3Started, error) {
+	var none v3Started
 	// The RP-API v3 shape (eid-mongolia-sdk src/sign.ts): a raw digest
 	// signature, its parameters nested, and the interactions as base64 of
 	// their JSON. The flat ACSP_V2/digest/hashType body this replaced is what
@@ -691,8 +719,9 @@ func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName,
 		{"type": "displayTextAndPIN", "displayText60": clampDisplayText(displayText)},
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("eidsign: encode the interactions: %w", err)
+		return none, fmt.Errorf("eidsign: encode the interactions: %w", err)
 	}
+	interactionsB64 := base64.StdEncoding.EncodeToString(interactions)
 	body := map[string]any{
 		"relyingPartyUUID": u.cfg.RPUUID,
 		"relyingPartyName": u.cfg.RPName,
@@ -705,7 +734,12 @@ func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName,
 			"signatureAlgorithm":           "rsassa-pss",
 			"signatureAlgorithmParameters": map[string]string{"hashAlgorithm": "SHA-256"},
 		},
-		"interactions": base64.StdEncoding.EncodeToString(interactions),
+		"interactions": interactionsB64,
+	}
+	path := "/signature/notification/etsi/"
+	if callbackURL != "" {
+		path = "/signature/device-link/etsi/"
+		body["initialCallbackUrl"] = callbackURL
 	}
 	if onBehalfOfOrg != "" {
 		body["onBehalfOf"] = onBehalfOfOrg
@@ -718,19 +752,19 @@ func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName,
 
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		return "", "", fmt.Errorf("eidsign: encode the request: %w", err)
+		return none, fmt.Errorf("eidsign: encode the request: %w", err)
 	}
-	endpoint := strings.TrimRight(u.cfg.BaseURL, "/") + "/signature/notification/etsi/" + url.PathEscape(etsi)
+	endpoint := strings.TrimRight(u.cfg.BaseURL, "/") + path + url.PathEscape(etsi)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
-		return "", "", err
+		return none, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	u.setRPAuth(req)
 
 	resp, err := u.client.Do(req)
 	if err != nil {
-		return "", "", err
+		return none, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -738,23 +772,53 @@ func (u *usecase) startV3Sign(ctx context.Context, etsi, digestB64, displayName,
 	// this deployment not holding the right to sign at all. Either way it is a
 	// refusal with a reason, and hiding it behind a 500 helps nobody.
 	if resp.StatusCode == http.StatusForbidden {
-		return "", "", ErrNotRepresentative
+		return none, ErrNotRepresentative
 	}
 	if resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", "", fmt.Errorf("eidsign: eID answered %d: %s", resp.StatusCode, string(raw))
+		return none, fmt.Errorf("eidsign: eID answered %d: %s", resp.StatusCode, string(raw))
 	}
 
 	var answer struct {
-		SessionID string `json:"sessionID"`
-		VC        struct {
-			Value string `json:"value"`
-		} `json:"vc"`
+		SessionID      string          `json:"sessionID"`
+		SessionToken   string          `json:"sessionToken"`
+		SessionSecret  string          `json:"sessionSecret"`
+		DeviceLinkBase string          `json:"deviceLinkBase"`
+		VC             json.RawMessage `json:"vc"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return "", "", err
+		return none, err
 	}
-	return answer.SessionID, answer.VC.Value, nil
+	started := v3Started{SessionID: answer.SessionID, Code: verificationCode(answer.VC)}
+	if callbackURL == "" {
+		return started, nil
+	}
+	// The secret signs the link here and goes no further.
+	started.AppLink, err = eidrp.BuildDeviceLink(eidrp.DeviceLinkInput{
+		Base: answer.DeviceLinkBase, LinkType: eidrp.LinkWeb2App, SessionToken: answer.SessionToken,
+		SessionSecret: answer.SessionSecret, SessionType: "sign", Lang: eidrp.DefaultLinkLang,
+		Challenge: digestB64, RPName: u.cfg.RPName, Interactions: interactionsB64, CallbackURL: callbackURL,
+	})
+	if err != nil {
+		return none, fmt.Errorf("eidsign: build the app link: %w", err)
+	}
+	return started, nil
+}
+
+// verificationCode reads the code shown on both screens: a notification
+// session answers {type,value}, a device-link session may answer a string.
+func verificationCode(raw json.RawMessage) string {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+	var object struct {
+		Value string `json:"value"`
+	}
+	if json.Unmarshal(raw, &object) == nil {
+		return object.Value
+	}
+	return ""
 }
 
 // v3PollResult is one look at an eID signature session.
