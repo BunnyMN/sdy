@@ -235,16 +235,22 @@ func TestConcurrentDuesApprovalsCannotOverpay(t *testing.T) {
 	f := newDuesFixture(t)
 	charges := f.prepare(t)
 	ids := make([]string, 2)
-	for i := range 2 {
-		w := f.request("POST", "/payments", `{"charge_id":"`+charges[1].ID+`","request_key":"`+uuid.NewString()+`","amount":10000,"reference":"`+uuid.NewString()+`"}`, f.tenant, f.users[1], false)
-		status(t, w, 201)
-		var receipt struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &receipt); err != nil {
-			t.Fatal(err)
-		}
-		ids[i] = receipt.ID
+	w := f.request("POST", "/payments", `{"charge_id":"`+charges[1].ID+`","request_key":"`+uuid.NewString()+`","amount":10000,"reference":"`+uuid.NewString()+`"}`, f.tenant, f.users[1], false)
+	status(t, w, 201)
+	var receipt struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	ids[0] = receipt.ID
+	// The API no longer accepts a second full report while the first is
+	// pending, so the duplicate the race needs is written directly: the
+	// approval lock is what this test is about, and it must still hold
+	// against rows written before the submission check existed.
+	if err := f.pool.QueryRow(context.Background(), `INSERT INTO membership_dues_payments(tenant_id,charge_id,user_id,request_key,amount,reference)
+		VALUES($1,$2,$3,$4,10000,$5) RETURNING id::text`, f.tenant, charges[1].ID, f.users[1], uuid.NewString(), uuid.NewString()).Scan(&ids[1]); err != nil {
+		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
 	results := make(chan int, 2)
@@ -269,4 +275,54 @@ func TestConcurrentDuesApprovalsCannotOverpay(t *testing.T) {
 	if paid != 10000 {
 		t.Fatalf("paid %d exceeds charge", paid)
 	}
+}
+
+// A charge paid in parts: each part may take only what the earlier reports
+// have not already claimed, the member's totals add up, and a rejected part
+// frees its share for the next report.
+func TestDuesPaidInParts(t *testing.T) {
+	f := newDuesFixture(t)
+	charges := f.prepare(t)
+	member, charge := f.users[1], charges[1].ID
+	report := func(amount string, want int) string {
+		t.Helper()
+		w := f.request("POST", "/payments", `{"charge_id":"`+charge+`","request_key":"`+uuid.NewString()+`","amount":`+amount+`,"reference":"`+uuid.NewString()+`"}`, f.tenant, member, false)
+		status(t, w, want)
+		var receipt struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &receipt)
+		return receipt.ID
+	}
+	mine := func() (Charge, map[string]int64) {
+		t.Helper()
+		w := f.request("GET", "/mine", "", f.tenant, member, false)
+		status(t, w, 200)
+		var result struct {
+			Charges []Charge         `json:"charges"`
+			Totals  map[string]int64 `json:"totals"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || len(result.Charges) != 1 {
+			t.Fatal(err, w.Body.String())
+		}
+		return result.Charges[0], result.Totals
+	}
+	first := report("4000", 201)
+	second := report("3000", 201)
+	report("3001", 409) // 4000 + 3000 + 3001 would pass the 10000 charge
+	c, totals := mine()
+	if c.Pending != 7000 || c.Paid != 0 || c.Balance != 10000 {
+		t.Fatalf("charge after two reports: %+v", c)
+	}
+	if totals["charged"] != 10000 || totals["pending"] != 7000 || totals["paid"] != 0 || totals["outstanding"] != 10000 {
+		t.Fatalf("totals after two reports: %v", totals)
+	}
+	status(t, f.request("POST", "/payments/"+first+"/review", `{"action":"approve","reason":"Matched bank statement"}`, f.tenant, f.users[0], true), 200)
+	status(t, f.request("POST", "/payments/"+second+"/review", `{"action":"reject","reason":"No such transfer"}`, f.tenant, f.users[0], true), 200)
+	c, totals = mine()
+	if c.Paid != 4000 || c.Pending != 0 || c.Balance != 6000 || totals["paid"] != 4000 || totals["outstanding"] != 6000 {
+		t.Fatalf("after approve/reject: %+v %v", c, totals)
+	}
+	report("6000", 201) // the rejected part's share is free again
+	report("1", 409)
 }

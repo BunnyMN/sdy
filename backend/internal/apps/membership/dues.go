@@ -118,13 +118,17 @@ func (m *Module) createCharges(w http.ResponseWriter, r *http.Request) {
 }
 
 type Charge struct {
-	ID           string `json:"id"`
-	UserID       string `json:"user_id"`
-	Name         string `json:"name"`
-	Period       string `json:"period"`
-	Amount       int64  `json:"amount"`
-	Paid         int64  `json:"paid"`
-	Balance      int64  `json:"balance"`
+	ID      string `json:"id"`
+	UserID  string `json:"user_id"`
+	Name    string `json:"name"`
+	Period  string `json:"period"`
+	Amount  int64  `json:"amount"`
+	Paid    int64  `json:"paid"`
+	Balance int64  `json:"balance"`
+	// Pending is what the member has reported and finance has not yet
+	// decided. It is not money received, but it is money already claimed:
+	// a further report may cover only the balance left after it.
+	Pending      int64  `json:"pending"`
 	DueDate      string `json:"due_date"`
 	Waived       bool   `json:"waived"`
 	WaiverReason string `json:"waiver_reason"`
@@ -133,8 +137,11 @@ type Charge struct {
 const paidSQL = `COALESCE((SELECT sum(e.delta) FROM membership_dues_entries e JOIN membership_dues_payments p
  ON p.id=e.payment_id AND p.tenant_id=e.tenant_id WHERE p.charge_id=c.id AND p.tenant_id=c.tenant_id),0)`
 
+const pendingSQL = `COALESCE((SELECT sum(p.amount) FROM membership_dues_payments p
+ WHERE p.charge_id=c.id AND p.tenant_id=c.tenant_id AND p.status='pending'),0)`
+
 func (m *Module) charges(ctx context.Context, tenant, user, period string, start int) ([]Charge, bool, error) {
-	rows, err := m.db.Query(ctx, `SELECT c.id::text,c.user_id::text,COALESCE(u.name,''),to_char(c.period,'YYYY-MM'),c.amount,`+paidSQL+`,c.due_date::text,c.waived,c.waiver_reason
+	rows, err := m.db.Query(ctx, `SELECT c.id::text,c.user_id::text,COALESCE(u.name,''),to_char(c.period,'YYYY-MM'),c.amount,`+paidSQL+`,`+pendingSQL+`,c.due_date::text,c.waived,c.waiver_reason
 		FROM membership_dues_charges c LEFT JOIN registry.users u ON u.id=c.user_id
 		WHERE c.tenant_id=$1 AND ($2='' OR c.user_id::text=$2) AND ($3='' OR to_char(c.period,'YYYY-MM')=$3)
 		ORDER BY c.period DESC,c.id LIMIT 51 OFFSET $4`, tenant, user, period, start)
@@ -145,7 +152,7 @@ func (m *Module) charges(ctx context.Context, tenant, user, period string, start
 	items := make([]Charge, 0, 51)
 	for rows.Next() {
 		var c Charge
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Name, &c.Period, &c.Amount, &c.Paid, &c.DueDate, &c.Waived, &c.WaiverReason); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.Name, &c.Period, &c.Amount, &c.Paid, &c.Pending, &c.DueDate, &c.Waived, &c.WaiverReason); err != nil {
 			return nil, false, err
 		}
 		if !c.Waived {
@@ -208,7 +215,24 @@ func (m *Module) mine(w http.ResponseWriter, r *http.Request) {
 	if fail(w, err) {
 		return
 	}
-	nexus.JSON(w, 200, map[string]any{"charges": charges, "payments": payments, "has_more": more || pMore, "next_offset": start + 50})
+	// The member's whole account in this branch, not just the page: what the
+	// progress bar on their dues screen is a share of.
+	var totals struct {
+		Charged     int64 `json:"charged"`
+		Paid        int64 `json:"paid"`
+		Pending     int64 `json:"pending"`
+		Outstanding int64 `json:"outstanding"`
+		Waived      int64 `json:"waived"`
+	}
+	err = m.db.QueryRow(r.Context(), `SELECT COALESCE(sum(amount),0),COALESCE(sum(paid),0),COALESCE(sum(pending),0),
+		COALESCE(sum(CASE WHEN waived THEN 0 ELSE greatest(amount-paid,0) END),0),
+		COALESCE(sum(CASE WHEN waived THEN greatest(amount-paid,0) ELSE 0 END),0)
+		FROM(SELECT c.amount,c.waived,`+paidSQL+` AS paid,`+pendingSQL+` AS pending FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.user_id=$2) mine`,
+		c.WorkspaceID, c.UserID).Scan(&totals.Charged, &totals.Paid, &totals.Pending, &totals.Outstanding, &totals.Waived)
+	if fail(w, err) {
+		return
+	}
+	nexus.JSON(w, 200, map[string]any{"charges": charges, "payments": payments, "totals": totals, "has_more": more || pMore, "next_offset": start + 50})
 }
 func (m *Module) finance(w http.ResponseWriter, r *http.Request) {
 	c, ok := who(w, r)
@@ -279,9 +303,9 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	// A submission is only a pending report. The finance review takes a row
 	// lock and checks the balance again before recognising any money.
-	var amount, paid int64
+	var amount, paid, pending int64
 	var waived bool
-	err := m.db.QueryRow(r.Context(), `SELECT c.amount,`+paidSQL+`,c.waived FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.id=$2 AND c.user_id=$3`, c.WorkspaceID, input.ChargeID, c.UserID).Scan(&amount, &paid, &waived)
+	err := m.db.QueryRow(r.Context(), `SELECT c.amount,`+paidSQL+`,`+pendingSQL+`,c.waived FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.id=$2 AND c.user_id=$3`, c.WorkspaceID, input.ChargeID, c.UserID).Scan(&amount, &paid, &pending, &waived)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, 404, "no such charge")
 		return
@@ -304,8 +328,11 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 	if !errors.Is(err, pgx.ErrNoRows) && fail(w, err) {
 		return
 	}
-	if waived || input.Amount > amount-paid {
-		nexus.Error(w, 409, "amount exceeds the outstanding balance")
+	// A charge may be paid in parts. Each part may cover only what is left
+	// once the parts already reported are counted, so the reports add up to
+	// the charge and never past it; a rejected part frees its share again.
+	if waived || input.Amount > amount-paid-pending {
+		nexus.Error(w, 409, "amount exceeds the balance left after the transfers already reported")
 		return
 	}
 	var id string
