@@ -38,7 +38,7 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
   const ticket = useRef(0);
 
   const load = useCallback(async () => {
-    try { setData(await participationApi.motions(eventID)); }
+    try { const r = await participationApi.motions(eventID); setData({ ...r, motions: r.motions ?? [] }); }
     catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
   }, [eventID]);
   useEffect(() => { void load(); }, [load]);

@@ -30,13 +30,13 @@ export default function EventTasks({ eventID, closed }: { eventID: string; close
   const [picks, setPicks] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    try { const r = await participationApi.tasks(eventID); setTasks(r.tasks); setManager(r.can_manage); setMe(r.me); }
+    try { const r = await participationApi.tasks(eventID); setTasks(r.tasks ?? []); setManager(!!r.can_manage); setMe(r.me ?? ""); }
     catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
   }, [eventID]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (!manager || members.length) return;
-    eventsApi.members().then(r => setMembers(r.members)).catch(() => {});
+    eventsApi.members().then(r => setMembers(r.members ?? [])).catch(() => {});
   }, [manager, members.length]);
 
   async function act(run: () => Promise<unknown>) {

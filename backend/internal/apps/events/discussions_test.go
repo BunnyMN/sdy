@@ -112,9 +112,9 @@ func TestDiscussionVotesAreSignedAndDecidedByMajority(t *testing.T) {
 	status(t, f.request("POST", one+"/open", ``, f.tenant, f.users[0], true), http.StatusOK)
 	status(t, f.request("PUT", one, `{"title":"Өөр","body":""}`, f.tenant, f.users[0], true), http.StatusConflict)
 
-	vote := func(user, choice string, tamper bool) int {
+	vote := func(motion, user, choice string, tamper bool) int {
 		t.Helper()
-		w := f.request("POST", one+"/vote", `{"choice":"`+choice+`"}`, f.tenant, user, false)
+		w := f.request("POST", motion+"/vote", `{"choice":"`+choice+`"}`, f.tenant, user, false)
 		if w.Code != http.StatusAccepted {
 			return w.Code
 		}
@@ -127,24 +127,24 @@ func TestDiscussionVotesAreSignedAndDecidedByMajority(t *testing.T) {
 			signer.tamper[started.SessionID] = true
 			signer.mu.Unlock()
 		}
-		return f.request("POST", one+"/vote/poll", `{"session_id":"`+started.SessionID+`"}`, f.tenant, user, false).Code
+		return f.request("POST", motion+"/vote/poll", `{"session_id":"`+started.SessionID+`"}`, f.tenant, user, false).Code
 	}
-	if code := vote(f.users[4], "yes", false); code != http.StatusForbidden {
+	if code := vote(one, f.users[4], "yes", false); code != http.StatusForbidden {
 		t.Fatalf("a member who only registered voted: %d", code)
 	}
-	if code := vote(f.users[1], "yes", false); code != http.StatusOK {
+	if code := vote(one, f.users[1], "yes", false); code != http.StatusOK {
 		t.Fatalf("vote: %d", code)
 	}
-	if code := vote(f.users[1], "no", false); code != http.StatusConflict {
+	if code := vote(one, f.users[1], "no", false); code != http.StatusConflict {
 		t.Fatalf("a second vote was accepted: %d", code)
 	}
-	if code := vote(f.users[2], "no", false); code != http.StatusOK {
+	if code := vote(one, f.users[2], "no", false); code != http.StatusOK {
 		t.Fatalf("vote: %d", code)
 	}
-	if code := vote(f.users[3], "yes", true); code != http.StatusConflict {
+	if code := vote(one, f.users[3], "yes", true); code != http.StatusConflict {
 		t.Fatalf("a signature over another document was counted: %d", code)
 	}
-	if code := vote(f.users[3], "abstain", false); code != http.StatusOK {
+	if code := vote(one, f.users[3], "abstain", false); code != http.StatusOK {
 		t.Fatalf("a retry after a failed signature: %d", code)
 	}
 	// The roll is published once decided; managers see it before.
@@ -187,8 +187,8 @@ func TestDiscussionVotesAreSignedAndDecidedByMajority(t *testing.T) {
 	decodeInto(t, w.Body.Bytes(), &mo)
 	two := base + "/" + mo.ID
 	status(t, f.request("POST", two+"/open", ``, f.tenant, f.users[0], true), http.StatusOK)
-	vote(f.users[1], "yes", false)
-	vote(f.users[2], "yes", false)
+	vote(two, f.users[1], "yes", false)
+	vote(two, f.users[2], "yes", false)
 	w = f.request("POST", two+"/close", ``, f.tenant, f.users[0], true)
 	decodeInto(t, w.Body.Bytes(), &mo)
 	if mo.Result != "approved" {
