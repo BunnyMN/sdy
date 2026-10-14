@@ -48,9 +48,11 @@ export default function SdyFeedback() {
     try {
       const response = await fetch(`${apiBase()}/feedback?limit=${PAGE}&offset=${offset}`, { credentials: "same-origin" });
       if (!response.ok) throw new Error(String(response.status));
-      const body = await response.json() as { feedback: Item[]; total: number };
-      setItems(current => offset === 0 ? body.feedback : [...current, ...body.feedback.filter(item => !current.some(c => c.id === item.id))]);
-      setTotal(body.total);
+      // An answer of the wrong shape is an empty list, never a broken page.
+      const body = await response.json().catch(() => null) as { feedback?: unknown; total?: unknown } | null;
+      const page = Array.isArray(body?.feedback) ? body.feedback as Item[] : [];
+      setItems(current => offset === 0 ? page : [...current, ...page.filter(item => !current.some(c => c.id === item.id))]);
+      setTotal(typeof body?.total === "number" ? body.total : page.length);
       setListState("ready");
     } catch {
       setListState(current => current === "ready" ? "ready" : "failed");
