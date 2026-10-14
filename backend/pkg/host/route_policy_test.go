@@ -144,6 +144,11 @@ var publicRoutes = []string{
 	// serves that route needs this guard of its own.
 	"/api/v1/verify/landed",
 
+	// The front page's suggestion box: anybody may write one, and during the
+	// pilot anybody may read the list. Contact details are never in the
+	// answer — see internal/workspace/feedback. Migration 00114.
+	"/api/v1/feedback",
+
 	// The Өртөө channel's four public routes were here — the redemption, the
 	// two exchange endpoints and the installation's own public key. They left
 	// with the channel (client-gerege-nexus, modules/urtuu/channel), and the

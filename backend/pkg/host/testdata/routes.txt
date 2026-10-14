@@ -33,6 +33,7 @@ GET /api/platform/v1/directory/organisation
 GET /api/platform/v1/directory/people
 GET /api/platform/v1/directory/person
 GET /api/platform/v1/email-verifications
+GET /api/platform/v1/feedback
 GET /api/platform/v1/flags
 GET /api/platform/v1/health
 GET /api/platform/v1/me
@@ -69,6 +70,7 @@ GET /api/v1/auth/tenants
 GET /api/v1/core/me/preferences
 GET /api/v1/core/organisation
 GET /api/v1/devices/me
+GET /api/v1/feedback
 GET /api/v1/installed-apps
 GET /api/v1/me/branches
 GET /api/v1/me/directory
@@ -122,6 +124,7 @@ POST /api/platform/v1/assistant/knowledge
 POST /api/platform/v1/backups/restore-test
 POST /api/platform/v1/catalog/sync
 POST /api/platform/v1/deploy
+POST /api/platform/v1/feedback/{id}/status
 POST /api/platform/v1/flags
 POST /api/platform/v1/me/password
 POST /api/platform/v1/operators
@@ -174,6 +177,7 @@ POST /api/v1/devices/enroll
 POST /api/v1/devices/staff/pin
 POST /api/v1/devices/telemetry
 POST /api/v1/devices/token/rotate
+POST /api/v1/feedback
 POST /api/v1/me/branch-requests
 POST /api/v1/me/join-requests
 POST /api/v1/me/notifications/read-all
