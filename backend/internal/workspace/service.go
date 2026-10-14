@@ -48,6 +48,7 @@ import (
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/devices/staffpin"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/directory"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/emailverify"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/feedback"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/dan"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/eid"
@@ -87,9 +88,13 @@ type Service struct {
 	// only because no module has asked yet, and an exported accessor nobody
 	// called read as a dependency the modules already had.
 	emailVerify *emailverify.Service
-	eidSvc      *eid.EIDService
-	danSvc      *dan.DANService
-	ssoProvider *ssoprovider.SSOProvider
+	// feedback is the front page's open suggestion box, and the budget for
+	// writing to it: three in a burst, then one a minute per address.
+	feedback        *feedback.Service
+	feedbackLimiter *security.IPRateLimiter
+	eidSvc          *eid.EIDService
+	danSvc          *dan.DANService
+	ssoProvider     *ssoprovider.SSOProvider
 	// ssoClient is the other half: the provider this deployment signs its own
 	// people in through, when it has one. Nil means it authenticates them
 	// itself, which is every deployment that has not set SSO_CLIENT_ISSUER.
@@ -409,24 +414,26 @@ func New(deps Deps) (*Service, error) {
 		// Every send is a call to somebody else's service on a shared key, so
 		// there is a cruder guard in front of the per-tenant allowance the
 		// service itself applies: one per second sustained, twenty in a burst.
-		verifyLimiter:  security.NewIPRateLimiter(rate.Limit(float64(auth.VerifyRatePerMinute)/60.0), auth.VerifyBurst),
-		emailVerify:    emailverify.NewService(db),
-		eidSvc:         eidSvc,
-		danSvc:         danSvc,
-		ssoProvider:    ssoProvider,
-		ssoClient:      federatedSignIn,
-		googleLogin:    googleLogin,
-		geregeSvc:      geregeSvc,
-		aiSvc:          ai.NewService(db),
-		staffPIN:       staffpin.NewService(db),
-		permissions:    permissions,
-		appGate:        memo.New[bool](appGateTTL),
-		suspended:      memo.New[bool](auth.SuspendedTTL),
-		settings:       deps.Settings,
-		featureFlags:   deps.Flags,
-		bus:            bus,
-		backgroundApps: appRuntime.Background,
-		eidMN:          eidMN,
+		verifyLimiter:   security.NewIPRateLimiter(rate.Limit(float64(auth.VerifyRatePerMinute)/60.0), auth.VerifyBurst),
+		emailVerify:     emailverify.NewService(db),
+		feedback:        feedback.New(db),
+		feedbackLimiter: security.NewIPRateLimiter(rate.Every(time.Minute), 3),
+		eidSvc:          eidSvc,
+		danSvc:          danSvc,
+		ssoProvider:     ssoProvider,
+		ssoClient:       federatedSignIn,
+		googleLogin:     googleLogin,
+		geregeSvc:       geregeSvc,
+		aiSvc:           ai.NewService(db),
+		staffPIN:        staffpin.NewService(db),
+		permissions:     permissions,
+		appGate:         memo.New[bool](appGateTTL),
+		suspended:       memo.New[bool](auth.SuspendedTTL),
+		settings:        deps.Settings,
+		featureFlags:    deps.Flags,
+		bus:             bus,
+		backgroundApps:  appRuntime.Background,
+		eidMN:           eidMN,
 	}
 
 	s.authn = auth.New(auth.Deps{
@@ -792,6 +799,15 @@ func (s *Service) Routes(r chi.Router) {
 		// may have no account here at all. The single-use reference in the
 		// query is the whole authority — see handleVerifyLanded.
 		api.Get("/verify/landed", s.emailVerify.HandleVerifyLanded)
+
+		// The front page's suggestion box. Unauthenticated on purpose — see
+		// feedback.HandleSubmit — so it carries its own tight budget rather
+		// than the sign-in one: a person typing an opinion sends one, a
+		// script sends thousands.
+		api.With(security.RateLimitMiddleware(s.feedbackLimiter)).Post("/feedback", s.feedback.HandleSubmit)
+		// And what everybody said, in public, during the pilot. The poll budget:
+		// reading is cheap, but a public list is still a public query.
+		api.With(security.SharedRateLimitMiddleware(s.pollLimiter, s.sharedPoll)).Get("/feedback", s.feedback.HandleList)
 
 		// Protected endpoints
 		api.Group(func(pr chi.Router) {

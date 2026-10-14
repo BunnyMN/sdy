@@ -133,6 +133,9 @@ var platformTables = map[string]table{
 	"person_items":         {"operator", "a person's own requests"},
 	"member_profiles":      {"operator", "a person's own member contact details"},
 	"member_notifications": {"operator", "a person's own in-app inbox"},
+	// What anybody, signed in or not, tells the platform from its front page.
+	// Nobody's organisation: it exists once per deployment. Migration 00114.
+	"public_feedback": {"operator", "public feedback"},
 	// Who does what, deployment-wide. In registry because it is neither one
 	// workspace's nor one person's: an organisation publishes into it and
 	// everybody reads it. Migration 00090.

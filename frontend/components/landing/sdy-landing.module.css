@@ -122,6 +122,54 @@
 .accordion summary svg { transition: transform 160ms ease-out; }
 .accordion details[open] summary svg { transform: rotate(90deg); }
 .accordion details > p { padding: 0 40px 24px 0; color: var(--lp-muted); }
+/* Feedback — the pilot's open suggestion box. */
+.feedbackLayout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 64px; align-items: start; }
+.feedbackLayout .sectionHeading { margin-bottom: 0; }
+.feedbackNotes { display: grid; gap: 12px; margin: 24px 0 0; padding: 0; list-style: none; }
+.feedbackNotes li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--lp-muted); }
+.feedbackNotes svg { width: 18px; height: 18px; margin-top: 1px; color: var(--lp-accent); }
+.feedbackCard { display: grid; gap: 20px; border: 1px solid var(--lp-border); border-radius: 8px; padding: 24px; background: var(--lp-panel); }
+.feedbackCard > button { justify-self: start; cursor: pointer; }
+.feedbackCard > button:disabled { opacity: .6; cursor: progress; }
+.feedbackKinds { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.feedbackKinds legend { width: 100%; margin-bottom: 8px; font-size: 14px; font-weight: 500; }
+.feedbackKinds label { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--lp-border); border-radius: 999px; font-size: 14px; color: var(--lp-muted); cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
+.feedbackKinds label svg { width: 16px; height: 16px; }
+.feedbackKinds label:hover { background: var(--lp-soft); }
+.feedbackKinds label[data-active] { border-color: var(--lp-accent); color: var(--lp-fg); background: var(--lp-soft); }
+.feedbackKinds label[data-active] svg { color: var(--lp-accent); }
+.feedbackKinds input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.feedbackKinds label:has(input:focus-visible) { outline: 2px solid var(--lp-ring); outline-offset: 2px; }
+.feedbackField { display: grid; gap: 8px; font-size: 14px; font-weight: 500; min-width: 0; }
+.feedbackField small { font-weight: 400; color: var(--lp-muted); }
+.feedbackField > small { justify-self: end; font-size: 12px; font-variant-numeric: tabular-nums; }
+.feedbackField em { font-style: normal; color: var(--lp-accent); }
+.feedbackField :is(input,textarea) { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--lp-control); border-radius: 6px; font: inherit; font-weight: 400; color: var(--lp-fg); background: var(--lp-bg); }
+.feedbackField textarea { resize: vertical; min-height: 128px; line-height: 1.5; }
+.feedbackField :is(input,textarea):focus-visible { outline: 2px solid var(--lp-ring); outline-offset: 1px; border-color: var(--lp-ring); }
+.feedbackRow { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.feedbackTrap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.feedbackError { font-size: 14px; color: var(--lp-accent); }
+.feedbackDone { display: grid; justify-items: start; gap: 12px; padding-block: 16px; }
+.feedbackDone > svg { width: 32px; height: 32px; color: var(--lp-accent); }
+.feedbackDone h3 { font-size: 20px; }
+.feedbackDone p { color: var(--lp-muted); }
+.feedbackDone button { margin-top: 8px; cursor: pointer; background: none; }
+.feedbackWall { margin-top: 56px; display: grid; gap: 20px; }
+.feedbackWall h3 { font-size: 20px; }
+.feedbackWall h3 span { color: var(--lp-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.feedbackWall > button { justify-self: center; cursor: pointer; background: none; }
+.feedbackEmpty { color: var(--lp-muted); font-size: 14px; }
+.feedbackEmpty button { border: 0; padding: 0; background: none; color: var(--lp-accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.feedbackList { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.feedbackItem { display: flex; flex-direction: column; gap: 12px; padding: 20px; border: 1px solid var(--lp-border); border-radius: 8px; background: var(--lp-panel); min-width: 0; }
+.feedbackItem p { flex: 1; white-space: pre-wrap; font-size: 15px; line-height: 1.6; }
+.feedbackItem small { font-size: 12px; color: var(--lp-muted); }
+.feedbackMeta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.feedbackTag { font-size: 12px; font-weight: 600; color: var(--lp-muted); }
+.feedbackStatus { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid var(--lp-border); color: var(--lp-muted); }
+.feedbackStatus[data-status="planned"] { border-color: var(--lp-accent); color: var(--lp-accent); }
+.feedbackStatus[data-status="done"] { border-color: var(--lp-accent); background: var(--lp-accent); color: var(--lp-on-accent); }
 .finalCta { padding-block: 64px; display: flex; align-items: center; justify-content: space-between; gap: 40px; }
 .finalCta > div { max-width: 680px; }
 .finalCta > a { flex-shrink: 0; }
@@ -143,7 +191,8 @@
   .hero .lede { font-size: 16px; }
   .previewBody,.previewTop { padding: 16px; }
   .previewRow { padding: 12px; gap: 8px; }
-  .questionLayout { gap: 32px; }
+  .questionLayout,.feedbackLayout { gap: 32px; }
+  .feedbackList { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 1024px) {
   .eventSlide { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -171,7 +220,11 @@
   .preview { width: 100%; max-width: 520px; margin-inline: auto; }
   .section { padding-block: 48px; }
   .sectionHeading h2,.finalCta h2 { font-size: 28px; }
-  .featureGrid,.steps,.questionLayout { grid-template-columns: 1fr; gap: 16px; }
+  .featureGrid,.steps,.questionLayout,.feedbackLayout,.feedbackRow { grid-template-columns: 1fr; gap: 16px; }
+  .feedbackLayout .sectionHeading { margin-bottom: 16px; }
+  .feedbackCard { padding: 16px; }
+  .feedbackList { grid-template-columns: 1fr; }
+  .feedbackWall { margin-top: 40px; }
   .featureCard { padding: 16px; }
   .featureCard > svg { margin-bottom: 16px; }
   .steps { gap: 32px; margin-top: 32px; }

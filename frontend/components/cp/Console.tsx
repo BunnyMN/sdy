@@ -38,6 +38,7 @@ import {
   PackageCheck,
   MailCheck,
   Megaphone,
+  MessageSquareText,
   Menu as HamburgerIcon,
   Scale,
   ScrollText,
@@ -76,6 +77,7 @@ const APPS: ConsoleApp[] = [
       { id: "cp.group.platform", items: [
         { href: "/cp/config", label: "cp.section.config", icon: <SlidersHorizontal className="w-5 h-5" /> },
         { href: "/cp/announcements", label: "cp.section.announcements", icon: <Megaphone className="w-5 h-5" /> },
+        { href: "/cp/feedback", label: "cp.section.feedback", icon: <MessageSquareText className="w-5 h-5" /> },
         { href: "/cp/assistant", label: "cp.section.assistant", icon: <BrainCircuit className="w-5 h-5" /> },
         { href: "/cp/email-verification", label: "cp.section.verifications", icon: <MailCheck className="w-5 h-5" /> },
       ] },

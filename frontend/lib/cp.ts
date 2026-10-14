@@ -416,6 +416,12 @@ export const cp = {
   withdraw: (id: string, reason: string) =>
     request<{ status: string }>(`/announcements/${id}`,
       { method: "DELETE", body: JSON.stringify({ reason }) }),
+
+  feedback: (status: FeedbackStatus | "" = "") =>
+    request<{ feedback: Feedback[]; counts: Partial<Record<FeedbackStatus, number>> }>(
+      status ? `/feedback?status=${status}` : "/feedback"),
+  feedbackStatus: (id: string, status: FeedbackStatus) =>
+    request<{ status: string }>(`/feedback/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
 };
 
 export interface Setting {
@@ -481,6 +487,21 @@ export interface Announcement {
   starts_at: string;
   ends_at: string | null;
   created_at: string;
+}
+
+export type FeedbackStatus = "new" | "seen" | "planned" | "done" | "dismissed";
+
+/** One submission from the front page's suggestion box. */
+export interface Feedback {
+  id: string;
+  category: "idea" | "request" | "bug" | "other";
+  message: string;
+  name: string;
+  contact: string;
+  page: string;
+  status: FeedbackStatus;
+  created_at: string;
+  reviewed_at: string | null;
 }
 
 export interface Overview {

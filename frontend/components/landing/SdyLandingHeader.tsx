@@ -11,6 +11,7 @@ const links = [
   ["#features", "Боломжууд"],
   ["#how-it-works", "Хэрхэн элсэх вэ"],
   ["#questions", "Түгээмэл асуулт"],
+  ["#feedback", "Санал хүсэлт"],
 ] as const;
 
 export default function SdyLandingHeader({ brand }: { brand: Brand }) {

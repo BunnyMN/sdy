@@ -96,8 +96,9 @@ func TestEveryPlatformMigrationTableLandsOnItsDeclaredSchema(t *testing.T) {
 	// 00093 moved person_items out of workspace and into registry, which is
 	// where the thirty-third workspace table went.
 	// 00112 adds membership_history and the two person-owned member tables.
-	if counts["workspace"] != 34 || counts["registry"] != 24 || counts["operator"] != 7 {
-		t.Errorf("schema counts: workspace=%d registry=%d operator=%d; want 34, 24 and 7",
+	// 00114 adds public_feedback.
+	if counts["workspace"] != 34 || counts["registry"] != 25 || counts["operator"] != 7 {
+		t.Errorf("schema counts: workspace=%d registry=%d operator=%d; want 34, 25 and 7",
 			counts["workspace"], counts["registry"], counts["operator"])
 	}
 }
