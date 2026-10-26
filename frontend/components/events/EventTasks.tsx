@@ -11,7 +11,8 @@ import { Check, ClipboardList, HandHelping, Plus, Trash2, Undo2, UserPlus, X } f
 import { eventsApi, participationApi, type AssignmentStatus, type Task, type TaskInput } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { Chip, ErrorNote, Panel } from "@/components/module/kit";
-import { fieldClass, selectClass } from "@/components/ui";
+import { LoadingBlock, fieldClass, selectClass, useConfirm } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
 const tone: Record<AssignmentStatus, "slate" | "emerald" | "amber" | "rose" | "blue"> = {
   offered: "amber", accepted: "blue", declined: "slate", done: "emerald",
@@ -20,6 +21,8 @@ const blank: TaskInput = { title: "", description: "", points: 0, slots: 1 };
 
 export default function EventTasks({ eventID, closed }: { eventID: string; closed: boolean }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [manager, setManager] = useState(false);
   const [me, setMe] = useState("");
@@ -28,22 +31,34 @@ export default function EventTasks({ eventID, closed }: { eventID: string; close
   const [draft, setDraft] = useState<TaskInput | null>(null);
   const [members, setMembers] = useState<{ user_id: string; name: string; email: string }[]>([]);
   const [picks, setPicks] = useState<Record<string, string>>({});
+  const [loadFailed, setLoadFailed] = useState("");
+  const [membersFailed, setMembersFailed] = useState("");
+  const [membersRound, setMembersRound] = useState(0);
 
   const load = useCallback(async () => {
-    try { const r = await participationApi.tasks(eventID); setTasks(r.tasks ?? []); setManager(!!r.can_manage); setMe(r.me ?? ""); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
-  }, [eventID]);
+    try { const r = await participationApi.tasks(eventID); setTasks(r.tasks ?? []); setManager(!!r.can_manage); setMe(r.me ?? ""); setLoadFailed(""); }
+    catch (err) { setLoadFailed(errorMessage(err)); }
+  }, [eventID, errorMessage]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (!manager || members.length) return;
-    eventsApi.members().then(r => setMembers(r.members ?? [])).catch(() => {});
-  }, [manager, members.length]);
+    let live = true;
+    eventsApi.members()
+      .then(r => { if (live) { setMembers(r.members ?? []); setMembersFailed(""); } })
+      .catch(err => { if (live) setMembersFailed(errorMessage(err)); });
+    return () => { live = false; };
+  }, [manager, members.length, membersRound, errorMessage]);
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true); setFailed("");
     try { await run(); await load(); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
+    catch (err) { setFailed(errorMessage(err)); }
     finally { setBusy(false); }
+  }
+
+  async function remove(task: Task) {
+    if (!(await confirm({ title: t("events.tasks.delete_confirm", { title: task.title }), confirmLabel: t("events.tasks.delete"), tone: "danger" }))) return;
+    await act(() => participationApi.deleteTask(eventID, task.id));
   }
 
   const btn = "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:text-foreground disabled:opacity-50";
@@ -62,6 +77,11 @@ export default function EventTasks({ eventID, closed }: { eventID: string; close
 
         <div className="space-y-3 p-4">
           {failed && <ErrorNote>{failed}</ErrorNote>}
+          {loadFailed && <div className="flex flex-wrap items-center gap-2"><ErrorNote>{loadFailed}</ErrorNote>
+            <button type="button" onClick={() => void load()} className="min-h-11 rounded-lg border border-input px-4 text-sm">{t("membership.retry")}</button></div>}
+          {membersFailed && <div className="flex flex-wrap items-center gap-2"><ErrorNote>{t("events.tasks.members_failed")}</ErrorNote>
+            <button type="button" onClick={() => setMembersRound(n => n + 1)} className="min-h-11 rounded-lg border border-input px-4 text-sm">{t("membership.retry")}</button></div>}
+          {!tasks && !loadFailed && <LoadingBlock rows={2} />}
 
           {draft && <form onSubmit={e => { e.preventDefault(); void act(async () => { await participationApi.createTask(eventID, { ...draft, title: draft.title.trim(), description: draft.description.trim() }); setDraft(null); }); }}
             className="grid gap-3 rounded-lg border border-line bg-surface-2 p-3 sm:grid-cols-4">
@@ -122,7 +142,7 @@ export default function EventTasks({ eventID, closed }: { eventID: string; close
                   </select>
                   <button disabled={busy || !picks[task.id]} onClick={() => void act(async () => { await participationApi.assign(eventID, task.id, picks[task.id]); setPicks({ ...picks, [task.id]: "" }); })} className={btn}><UserPlus className="h-3.5 w-3.5" />{t("events.tasks.assign")}</button>
                 </>}
-                {manager && !task.assignments.some(a => a.status === "done") && <button disabled={busy} onClick={() => void act(() => participationApi.deleteTask(eventID, task.id))} className={`${btn} ml-auto`}><Trash2 className="h-3.5 w-3.5" />{t("events.tasks.delete")}</button>}
+                {manager && !task.assignments.some(a => a.status === "done") && <button disabled={busy} onClick={() => void remove(task)} className={`${btn} ml-auto`}><Trash2 className="h-3.5 w-3.5" />{t("events.tasks.delete")}</button>}
               </div>
             </article>;
           })}

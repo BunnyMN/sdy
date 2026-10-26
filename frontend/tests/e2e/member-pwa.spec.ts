@@ -84,10 +84,11 @@ test("гишүүн холбоо барих мэдээлэл, мэдэгдлий�
 test("мэдэгдлийг уншсанд тооцож холбогдох бүртгэлийг нээнэ", async ({ page, baseURL }) => {
   const state = await memberAPI(page);
   await page.goto(`${base(baseURL!)}/member/notifications`);
-  await page.getByRole("button", { name: "Уншсанд тооцох", exact: true }).click();
+  // Each row's buttons carry the notification's title, so a screen reader can tell them apart.
+  await page.getByRole("button", { name: /^Уншсанд тооцох/ }).click();
   await expect(page.getByText("Уншаагүй", { exact: true })).toHaveCount(0);
   expect(state.readNotifications).toBe(true);
-  await page.getByRole("link", { name: "Дэлгэрэнгүй үзэх", exact: true }).click();
+  await page.getByRole("link", { name: /^Дэлгэрэнгүй үзэх/ }).click();
   await expect(page).toHaveURL(/\/member\/record$/);
 });
 
@@ -95,7 +96,7 @@ test("арга хэмжээний мэдэгдэл өөрийн салбарыг
   const state = await memberAPI(page);
   state.notificationPath = "/module/events/event-1?workspace=branch-2";
   await page.goto(`${base(baseURL!)}/member/notifications`);
-  await page.getByRole("link", { name: "Дэлгэрэнгүй үзэх", exact: true }).click();
+  await page.getByRole("link", { name: /^Дэлгэрэнгүй үзэх/ }).click();
   await expect(page).toHaveURL(/\/module\/events\/event-1$/);
   expect(state.switchedTo).toBe("branch-2");
 });
@@ -157,6 +158,8 @@ test("менежер утаснаас элсэх хүсэлтийг баталн
   await page.goto(`${base(baseURL!)}/member/requests`);
   await expect(page.getByRole("heading", { name: "Шинэ Гишүүн" })).toBeVisible();
   await page.getByRole("button", { name: "Батлах", exact: true }).click();
+  // Approving admits a member, so it is asked about first.
+  await page.getByRole("dialog").getByRole("button", { name: "Батлах", exact: true }).click();
   await expect(page.getByText("Хүлээгдэж буй хүсэлт алга.")).toBeVisible();
   expect(state.approved).toBe(true);
 });

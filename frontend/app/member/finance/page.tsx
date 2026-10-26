@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { duesApi, type DuesSettings, type FinancePage } from "@/lib/api/dues";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass, Loading } from "@/components/ui";
+import { Banner, fieldClass, LoadingBlock, useConfirm } from "@/components/ui";
+import { memberApi } from "@/lib/api/member";
+import { monthOf } from "@/lib/datetime";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
 type Decision = { id: string; action: "approve" | "reject" | "reverse" | "waive"; title: string; reason: string };
 const button = "min-h-11 rounded-lg border border-line px-4 disabled:opacity-50";
@@ -13,7 +16,10 @@ import { memberMoney as money } from "@/lib/memberFormat";
 export default function DuesFinance() {
   const { t } = useI18n();
   const { allowed, loading } = useAccess("membership.finance");
-  const [period, setPeriod] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`; });
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
+  const [period, setPeriod] = useState(() => monthOf());
+  const [round, setRound] = useState(0);
   const [data, setData] = useState<FinancePage | null>(null);
   const [settings, setSettings] = useState<DuesSettings | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
@@ -22,15 +28,30 @@ export default function DuesFinance() {
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => { const next = await duesApi.finance(period); setData(next); }, [period]);
   useEffect(() => {
-    if (!loading && allowed) void duesApi.settings().then(setSettings).catch(err => setError(err instanceof Error ? err.message : "—"));
-  }, [loading, allowed]);
+    if (!loading && allowed) void duesApi.settings().then(setSettings).catch(err => setError(errorMessage(err)));
+  }, [loading, allowed, round, errorMessage]);
   useEffect(() => {
-    if (!loading && allowed && period) { let active = true; setData(null); void duesApi.finance(period).then(next => { if (active) setData(next); }).catch(err => { if (active) setError(err instanceof Error ? err.message : "—"); }); return () => { active = false; }; }
-  }, [loading, allowed, period]);
+    if (!loading && allowed && period) { let active = true; setData(null); void duesApi.finance(period).then(next => { if (active) setData(next); }).catch(err => { if (active) setError(errorMessage(err)); }); return () => { active = false; }; }
+  }, [loading, allowed, period, round, errorMessage]);
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(""); setNotice("");
-    try { await work(); } catch (err) { setError(err instanceof Error ? err.message : "—"); }
+    try { await work(); } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
+  }
+  /* Charging is for every current member at once and cannot be undone from
+     here, so it is asked about first — with the number of people it reaches,
+     when the summary can say. */
+  async function chargeAll() {
+    if (!settings) return;
+    const members = await memberApi.summary().then(summary => summary.active_members).catch(() => null);
+    const asked = await confirm({
+      title: t("dues.charge_confirm", { period }),
+      body: members === null ? t("dues.charge_confirm_body", { amount: money(settings.monthly_amount) })
+        : t("dues.charge_confirm_count", { count: members, amount: money(settings.monthly_amount) }),
+      confirmLabel: t("dues.create"),
+    });
+    if (!asked) return;
+    void act(async () => { const result = await duesApi.charge(period); setNotice(t("dues.created", { count: result.created })); await load(); });
   }
   function save(event: React.FormEvent) {
     event.preventDefault(); if (!settings) return;
@@ -44,11 +65,12 @@ export default function DuesFinance() {
       setDecision(null); setNotice(t("dues.saved")); await load();
     });
   }
-  if (loading) return <Loading />;
+  if (loading) return <LoadingBlock />;
   if (!allowed) return <p>{t("dues.no_access")}</p>;
   return <div className="mx-auto max-w-4xl space-y-5">
     <h1 className="text-2xl font-semibold">{t("dues.finance")}</h1>
-    {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-success-soft p-4 text-success">{notice}</p>}
+    {error && <Banner tone="error" message={error} onDismiss={() => setError("")} />}{notice && <Banner tone="success" message={notice} onDismiss={() => setNotice("")} />}
+    {error && (!data || !settings) && <button type="button" onClick={() => { setError(""); setRound(n => n + 1); }} className={button}>{t("membership.retry")}</button>}
     {settings && <details className="rounded-lg border border-line bg-surface p-4 sm:p-6" open={!settings.enabled}>
       <summary className="cursor-pointer font-semibold">{t("dues.settings")}</summary>
       <form onSubmit={save} className="mt-4 space-y-4">
@@ -64,9 +86,9 @@ export default function DuesFinance() {
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <label className="block space-y-1"><span className="text-sm">{t("dues.period")}</span><input required type="month" min="2000-01" max="2100-12" value={period} disabled={busy} onChange={e => { setPeriod(e.target.value); setDecision(null); setNotice(""); }} className={`${fieldClass} block min-h-11`} /></label>
       <p className="text-sm text-muted">{t("dues.charge_hint")}</p>
-      <button disabled={busy || !settings?.enabled || !period} onClick={() => void act(async () => { const result = await duesApi.charge(period); setNotice(t("dues.created", { count: result.created })); await load(); })} className={button}>{t("dues.create")}</button>
+      <button disabled={busy || !settings?.enabled || !period} onClick={() => void chargeAll()} className={button}>{t("dues.create")}</button>
     </section>
-    {!data && !error && <Loading />}
+    {!data && !error && <LoadingBlock />}
     {data && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(data.totals).map(([key, value]) => <div key={key} className="rounded-xl border border-line p-4"><p className="text-xs text-muted">{t(`dues.${key}`)}</p><strong className="mt-2 block break-words">{money(value)}</strong></div>)}</div>}
     {decision && <form onSubmit={review} className="space-y-3 rounded-lg border border-accent bg-surface p-4 sm:p-6">
       <h2 className="font-semibold">{t(`dues.${decision.action}`)} · {decision.title}</h2>

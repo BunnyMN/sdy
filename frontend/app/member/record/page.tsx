@@ -5,7 +5,7 @@ import Link from "next/link";
 import { memberApi, type MemberRecord, type MemberProfile } from "@/lib/api/member";
 import { useI18n } from "@/lib/i18n";
 import { memberDate } from "@/lib/memberFormat";
-import { Banner, fieldClass, Loading } from "@/components/ui";
+import { Banner, fieldClass, LoadingBlock } from "@/components/ui";
 
 export default function MemberRecordPage() {
   const { t } = useI18n();
@@ -36,7 +36,7 @@ export default function MemberRecordPage() {
     <h1 className="font-semibold">{t("membership.record.title")}</h1>
     <Link href="/member/history" className="inline-flex min-h-11 items-center text-accent underline">{t("membership.record.personal_history")}</Link>
     {error && <Banner tone="error" message={error} />}
-    {!data && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <Loading />)}
+    {!data && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <LoadingBlock />)}
     {data && <>
       <section className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
         <h2>{t("membership.record.affiliations")}</h2>

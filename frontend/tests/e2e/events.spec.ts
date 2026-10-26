@@ -88,9 +88,12 @@ test("гишүүн бүртгүүлж цуцлах бөгөөд хаагдсан
   await page.getByRole("link", { name: /Салбарын уулзалт/ }).click();
   await page.getByRole("button", { name: "Бүртгүүлэх", exact: true }).click();
   await expect(page.getByRole("button", { name: "Бүртгэлээ цуцлах" })).toBeVisible();
+  // A member's participant list is folded below the discussion and tasks.
+  await page.locator("summary", { hasText: "Оролцогчид" }).click();
   await expect(page.getByText(member.name, { exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "Ирсэн", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Бүртгэлээ цуцлах" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Бүртгэлээ цуцлах" }).click();
   await expect(page.getByRole("button", { name: "Бүртгүүлэх", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Бүртгүүлэх", exact: true }).click();
   await expect(page.getByRole("button", { name: "Бүртгэлээ цуцлах" })).toBeVisible();

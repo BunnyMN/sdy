@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { memberApi, type PersonalDuesHistory, type PersonalParticipationHistory } from "@/lib/api/member";
 import { useI18n } from "@/lib/i18n";
 import { memberDate, memberMoney } from "@/lib/memberFormat";
-import { Banner, Loading } from "@/components/ui";
+import { Banner, LoadingBlock } from "@/components/ui";
 
 export default function PersonalHistoryPage() {
   const { t } = useI18n();
@@ -28,7 +28,7 @@ export default function PersonalHistoryPage() {
   return <div className="mx-auto max-w-[720px] space-y-6 pb-6">
     <header><h1>{t("membership.record.personal_history")}</h1><p className="mt-2 text-sm text-muted">{t("membership.record.personal_history_hint")}</p></header>
     {error && <Banner tone="error" message={error} />}
-    {!events && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <Loading />)}
+    {!events && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <LoadingBlock />)}
     {events && <section className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <h2>{t("membership.nav_attendance")} · {events.total_points} {t("membership.record.points_unit")}</h2>
       {!events.items.length && <p className="text-sm text-muted">{t("membership.record.empty_history")}</p>}

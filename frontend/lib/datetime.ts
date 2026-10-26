@@ -83,3 +83,64 @@ export function formatMoney(amount: number, currency = "MNT"): string {
   const body = formatNumber(amount, digits);
   return currency === "MNT" ? `${body}₮` : `${body} ${currency}`;
 }
+
+/** `2026-09` — the month an instant falls in, in Ulaanbaatar. For `<input type="month">` defaults. */
+export function monthOf(value: string | number | Date = new Date()): string {
+  const p = parts(value);
+  return p ? `${p.year}-${p.month}` : "";
+}
+
+/** `2026-09-01` — the day an instant falls in, in Ulaanbaatar. Comparable as text with a `due_date`. */
+export function dayOf(value: string | number | Date = new Date()): string {
+  const p = parts(value);
+  return p ? `${p.year}-${p.month}-${p.day}` : "";
+}
+
+/**
+ * RFC 3339 → the value a `datetime-local` input wants, as Ulaanbaatar wall time.
+ *
+ * The browser's own zone is not used: an organiser on a laptop still set to
+ * UTC used to see an 18:00 meeting as 10:00 in the edit form, and saving it
+ * unchanged moved it by eight hours.
+ */
+export function toZonedInput(value: string | null | undefined): string {
+  const p = parts(value);
+  return p ? `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}` : "";
+}
+
+/** A `datetime-local` value read as Ulaanbaatar wall time → RFC 3339 (UTC), or null for blank/invalid. */
+export function fromZonedInput(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return null;
+  // Mongolia is UTC+8 the year round, so the offset is a constant.
+  const at = new Date(`${value.slice(0, 16)}:00+08:00`);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
+/** `4:05` — whole seconds as minutes and seconds, for a countdown. Negative reads as `0:00`. */
+export function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/**
+ * "5 минутын өмнө" — how long ago, in the reader's language, for the last
+ * week; the plain `yyyy-MM-dd HH:mm` after that, when "41 days ago" says less
+ * than the date does.
+ */
+export function formatRelative(value: string | number | Date, locale: string, now = Date.now()): string {
+  const at = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (Number.isNaN(at)) return "";
+  const seconds = Math.round((at - now) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs >= 7 * 86400) return formatMoment(at);
+  let format: Intl.RelativeTimeFormat;
+  try {
+    format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  } catch {
+    return formatMoment(at);
+  }
+  if (abs < 60) return format.format(0, "second");
+  if (abs < 3600) return format.format(Math.round(seconds / 60), "minute");
+  if (abs < 86400) return format.format(Math.round(seconds / 3600), "hour");
+  return format.format(Math.round(seconds / 86400), "day");
+}

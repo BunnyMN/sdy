@@ -18,6 +18,10 @@ export const core = {
   "core.field.service_title": { mn: "юу гэж нэрлэх вэ", en: "what you call it" },
   "core.action.publish": { mn: "Нийтлэх", en: "Publish" },
   "core.action.withdraw": { mn: "Хасах", en: "Withdraw" },
+  "core.message.confirm_withdraw": {
+    mn: "«{name}» үйлчилгээг лавлахаас хасах уу? Иргэд үүгээр танайхыг олохоо болино.",
+    en: "Withdraw «{name}» from the directory? Citizens will no longer find you by it.",
+  },
   "core.view.organisation_title": { mn: "Байгууллага", en: "Organisation" },
   "core.view.organisation_subtitle": {
     mn: "Байгууллагын албан ёсны мэдээлэл — баримт бичиг, тайланд хэвлэгдэнэ",

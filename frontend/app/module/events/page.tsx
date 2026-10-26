@@ -14,12 +14,14 @@ import { CalendarDays, MapPin, Plus, Users } from "lucide-react";
 
 import { eventsApi, type EventInput, type EventRecord, type EventStatus } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
-import { Screen, Panel, Empty, Loading, ErrorNote, Chip, useAccess } from "@/components/module/kit";
-import { Modal } from "@/components/ui";
-import { EventForm, eventStatusTone, formatWhen } from "./shared";
+import { Screen, Panel, Empty, ErrorNote, Chip, useAccess } from "@/components/module/kit";
+import { LoadingBlock, Modal } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { EventForm, eventCounts, eventStatusTone, formatWhen } from "./shared";
 
 export default function EventsPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const { allowed: canManage } = useAccess("events.manage");
   const [events, setEvents] = useState<EventRecord[] | null>(null);
   const [failed, setFailed] = useState("");
@@ -32,10 +34,10 @@ export default function EventsPage() {
     try {
       setEvents((await eventsApi.list(filter || undefined)).events);
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(errorMessage(err));
       setEvents([]);
     }
-  }, [filter]);
+  }, [filter, errorMessage]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -56,7 +58,7 @@ export default function EventsPage() {
 
   const row = (e: EventRecord) => (
     <li key={e.id}>
-      <Link href={`/module/events/${e.id}`} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface-2 transition">
+      <Link href={`/module/events/${e.id}`} className="flex min-h-11 flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface-2 transition">
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <strong className="text-sm text-foreground truncate">{e.title}</strong>
@@ -64,12 +66,9 @@ export default function EventsPage() {
             {e.my_status && <Chip tone="emerald">{t(`events.attendance.${e.my_status}`)}</Chip>}
           </span>
           <span className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
-            <span className="inline-flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />{formatWhen(e.starts_at, locale)}</span>
-            {e.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{e.location}</span>}
-            <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" />
-              {t("events.message.counts", { registered: e.registered, attended: e.attended })}
-              {e.capacity ? ` / ${e.capacity}` : ""}
-            </span>
+            <span className="inline-flex items-center gap-1 tabular-nums"><CalendarDays aria-hidden="true" className="w-3.5 h-3.5" />{formatWhen(e.starts_at)}</span>
+            {e.location && <span className="inline-flex items-center gap-1"><MapPin aria-hidden="true" className="w-3.5 h-3.5" />{e.location}</span>}
+            <span className="inline-flex items-center gap-1 tabular-nums"><Users aria-hidden="true" className="w-3.5 h-3.5" />{eventCounts(t, e)}</span>
           </span>
         </span>
       </Link>
@@ -82,27 +81,30 @@ export default function EventsPage() {
       title={t("events.view.title")}
       subtitle={t("events.view.subtitle")}
       action={canManage ? (
-        <button onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent">
+        <button onClick={() => setCreating(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent">
           <Plus className="w-4 h-4" /> {t("events.action.create")}
         </button>
       ) : undefined}
     >
       {!canManage && <p className="text-xs text-muted">{t("events.message.read_only")}</p>}
-      <div className="flex gap-1">
+      <div role="group" aria-label={t("events.field.status")} className="flex flex-wrap gap-2">
         {(["", "planned", "done", "cancelled"] as const).map((s) => (
           <button
             key={s || "all"}
+            type="button"
             onClick={() => setFilter(s)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold border ${filter === s ? "bg-accent text-on-accent border-accent" : "border-line text-muted"}`}
+            aria-pressed={filter === s}
+            className={`min-h-11 rounded-full px-4 text-sm font-semibold border ${filter === s ? "bg-accent text-on-accent border-accent" : "border-line text-muted"}`}
           >
             {t(s ? `events.status.${s}` : "events.status.all")}
           </button>
         ))}
       </div>
-      {failed && <ErrorNote>{failed}</ErrorNote>}
+      {failed && <div className="flex flex-wrap items-center gap-2"><ErrorNote>{failed}</ErrorNote>
+        <button type="button" onClick={() => void load()} className="min-h-11 rounded-lg border border-input px-4 text-sm">{t("membership.retry")}</button></div>}
       {events === null ? (
-        <Loading label={t("events.message.loading")} />
-      ) : events.length === 0 ? (
+        <LoadingBlock label={t("events.message.loading")} />
+      ) : failed ? null : events.length === 0 ? (
         <Empty icon={<CalendarDays className="w-10 h-10" />}>{t("events.message.empty")}</Empty>
       ) : (
         <div className="space-y-6">

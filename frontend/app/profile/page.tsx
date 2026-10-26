@@ -2,10 +2,15 @@
 import {useEffect,useState} from "react";
 import {api,apiBase} from "@/lib/api";
 import {useI18n} from "@/lib/i18n";
-import {Building2,House,KeyRound,MonitorSmartphone,ShieldCheck,Unlink} from "lucide-react";
+import {Building2,House,KeyRound,MonitorSmartphone,ShieldCheck,Trash2,Unlink} from "lucide-react";
 import {ProviderMark,GoogleMark} from "@/components/ProviderMark";
 import EIDLogin from "@/components/EIDLogin";
 import { formatDay } from "@/lib/datetime";
+import { accountDeletionApi, ACCOUNT_DELETION_REASON_MAX } from "@/lib/api/accountDeletion";
+import { resetAccess } from "@/lib/access";
+import { forgetTenants } from "@/components/TenantChoices";
+import { Banner, LoadingBlock, useConfirm } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
 /**
  * Хүний өөрийнх нь тухай бичлэг.
@@ -70,8 +75,13 @@ function linkErrorText(t:(k:any,v?:any)=>string,code:string){
 }
 
 export default function ProfilePage(){const {t}=useI18n();
+  const errorMessage=useErrorMessage();
+  const confirm=useConfirm();
   const [profile,setProfile]=useState<Profile|null>(null);
-  const [error,setError]=useState("");
+  // Two kinds of failure: the page could not be read at all (nothing to
+  // show), or one action on it failed (everything else is still true).
+  const [loadError,setLoadError]=useState("");
+  const [actionError,setActionError]=useState("");
   const [open,setOpen]=useState<string>("");
   const [busy,setBusy]=useState<string>("");
 
@@ -90,7 +100,7 @@ export default function ProfilePage(){const {t}=useI18n();
   // round-ыг нэмэхэд дахин уншина: eID холбогдмогц жагсаалт, Гэрэгэ дугаар,
   // «холбогдсон таних тэмдэг алга» гэсэн мөр гурвуулаа хуучирдаг.
   const [round,setRound]=useState(0);
-  useEffect(()=>{void api.profile().then(setProfile).catch((e:any)=>setError(e?.message||"—"))},[round]);
+  useEffect(()=>{setLoadError("");void api.profile().then(setProfile).catch((e:unknown)=>setLoadError(errorMessage(e)))},[round,errorMessage]);
   // Серверээс асууна, таамаглахгүй: Google-ээр нэвтрэх тохируулаагүй
   // deployment дээр холбох товч гарч ирээд дарахад л бүтэлгүйтэх нь дор.
   useEffect(()=>{void api.ssoConfig().then(c=>setCanLinkGoogle(!!c.google?.enabled)).catch(()=>{})},[]);
@@ -102,13 +112,40 @@ export default function ProfilePage(){const {t}=useI18n();
    * товч ингэснээр өөрөө алга болно.
    */
   async function unlink(id:Identity,key:string){
-    if(!window.confirm(t("profile.unlink_confirm",{provider:id.provider})))return;
-    setBusy(key);
+    if(!(await confirm({title:t("profile.unlink_confirm",{provider:id.provider}),confirmLabel:t("profile.unlink"),tone:"danger"})))return;
+    setBusy(key);setActionError("");
     try{
       const res=await api.unlinkIdentity({kind:id.kind,issuer:id.issuer,subject:id.subject});
       setProfile(p=>p?{...p,identities:res.identities}:p);
-    }catch(e:any){setError(e?.message||"—")}
+    }catch(e:unknown){setActionError(errorMessage(e))}
     finally{setBusy("")}
+  }
+
+  /**
+   * Бүртгэл устгах хүсэлт. Сервер энэ мөчид бүх сессийг (энэ нэгийг ч) хаадаг
+   * тул амжилт = гарах: хуудсыг шинээр ачаалж нэвтрэх дэлгэц рүү буцна.
+   */
+  const [deleting,setDeleting]=useState(false);
+  const [graceDays,setGraceDays]=useState(30);
+  useEffect(()=>{void accountDeletionApi.status().then(s=>{if(s.grace_days>0)setGraceDays(s.grace_days)}).catch(()=>{})},[]);
+  async function requestDeletion(){
+    const answer=await confirm({
+      title:t("profile.delete.confirm_title"),
+      body:t("profile.delete.confirm_body",{days:graceDays}),
+      confirmLabel:t("profile.delete.confirm"),
+      tone:"danger",
+      reasonLabel:t("profile.delete.reason"),
+      reasonRequired:false,
+    });
+    if(!answer)return;
+    setDeleting(true);setActionError("");
+    try{
+      await accountDeletionApi.request(answer.reason.slice(0,ACCOUNT_DELETION_REASON_MAX));
+      resetAccess();forgetTenants();
+      // A full load, not router.push: every session is gone, and nothing held in memory should survive it.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/");
+    }catch(e:unknown){setActionError(errorMessage(e));setDeleting(false)}
   }
 
   // Google аль хэдийн холбогдсон эсэх — issuer-ээр, провайдерын нэрээр биш:
@@ -119,10 +156,11 @@ export default function ProfilePage(){const {t}=useI18n();
   const hasEID=profile?.identities.some(i=>i.kind==="eid")??false;
   const [linking,setLinking]=useState(false);
 
-  if(error)return <main className="profile"><p className="profile__error">{error}</p></main>;
-  if(!profile)return <main className="profile"><p className="profile__muted">{t("profile.loading")}</p></main>;
+  // A <div>, not <main>: every shell this page renders in already has the page's <main>.
+  if(loadError&&!profile)return <div className="profile"><Banner tone="error" message={loadError}/><button type="button" onClick={()=>setRound(n=>n+1)} className="min-h-11 w-fit rounded-md border border-input px-4">{t("base.action.retry")}</button></div>;
+  if(!profile)return <div className="profile"><LoadingBlock label={t("profile.loading")}/></div>;
 
-  return <main className="profile">
+  return <div className="profile">
     <header className="profile__head">
       <div className="profile__avatar">{(profile.name||profile.email||"?").trim().charAt(0).toUpperCase()}</div>
       <div>
@@ -139,6 +177,8 @@ export default function ProfilePage(){const {t}=useI18n();
       <div><MonitorSmartphone/><b>{profile.active_sessions}</b><span>{t("profile.stat.sessions")}</span></div>
       <div><ShieldCheck/><b>{when(profile.created_at)}</b><span>{t("profile.stat.since")}</span></div>
     </section>
+
+    {actionError&&<Banner tone="error" message={actionError} onDismiss={()=>setActionError("")}/>}
 
     <section className="profile__section">
       <h2>{t("profile.identities")}</h2>
@@ -232,5 +272,17 @@ export default function ProfilePage(){const {t}=useI18n();
         {profile.organisations.length===0&&<li className="profile__muted">{t("profile.message.no_organisations")}</li>}
       </ul>
     </section>
-  </main>
+
+    {/* Устгах нь буцаах боломжтой хугацаатай: тэр хугацаанд дахин нэвтэрвэл
+        хүсэлт цуцлагдаж, гишүүнчлэл сэргэнэ. Үүнийг товчны өмнө хэлнэ. */}
+    <section className="profile__section" aria-labelledby="profile-delete">
+      <h2 id="profile-delete">{t("profile.delete.title")}</h2>
+      <p className="profile__muted">{t("profile.delete.hint",{days:graceDays})}</p>
+      {deleting&&<p role="status" className="profile__muted">{t("profile.delete.signing_out")}</p>}
+      <button type="button" disabled={deleting} aria-busy={deleting||undefined} onClick={()=>void requestDeletion()}
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-danger-border bg-danger-soft px-4 text-sm font-semibold text-danger disabled:opacity-50">
+        <Trash2 aria-hidden="true" className="h-4 w-4"/>{t("profile.delete.action")}
+      </button>
+    </section>
+  </div>
 }

@@ -1,18 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 import { eventsApi, type EventRecord } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
-import { Banner, Loading } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { formatMoment } from "@/lib/datetime";
+import { Banner, LoadingBlock } from "@/components/ui";
+
+// The sentences the check-in route sends that the platform does not already know.
+const CHECKIN_CODES = { "this event is closed": "events.checkin.closed" };
 
 export default function MemberCheckin() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage({ codes: CHECKIN_CODES });
   const [code, setCode] = useState<{ id: string; token: string } | null>(null);
+  // The link was a check-in link, but not one this screen can use.
+  const [malformed, setMalformed] = useState(false);
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<{ points: number; changed: boolean } | null>(null);
+
+  const loadEvent = useCallback((id: string) => {
+    setError("");
+    eventsApi.get(id).then(setEvent).catch(err => setError(errorMessage(err)));
+  }, [errorMessage]);
+
   useEffect(() => {
     let fragment = location.hash;
     try {
@@ -26,25 +41,38 @@ export default function MemberCheckin() {
     const params = new URLSearchParams(fragment.replace(/^#/, ""));
     const id = params.get("event") ?? "", token = params.get("token") ?? "";
     history.replaceState(null, "", location.pathname);
-    if (!id || !/^[a-f0-9]{48}$/.test(token)) return;
+    if (!id && !token) return;
+    if (!id || !/^[a-f0-9]{48}$/.test(token)) { setMalformed(true); return; }
     setCode({ id, token });
-    void eventsApi.get(id).then(setEvent).catch(err => setError(err instanceof Error ? err.message : "—"));
-  }, []);
+    loadEvent(id);
+  }, [loadEvent]);
+
   async function confirm() {
     if (!code || !event) return;
     setBusy(true); setError("");
     try {
       if (!event.my_status) await eventsApi.register(code.id);
-      await eventsApi.checkIn(code.id, code.token);
-      setDone(true); setCode(null);
-    } catch (err) { setError(err instanceof Error ? err.message : "—"); }
+      const answer = await eventsApi.checkIn(code.id, code.token);
+      setDone({ points: answer.changed ? answer.points ?? event.points_value ?? 0 : 0, changed: answer.changed }); setCode(null);
+    } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   return <div className="mx-auto max-w-lg space-y-5 rounded-lg border border-line bg-surface p-6">
     <h1 className="text-2xl font-semibold">{t("events.checkin.title")}</h1>
     {error && <Banner tone="error" message={error} />}
-    {done ? <><p role="status" className="text-success">{t("events.checkin.success")}</p><Link href="/member/participation" className="inline-block py-3 text-accent">{t("events.participation")}</Link></>
+    {error && code && !event && <button type="button" onClick={() => loadEvent(code.id)} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button>}
+    {done ? <div role="status" className="space-y-3">
+      <p className="flex items-center gap-2 text-lg font-semibold text-success"><CheckCircle2 aria-hidden="true" className="h-6 w-6" />{t(done.changed ? "events.checkin.success" : "events.checkin.already")}</p>
+      {done.points > 0 && <p className="text-2xl font-semibold tabular-nums text-accent">{t("events.checkin.points_earned", { points: done.points })}</p>}
+      <Link href="/member/participation" className="inline-flex min-h-11 items-center text-accent underline">{t("events.participation")}</Link>
+    </div>
+      : malformed ? <Banner tone="warning" message={t("events.checkin.bad_link")} />
       : !code ? <p className="text-muted">{t("events.checkin.missing")}</p>
-        : !event && !error ? <Loading /> : event && <><h2 className="text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted">{event.location}</p><p>{t("events.field.points")}: {event.points_value ?? 0}</p><button disabled={busy} onClick={() => void confirm()} className="min-h-11 w-full rounded-xl bg-accent px-4 font-semibold text-on-accent disabled:opacity-50">{t("events.checkin.confirm")}</button></>}
+        : !event ? (!error && <LoadingBlock rows={2} />) : <>
+          <h2 className="text-lg font-semibold">{event.title}</h2>
+          <p className="text-sm text-muted tabular-nums">{formatMoment(event.starts_at)}{event.location ? ` · ${event.location}` : ""}</p>
+          <p>{t("events.field.points")}: <strong className="tabular-nums">{event.points_value ?? 0}</strong></p>
+          <button disabled={busy} aria-busy={busy || undefined} onClick={() => void confirm()} className="min-h-11 w-full rounded-xl bg-accent px-4 font-semibold text-on-accent disabled:opacity-50">{t("events.checkin.confirm")}</button>
+        </>}
   </div>;
 }
