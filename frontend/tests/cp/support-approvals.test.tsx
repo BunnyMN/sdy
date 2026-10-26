@@ -61,7 +61,9 @@ const APPROVAL = {
 
 test("a search waits for the typing to stop", async () => {
   api.people.mockResolvedValue({ people: [] });
-  const person = userEvent.setup();
+  // No delay between keystrokes: under a loaded test run the default per-key
+  // pause can outlast the debounce, which would test the machine, not the screen.
+  const person = userEvent.setup({ delay: null });
 
   render(<Support />);
   await waitFor(() => expect(api.people).toHaveBeenCalled());
