@@ -6,6 +6,7 @@ import { contracts, ContractRow } from "@/lib/contracts";
 import { useResource, useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { Banner, LoadingBlock, Modal, PageHeader, TableCard, EmptyState, fieldClass } from "@/components/ui";
 import { ContractBadge, fmtDate, fmtMoney } from "@/components/documents/contracts";
 import { FileSignature, Plus } from "lucide-react";
@@ -44,6 +45,7 @@ function orderByFamily(rows: ContractRow[]): ContractRow[] {
 
 export default function ContractsPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const { can } = useAccess();
   const router = useRouter();
   const mayManage = can("documents.manage");
@@ -68,7 +70,7 @@ export default function ContractsPage() {
       const doc = await contracts.create(title.trim());
       router.push(`/module/documents/contracts/${doc.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       setBusy(false);
     }
   };
@@ -76,14 +78,14 @@ export default function ContractsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<FileSignature className="w-6 h-6 text-indigo-600" />}
+        icon={<FileSignature className="w-6 h-6 text-accent" />}
         title={t("contracts.view.title")}
         subtitle={t("contracts.view.subtitle")}
         actions={
           mayManage ? (
             <button
               onClick={() => setCreating(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+              className="bg-accent hover:bg-accent-hover text-on-accent text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               {t("contracts.view.new")}
@@ -122,10 +124,10 @@ export default function ContractsPage() {
                   {row.parent_document_id ? row.counterparties || row.title : row.title}
                 </div>
                 {!row.parent_document_id && row.contract_number && (
-                  <div className="text-[11px] text-muted">№ {row.contract_number}</div>
+                  <div className="text-2xs text-muted">№ {row.contract_number}</div>
                 )}
                 {!row.parent_document_id && (row.issued_count ?? 0) > 0 && (
-                  <div className="text-[11px] text-indigo-600 font-semibold">
+                  <div className="text-2xs text-accent font-semibold">
                     {t("contracts.list.issued", { total: row.issued_count ?? 0, executed: row.issued_executed ?? 0 })}
                   </div>
                 )}
@@ -152,7 +154,7 @@ export default function ContractsPage() {
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
               />
-              <p className="text-[11px] text-muted mt-1">{t("contracts.field.title_hint")}</p>
+              <p className="text-2xs text-muted mt-1">{t("contracts.field.title_hint")}</p>
             </div>
             {error && <Banner tone="error" message={error} />}
             <div className="flex justify-end gap-2">
@@ -166,7 +168,7 @@ export default function ContractsPage() {
               <button
                 type="submit"
                 disabled={busy || !title.trim()}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-sm font-semibold px-4 py-2 rounded-lg"
               >
                 {t("contracts.action.create")}
               </button>

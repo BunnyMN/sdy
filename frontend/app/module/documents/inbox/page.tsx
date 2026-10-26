@@ -23,7 +23,7 @@ export default function ContractInboxPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Inbox className="w-6 h-6 text-indigo-600" />}
+        icon={<Inbox className="w-6 h-6 text-accent" />}
         title={t("contracts.view.inbox_title")}
         subtitle={t("contracts.view.inbox_subtitle")}
       />

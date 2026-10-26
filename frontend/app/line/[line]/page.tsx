@@ -7,6 +7,8 @@ import { Boxes, FileText, KeyRound, Landmark, LayoutGrid, Link2, MonitorCog, Pac
 import { invokeShell, useShell, SHELL_METHODS } from "@/lib/shell";
 import { api } from "@/lib/api";
 import { formatDay } from "@/lib/datetime";
+import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { LINES, isLine, type LineContent } from "./lines";
 
 /**
@@ -64,6 +66,8 @@ function when(iso?: string) {
  */
 export default function LineHomePage() {
   const params = useParams<{ line: string }>();
+  const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const { shell } = useShell();
   const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
   const [host, setHost] = useState("");
@@ -100,13 +104,11 @@ export default function LineHomePage() {
       .catch((err: unknown) => {
         if (cancelled) return;
         const status = (err as { status?: number })?.status;
-        setPersonNote(
-          status === 401
-            ? "Нэвтрээгүй байна. Бүрхүүлээр нэвтрэхэд хүний бүртгэл энд гарч ирнэ."
-            : err instanceof Error ? err.message : "—",
-        );
+        setPersonNote(status === 401 ? t("line.person.signed_out") : errorMessage(err));
       });
     return () => { cancelled = true; };
+    // t and errorMessage follow the language; who is signed in does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posture]);
   useEffect(() => {
     if (!shell) return;
@@ -122,10 +124,9 @@ export default function LineHomePage() {
   if (!line) {
     return <div className="line-home line-home--unknown">
       <p className="line-eyebrow">ГЭРЭГЭ</p>
-      <h1 className="line-title">Энэ шугам бүртгэлгүй</h1>
+      <h1 className="line-title">{t("line.unknown.title")}</h1>
       <p className="line-lede">
-        Хаяг нь <code>{params.line}</code> гэсэн шугамыг заасан байна. Бүртгэлтэй шугамууд
-        <code> native-apps/shared/device_lines.json</code> дотор байна.
+        {t("line.unknown.lede", { line: params.line, file: "native-apps/shared/device_lines.json" })}
       </p>
     </div>;
   }
@@ -134,8 +135,8 @@ export default function LineHomePage() {
   const formFactor = identity?.form_factor || shell?.formFactor || EMPTY;
 
   const actions = (
-    <nav className="line-actions" aria-label="Хаанаас эхлэх">
-      <p className="line-actions-head">Хаанаас эхлэх</p>
+    <nav className="line-actions" aria-label={t("line.actions.title")}>
+      <p className="line-actions-head">{t("line.actions.title")}</p>
       <ul>
         {content.actions.map((action) => (
           <li key={action.label + action.href}>
@@ -172,22 +173,22 @@ export default function LineHomePage() {
             баримт учир зөвхөн энд үлдэв — ширээ, гарын алган дээр тэр нь
             дөрвөн зураас болж, хоосон чимэг үлдээж байсан.
           */}
-          <figure className="paiza" aria-label="Энэ төхөөрөмжид олгосон гэрэгэ">
+          <figure className="paiza" aria-label={t("line.paiza.label")}>
             <span className="paiza-cord" aria-hidden="true" />
             <div className="paiza-face">
               <p className="paiza-mark">ГЭРЭГЭ</p>
               <dl className="paiza-inscription">
-                <div><dt>Шугам</dt><dd>{host || EMPTY}</dd></div>
-                <div><dt>Хэлбэр</dt><dd>{formFactor}</dd></div>
-                <div><dt>Байршил</dt><dd>{identity?.site || EMPTY}</dd></div>
-                <div><dt>Дугаар</dt><dd>{identity?.id || EMPTY}</dd></div>
+                <div><dt>{t("line.paiza.line")}</dt><dd>{host || EMPTY}</dd></div>
+                <div><dt>{t("line.paiza.form_factor")}</dt><dd>{formFactor}</dd></div>
+                <div><dt>{t("line.paiza.site")}</dt><dd>{identity?.site || EMPTY}</dd></div>
+                <div><dt>{t("line.paiza.id")}</dt><dd>{identity?.id || EMPTY}</dd></div>
               </dl>
-              <p className="paiza-seal">{shell ? `Гэрээ v${shell.version}` : "Олгоогүй"}</p>
+              <p className="paiza-seal">
+                {shell ? t("line.paiza.seal_version", { version: shell.version }) : t("line.paiza.seal_none")}
+              </p>
             </div>
             <figcaption className="paiza-note">
-              {shell
-                ? "Энэ төхөөрөмж бүрхүүлээр нэвтэрсэн. Дугаар, байршлыг Тохиргоо → Төхөөрөмж дээрээс бүртгэнэ."
-                : "Хөтчөөр нээсэн байна. Гэрэгэ нь зөвхөн native бүрхүүлд олгогдоно."}
+              {shell ? t("line.paiza.note_shell") : t("line.paiza.note_browser")}
             </figcaption>
           </figure>
 
@@ -214,39 +215,40 @@ export default function LineHomePage() {
  * Session байхгүй үед хуудас ЗОГСОНО — 401 нь энэ дэлгэцийн хувьд алдаа биш.
  */
 function Person({ person, session, note }: { person: Person | null; session: Session | null; note: string }) {
+  const { t } = useI18n();
   if (!person || !session) {
     return (
-      <section className="person" aria-label="Нэвтэрсэн хүн">
-        <p className="person-eyebrow">Нэвтэрсэн хүн</p>
-        <p className="person-empty">{note || "Уншиж байна…"}</p>
+      <section className="person" aria-label={t("line.person.title")}>
+        <p className="person-eyebrow">{t("line.person.title")}</p>
+        <p className="person-empty" role="status">{note || t("line.person.loading")}</p>
       </section>
     );
   }
 
   return (
-    <section className="person" aria-label="Нэвтэрсэн хүн">
-      <p className="person-eyebrow">Нэвтэрсэн хүн</p>
+    <section className="person" aria-label={t("line.person.title")}>
+      <p className="person-eyebrow">{t("line.person.title")}</p>
       <h2 className="person-name">{person.name}</h2>
       <p className="person-sub">{person.email}</p>
 
       <dl className="person-facts">
-        <div><dt>Ажлын муж</dt><dd>{session.tenant_name}</dd></div>
-        <div><dt>Эрх</dt><dd>{person.is_admin ? "Админ" : "Гишүүн"}</dd></div>
-        <div><dt>Байгууллага</dt><dd>{person.organisations.length}</dd></div>
-        <div><dt>Идэвхтэй session</dt><dd>{person.active_sessions}</dd></div>
-        <div><dt>Бүртгүүлсэн</dt><dd>{when(person.created_at)}</dd></div>
+        <div><dt>{t("line.person.workspace")}</dt><dd>{session.tenant_name}</dd></div>
+        <div><dt>{t("line.person.role")}</dt><dd>{person.is_admin ? t("line.person.admin") : t("line.person.member")}</dd></div>
+        <div><dt>{t("line.person.organisations")}</dt><dd>{person.organisations.length}</dd></div>
+        <div><dt>{t("line.person.sessions")}</dt><dd>{person.active_sessions}</dd></div>
+        <div><dt>{t("line.person.joined")}</dt><dd>{when(person.created_at)}</dd></div>
       </dl>
 
       <dl className="person-rows">
-        <div><dt>Дугаар</dt><dd>{person.id}</dd></div>
-        <div><dt>Мужийн төрөл</dt><dd>{session.workspace_kind || EMPTY}</dd></div>
-        <div><dt>Гэрийн муж</dt><dd>{person.home ? `${person.home.name} (${person.home.slug})` : EMPTY}</dd></div>
+        <div><dt>{t("line.person.id")}</dt><dd>{person.id}</dd></div>
+        <div><dt>{t("line.person.workspace_kind")}</dt><dd>{session.workspace_kind || EMPTY}</dd></div>
+        <div><dt>{t("line.person.home")}</dt><dd>{person.home ? `${person.home.name} (${person.home.slug})` : EMPTY}</dd></div>
         <div>
-          <dt>Байгууллага</dt>
+          <dt>{t("line.person.organisations")}</dt>
           <dd>{person.organisations.map((one) => `${one.name} (${one.slug})`).join(", ") || EMPTY}</dd>
         </div>
-        <div><dt>Эрх</dt><dd>{session.permissions?.join(", ") || EMPTY}</dd></div>
-        {session.impersonated && <div><dt>Нэрийн өмнөөс</dt><dd>тийм</dd></div>}
+        <div><dt>{t("line.person.permissions")}</dt><dd>{session.permissions?.join(", ") || EMPTY}</dd></div>
+        {session.impersonated && <div><dt>{t("line.person.impersonated")}</dt><dd>{t("line.person.yes")}</dd></div>}
         {/* Таних тэмдэг бүр нэг мөр: провайдер, түүн дэх дугаар, хэзээ холбогдсон.
             Түүхий claims-ыг ХАССАН — оношлоход хэрэгтэй ч энэ хуудасны ажил биш. */}
         {person.identities.map((one) => (
@@ -254,7 +256,15 @@ function Person({ person, session, note }: { person: Person | null; session: Ses
             <dt>{one.provider}</dt>
             <dd>
               <span>{one.subject}</span>
-              <small>{[one.email, `холбосон ${when(one.linked_at)}`, `сүүлд ${when(one.last_seen_at)}`].filter(Boolean).join(" · ")}</small>
+              <small>
+                {[
+                  one.email,
+                  t("line.person.linked", { when: when(one.linked_at) }),
+                  t("line.person.last_seen", { when: when(one.last_seen_at) }),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </small>
             </dd>
           </div>
         ))}

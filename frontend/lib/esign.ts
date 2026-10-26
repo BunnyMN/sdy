@@ -13,6 +13,7 @@
  */
 
 import { apiBase } from "@/lib/apiBase";
+import { fallbackErrorText } from "@/lib/errorMessage";
 
 export type Provider = "EID" | "HSM";
 export type DocumentStatus = "PENDING" | "SIGNED";
@@ -204,13 +205,17 @@ async function readJSON<T>(res: Response): Promise<T | null> {
   }
 }
 
-/** Turns a status with no usable body into something a person can act on. */
+/**
+ * Turns a status with no usable body into something a person can act on.
+ *
+ * It used to hold four Mongolian sentences of its own, so an English or
+ * Russian reader got Mongolian at exactly the moment something went wrong.
+ * The platform's status table already says these things in every language;
+ * screens translate through useErrorMessage, and this is only the message the
+ * error object carries for a log line.
+ */
 function httpErrorMessage(status: number): string {
-  if (status === 413) return "Файл хэт том байна.";
-  if (status === 401 || status === 403) return "Нэвтрэлт дууссан эсвэл эрх хүрэхгүй байна.";
-  if (status === 429) return "Хэт олон хүсэлт илгээлээ. Түр хүлээгээд дахин оролдоно уу.";
-  if (status >= 500) return "Үйлчилгээ түр саатлаа. Дахин оролдоно уу.";
-  return "Хүсэлт амжилтгүй боллоо.";
+  return fallbackErrorText(status);
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

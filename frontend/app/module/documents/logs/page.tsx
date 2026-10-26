@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Download, ScrollText, Search } from "lucide-react";
 import { esign, saveBlob, type LogFilter, type SignatureLogEntry } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
+import { formatMoment } from "@/lib/datetime";
 import { Banner, EmptyState, Loading, PageHeader, cardClass, tableHeadClass } from "@/components/ui";
 import { OutcomeBadge, Pager, useErrorMessage } from "@/components/esign/shared";
 
@@ -20,6 +21,13 @@ const PAGE_SIZE = 50;
 export default function EsignLogsPage() {
   const { t } = useI18n();
   const describe = useErrorMessage();
+  // The action column said CERT_CHECK and SIGN_START; the filter above already
+  // had words for them.
+  const actionLabel = (action: string) => {
+    const key = `esign.action_type.${action.toLowerCase()}`;
+    const label = t(key as never);
+    return label === key ? action : label;
+  };
   const [entries, setEntries] = useState<SignatureLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -73,13 +81,14 @@ export default function EsignLogsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<ScrollText className="w-7 h-7 text-indigo-600" />}
+        icon={<ScrollText aria-hidden="true" className="w-7 h-7 text-accent" />}
         title={t("esign.view.logs_title")}
         subtitle={t("esign.view.logs_subtitle")}
         actions={
           <button
+            type="button"
             onClick={exportCsv}
-            className="bg-surface-2 hover:bg-slate-200 text-foreground text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+            className="min-h-11 bg-surface-2 hover:bg-surface-hover border border-line text-foreground text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             {t("esign.action.export_csv")}
@@ -91,7 +100,7 @@ export default function EsignLogsPage() {
 
       <section className="bg-surface border border-line rounded-xl shadow-sm p-4 flex flex-wrap gap-3 items-end">
         <form onSubmit={submitSearch} className="flex-1 min-w-[220px]">
-          <label htmlFor="log-search" className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+          <label htmlFor="log-search" className="block text-2xs font-semibold uppercase tracking-wider text-muted mb-1">
             {t("base.action.search")}
           </label>
           <div className="relative">
@@ -101,7 +110,7 @@ export default function EsignLogsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("esign.field.search_placeholder")}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-ring"
             />
           </div>
         </form>
@@ -149,27 +158,29 @@ export default function EsignLogsPage() {
         />
 
         <div>
-          <label htmlFor="log-from" className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+          <label htmlFor="log-from" className="block text-2xs font-semibold uppercase tracking-wider text-muted mb-1">
             {t("esign.field.from")}
           </label>
           <input
             id="log-from"
             type="date"
             value={filter.from ?? ""}
+            max={filter.to || undefined}
             onChange={(event) => applyFilter({ from: event.target.value || undefined })}
-            className="px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+            className="px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-ring"
           />
         </div>
         <div>
-          <label htmlFor="log-to" className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+          <label htmlFor="log-to" className="block text-2xs font-semibold uppercase tracking-wider text-muted mb-1">
             {t("esign.field.to")}
           </label>
           <input
             id="log-to"
             type="date"
             value={filter.to ?? ""}
+            min={filter.from || undefined}
             onChange={(event) => applyFilter({ to: event.target.value || undefined })}
-            className="px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+            className="px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-ring"
           />
         </div>
       </section>
@@ -203,9 +214,9 @@ export default function EsignLogsPage() {
               {entries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-surface-hover">
                   <td className="px-4 py-3 whitespace-nowrap text-muted">
-                    {new Date(entry.created_at).toLocaleString()}
+                    {formatMoment(entry.created_at)}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-foreground">{entry.action}</td>
+                  <td className="px-4 py-3 font-semibold text-foreground">{actionLabel(entry.action)}</td>
                   <td className="px-4 py-3">
                     <OutcomeBadge outcome={entry.outcome} />
                   </td>
@@ -215,10 +226,10 @@ export default function EsignLogsPage() {
                       <span className="text-muted">—</span>
                     )}
                     {entry.reg_no && (entry.first_name || entry.last_name) && (
-                      <div className="text-[10px] text-muted font-mono">{entry.reg_no}</div>
+                      <div className="text-2xs text-muted font-mono">{entry.reg_no}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 font-mono text-[11px]">{entry.provider}</td>
+                  <td className="px-4 py-3 font-mono text-2xs">{entry.provider}</td>
                   <td className="px-4 py-3 text-muted max-w-xs truncate" title={entry.detail}>
                     {entry.detail || <span className="text-muted">—</span>}
                   </td>
@@ -254,14 +265,14 @@ function Select({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1">
+      <label htmlFor={id} className="block text-2xs font-semibold uppercase tracking-wider text-muted mb-1">
         {label}
       </label>
       <select
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-indigo-500 h-[38px]"
+        className="px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-ring h-[38px]"
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>

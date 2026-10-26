@@ -3,20 +3,8 @@
 import React, { useCallback } from "react";
 import { EsignApiError, type BatchItemStatus, type BatchStatus, type LogOutcome } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-
-/**
- * Turns any thrown value into a message, without the machine code.
- *
- * Only useErrorMessage calls this: the API answers in English, so this raw form
- * puts an English sentence in a Mongolian interface at exactly the moment
- * something has gone wrong. It is the fallback for a code with no translation
- * yet, not something a screen should reach for.
- */
-function describeError(err: unknown, fallback: string): string {
-  if (err instanceof EsignApiError) return err.message;
-  if (err instanceof Error && err.message) return err.message;
-  return fallback;
-}
+import { errorKey, errorText } from "@/lib/errorMessage";
+import { Badge as UiBadge, type BadgeTone } from "@/components/ui";
 
 /** The backend's machine code for a thrown value, if it carried one. */
 export function errorCode(err: unknown): string | null {
@@ -36,7 +24,7 @@ export function errorCode(err: unknown): string | null {
  * mid-session would then leave the old locale's message on screen.
  */
 export function useErrorMessage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return useCallback(
     (err: unknown, fallback?: string): string => {
       const code = errorCode(err);
@@ -45,9 +33,17 @@ export function useErrorMessage() {
         const translated = t(key as never);
         if (translated !== key) return translated;
       }
-      return describeError(err, fallback ?? t("base.message.error"));
+      // An untranslated code goes through the platform's own table — network,
+      // status, a server sentence already in the reader's script — and never
+      // puts the server's English on a Mongolian screen. The screen's own
+      // fallback wins over the generic "something went wrong".
+      if (fallback && errorKey(err) === "base.error.unknown") {
+        const text = errorText(err, t, { locale });
+        return text === t("base.error.unknown") ? fallback : text;
+      }
+      return errorText(err, t, { locale });
     },
-    [t],
+    [t, locale],
   );
 }
 
@@ -66,37 +62,37 @@ export function Card({ title, children, actions }: { title?: string; children: R
 }
 
 
-const BATCH_STYLE: Record<BatchStatus, string> = {
-  DRAFT: "bg-surface-2 text-muted border-line",
-  RUNNING: "bg-blue-50 text-blue-700 border-blue-200",
-  COMPLETED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  FAILED: "bg-red-50 text-red-700 border-red-200",
-  CANCELLED: "bg-surface-2 text-muted border-line",
+const BATCH_TONE: Record<BatchStatus, BadgeTone> = {
+  DRAFT: "neutral",
+  RUNNING: "info",
+  COMPLETED: "success",
+  FAILED: "danger",
+  CANCELLED: "neutral",
 };
 
-const ITEM_STYLE: Record<BatchItemStatus, string> = {
-  PENDING: "bg-surface-2 text-muted border-line",
-  RUNNING: "bg-blue-50 text-blue-700 border-blue-200",
-  SIGNED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  FAILED: "bg-red-50 text-red-700 border-red-200",
-  SKIPPED: "bg-surface-2 text-muted border-line",
+const ITEM_TONE: Record<BatchItemStatus, BadgeTone> = {
+  PENDING: "neutral",
+  RUNNING: "info",
+  SIGNED: "success",
+  FAILED: "danger",
+  SKIPPED: "neutral",
 };
 
-const OUTCOME_STYLE: Record<LogOutcome, string> = {
-  OK: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  FAILED: "bg-red-50 text-red-700 border-red-200",
-  REJECTED: "bg-rose-50 text-rose-700 border-rose-200",
-  EXPIRED: "bg-surface-2 text-muted border-line",
-  CANCELLED: "bg-surface-2 text-muted border-line",
-  UNVERIFIED: "bg-amber-50 text-amber-700 border-amber-200",
+const OUTCOME_TONE: Record<LogOutcome, BadgeTone> = {
+  OK: "success",
+  FAILED: "danger",
+  REJECTED: "danger",
+  EXPIRED: "neutral",
+  CANCELLED: "neutral",
+  UNVERIFIED: "warning",
 };
 
-export function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${tone}`}>
-      {children}
-    </span>
-  );
+/**
+ * The platform's status pill. It used to take a string of Tailwind palette
+ * classes, which stayed a pale pastel in dark mode; a tone follows the theme.
+ */
+export function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {
+  return <UiBadge tone={tone}>{children}</UiBadge>;
 }
 
 /**
@@ -115,17 +111,17 @@ function useEnumLabel(prefix: string) {
 
 export function BatchBadge({ status }: { status: BatchStatus }) {
   const label = useEnumLabel("esign.batch");
-  return <Badge tone={BATCH_STYLE[status] ?? BATCH_STYLE.DRAFT}>{label(status)}</Badge>;
+  return <Badge tone={BATCH_TONE[status] ?? "neutral"}>{label(status)}</Badge>;
 }
 
 export function ItemBadge({ status }: { status: BatchItemStatus }) {
   const label = useEnumLabel("esign.item");
-  return <Badge tone={ITEM_STYLE[status] ?? ITEM_STYLE.PENDING}>{label(status)}</Badge>;
+  return <Badge tone={ITEM_TONE[status] ?? "neutral"}>{label(status)}</Badge>;
 }
 
 export function OutcomeBadge({ outcome }: { outcome: LogOutcome }) {
   const label = useEnumLabel("esign.outcome");
-  return <Badge tone={OUTCOME_STYLE[outcome] ?? OUTCOME_STYLE.OK}>{label(outcome)}</Badge>;
+  return <Badge tone={OUTCOME_TONE[outcome] ?? "neutral"}>{label(outcome)}</Badge>;
 }
 
 /**
@@ -156,14 +152,16 @@ export function Pager({
         <button
           onClick={() => onPage(Math.max(0, offset - pageSize))}
           disabled={offset === 0}
-          className="px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-slate-200 disabled:opacity-40 font-medium"
+          type="button"
+          className="min-h-9 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-hover border border-line disabled:opacity-40 font-medium"
         >
           {t("base.action.previous")}
         </button>
         <button
           onClick={() => onPage(offset + pageSize)}
           disabled={offset + pageSize >= total}
-          className="px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-slate-200 disabled:opacity-40 font-medium"
+          type="button"
+          className="min-h-9 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-hover border border-line disabled:opacity-40 font-medium"
         >
           {t("base.action.next")}
         </button>

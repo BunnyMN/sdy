@@ -55,7 +55,7 @@ export default function EsignPoliciesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<ShieldCheck className="w-7 h-7 text-indigo-600" />}
+        icon={<ShieldCheck className="w-7 h-7 text-accent" />}
         title={t("esign.view.policies_title")}
         subtitle={t("esign.view.policies_subtitle")}
       />
@@ -75,12 +75,12 @@ export default function EsignPoliciesPage() {
                 value={policy.default_provider}
                 onChange={(event) => update({ default_provider: event.target.value as Policy["default_provider"] })}
                 disabled={policy.require_eid}
-                className="w-full h-[38px] px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-indigo-500 disabled:bg-surface-2"
+                className="w-full h-[38px] px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-ring disabled:bg-surface-2"
               >
                 <option value="EID">eID Mongolia (PIN2)</option>
                 <option value="HSM">Gerege eSign HSM</option>
               </select>
-              <p className="text-[11px] text-muted mt-1">{t("esign.field.default_provider_hint")}</p>
+              <p className="text-2xs text-muted mt-1">{t("esign.field.default_provider_hint")}</p>
             </div>
 
             <Toggle
@@ -108,13 +108,13 @@ export default function EsignPoliciesPage() {
                 onChange={(event) =>
                   update({ min_certificate_level: event.target.value as Policy["min_certificate_level"] })
                 }
-                className="w-full h-[38px] px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-indigo-500"
+                className="w-full h-[38px] px-3 py-2 text-sm border border-input rounded-lg bg-surface focus:ring-2 focus:ring-ring"
               >
                 <option value="ADVANCED">ADVANCED</option>
                 <option value="QUALIFIED">QUALIFIED</option>
                 <option value="QSCD">QSCD</option>
               </select>
-              <p className="text-[11px] text-muted mt-1">{t("esign.field.min_certificate_level_hint")}</p>
+              <p className="text-2xs text-muted mt-1">{t("esign.field.min_certificate_level_hint")}</p>
             </div>
           </div>
         </Card>
@@ -149,7 +149,7 @@ export default function EsignPoliciesPage() {
                   onChange={(event) => update({ retention_days: Number(event.target.value) })}
                   className={fieldClass}
                 />
-                <p className="text-[11px] text-muted mt-1">{t("esign.field.retention_days_hint")}</p>
+                <p className="text-2xs text-muted mt-1">{t("esign.field.retention_days_hint")}</p>
               </div>
               <div>
                 <label htmlFor="policy-upload" className="block text-xs font-semibold text-foreground mb-1">
@@ -164,7 +164,7 @@ export default function EsignPoliciesPage() {
                   onChange={(event) => update({ max_upload_mb: Number(event.target.value) })}
                   className={fieldClass}
                 />
-                <p className="text-[11px] text-muted mt-1">{t("esign.field.max_upload_mb_hint")}</p>
+                <p className="text-2xs text-muted mt-1">{t("esign.field.max_upload_mb_hint")}</p>
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function EsignPoliciesPage() {
         <button
           type="submit"
           disabled={saving}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
+          className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
         >
           <Save className="w-3.5 h-3.5" />
           {saving ? t("base.message.saving") : t("base.action.save")}
@@ -206,11 +206,11 @@ function Toggle({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 rounded border-input text-indigo-600 focus:ring-indigo-500"
+        className="mt-0.5 rounded border-input text-accent focus:ring-ring"
       />
       <span className="min-w-0">
         <span className="block text-sm font-medium text-foreground">{label}</span>
-        <span className="block text-[11px] text-muted mt-0.5">{hint}</span>
+        <span className="block text-2xs text-muted mt-0.5">{hint}</span>
       </span>
     </label>
   );

@@ -515,4 +515,61 @@ export const documents = {
     en: "The parties who co-sign THIS one contract. To conclude it separately with many people, use Issue below.",
   },
   "contracts.list.issued": { mn: "Тараасан: {total} · хүчин төгөлдөр: {executed}", en: "Issued: {total} · executed: {executed}" },
+
+  // ─── The contract page as a workflow ───────────────────────────────────────
+  "contracts.step.label": { mn: "Гэрээний алхмууд", en: "Contract steps" },
+  "contracts.step.progress": { mn: "{total} алхмаас {done} нь бэлэн", en: "{done} of {total} steps ready" },
+  "contracts.step.done": { mn: "бэлэн", en: "done" },
+  "contracts.step.facts": { mn: "Мэдээлэл", en: "Details" },
+  "contracts.step.file": { mn: "Файл ба текст", en: "File and text" },
+  "contracts.step.parties": { mn: "Талууд", en: "Parties" },
+  "contracts.step.issue": { mn: "Тараах", en: "Issue" },
+  "contracts.step.send": { mn: "Илгээх", en: "Send" },
+  "contracts.msg.facts_saved": { mn: "Гэрээний мэдээлэл хадгалагдлаа.", en: "The contract details were saved." },
+  "contracts.msg.unsaved": { mn: "Хадгалаагүй өөрчлөлт байна", en: "Unsaved changes" },
+  "contracts.msg.uploading": { mn: "Файлыг илгээж байна…", en: "Uploading the file…" },
+  "contracts.body.tokens_summary": { mn: "Орлуулах талбарууд", en: "Placeholders" },
+  "contracts.confirm.remove_party_title": { mn: "Талыг хасах уу?", en: "Remove this party?" },
+  "contracts.confirm.remove_party_body": {
+    mn: "«{name}»-г энэ гэрээнээс хасна. Түүний гарын үсэг зурагчид мөн хасагдана.",
+    en: "“{name}” is removed from this contract, together with its signatories.",
+  },
+  "contracts.confirm.withdraw_title": { mn: "Гэрээг эргүүлж татах уу?", en: "Withdraw the contract?" },
+  "contracts.confirm.withdraw_body": {
+    mn: "Илгээсэн хувиуд хүчингүй болж, талууд гарын үсэг зурах боломжгүй болно. Шалтгаан нь бүх талд харагдана.",
+    en: "The copies already sent stop being signable. The reason is shown to every party.",
+  },
+  "contracts.send.skipped_title": { mn: "{count} талд хүргэгдсэнгүй", en: "{count} parties were not reached" },
+  "contracts.action.stop_waiting": { mn: "Хүлээхээ болих", en: "Stop waiting" },
+  "contracts.msg.ceremony_starting": { mn: "Утас руу хүсэлт илгээж байна…", en: "Sending the request to the phone…" },
+  "contracts.msg.ceremony_code": {
+    mn: "Баталгаажуулах код {code}. Утсандаа энэ кодыг шалгаад PIN2-оор зурна уу.",
+    en: "Verification code {code}. Check it on your phone and sign with PIN2.",
+  },
+  "contracts.msg.ceremony_expired": {
+    mn: "Хүсэлтийн хугацаа дууслаа. Дахин эхлүүлнэ үү.",
+    en: "The request timed out. Please start again.",
+  },
+  "contracts.msg.ceremony_failed": { mn: "Гарын үсэг зурагдсангүй.", en: "The signature was not completed." },
+  "contracts.issue.preview_hint": {
+    mn: "Файлыг эхлээд уншиж харуулна — «Үүсгэх» дарах хүртэл гэрээ үүсэхгүй.",
+    en: "The file is read and shown first — no contract is created until you press Create.",
+  },
+  "contracts.issue.preview_title": { mn: "«{file}» — урьдчилан харах", en: "“{file}” — preview" },
+  "contracts.issue.preview_counts": {
+    mn: "{total} мөр · {ok} тохирох · {bad} алгасах",
+    en: "{total} rows · {ok} usable · {bad} skipped",
+  },
+  "contracts.issue.already_issued": { mn: "Аль хэдийн тараагдсан", en: "Already issued" },
+  "contracts.issue.row_ok": { mn: "Бэлэн", en: "Ready" },
+  "contracts.issue.create_n": { mn: "{count} гэрээ үүсгэх", en: "Create {count} contracts" },
+  "contracts.issue.skipped_title": { mn: "Алгассан мөр ({count})", en: "Skipped rows ({count})" },
+  "contracts.issue.skipped_csv": { mn: "CSV татах", en: "Download CSV" },
+  "contracts.issue.csv_row": { mn: "Мөр", en: "Row" },
+
+  "documents.confirm.remove_step_title": { mn: "Алхмыг хасах уу?", en: "Remove this step?" },
+  "documents.confirm.remove_step_body": {
+    mn: "{n}-р алхам «{name}» хасагдана. «Хадгалах» дарах хүртэл өөрчлөлт хадгалагдахгүй.",
+    en: "Step {n}, “{name}”, is removed. Nothing is stored until you press Save.",
+  },
 } as const;

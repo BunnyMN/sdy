@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { Banner, LoadingBlock, PageHeader, TableCard, rowActionClass } from "@/components/ui";
-import { ActionMessage } from "@/components/documents/shared";
+import { ActionMessage, useDocTypeLabel } from "@/components/documents/shared";
 import { Archive, Save } from "lucide-react";
 
 interface Rule {
@@ -31,6 +32,8 @@ interface Rule {
  */
 export default function DocumentRetentionPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const docTypeLabel = useDocTypeLabel();
   const { can } = useAccess();
   const mayManage = can("documents.manage");
 
@@ -48,7 +51,7 @@ export default function DocumentRetentionPage() {
   } = useResource(async () => (await api.getRetentionRules()) || [], {
     initial: [] as Rule[],
     onError: (err: any) =>
-      setMessage({ type: "error", text: err?.message || t("documents.message.retention_failed") }),
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.retention_failed" }) }),
   });
 
   const edit = (docType: string, patch: Partial<Rule>) =>
@@ -66,7 +69,7 @@ export default function DocumentRetentionPage() {
         retain_years: rule.retain_years,
         note: rule.note,
       })) as Rule | undefined;
-      setMessage({ type: "success", text: t("documents.message.retention_saved", { type: rule.doc_type }) });
+      setMessage({ type: "success", text: t("documents.message.retention_saved", { type: docTypeLabel(rule.doc_type) }) });
       if (saved && saved.doc_type) {
         // `total` counts every document of the type, so a save cannot change it and
         // the row's own is still good if the server sent none.
@@ -89,7 +92,7 @@ export default function DocumentRetentionPage() {
         });
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err?.message || t("documents.message.retention_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.retention_failed" }) });
     } finally {
       setBusy(null);
     }
@@ -107,7 +110,7 @@ export default function DocumentRetentionPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Archive className="w-7 h-7 text-indigo-600" />}
+        icon={<Archive className="w-7 h-7 text-accent" />}
         title={t("documents.menu.retention")}
         subtitle={t("documents.view.retention_hint")}
       />
@@ -117,19 +120,19 @@ export default function DocumentRetentionPage() {
       <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="p-4 bg-surface border border-line rounded-xl">
           <div className="text-2xl font-semibold text-foreground">{atLeast(filedTotal, filedPartial)}</div>
-          <div className="text-[11px] text-muted leading-snug mt-1">{t("documents.stat.filed")}</div>
+          <div className="text-2xs text-muted leading-snug mt-1">{t("documents.stat.filed")}</div>
         </div>
         <div className="p-4 bg-surface border border-line rounded-xl">
-          <div className={`text-2xl font-semibold ${expiredTotal > 0 ? "text-amber-600" : "text-foreground"}`}>
+          <div className={`text-2xl font-semibold ${expiredTotal > 0 ? "text-warning" : "text-foreground"}`}>
             {atLeast(expiredTotal, expiredPartial)}
           </div>
-          <div className="text-[11px] text-muted leading-snug mt-1">{t("documents.stat.past_term")}</div>
+          <div className="text-2xs text-muted leading-snug mt-1">{t("documents.stat.past_term")}</div>
         </div>
         <div className="p-4 bg-surface border border-line rounded-xl">
-          <div className="text-2xl font-semibold text-indigo-600">
+          <div className="text-2xl font-semibold text-accent">
             {loadFailed ? "—" : rules.filter((r) => r.configured).length}
           </div>
-          <div className="text-[11px] text-muted leading-snug mt-1">{t("documents.stat.rules_set")}</div>
+          <div className="text-2xs text-muted leading-snug mt-1">{t("documents.stat.rules_set")}</div>
         </div>
       </section>
 
@@ -157,7 +160,7 @@ export default function DocumentRetentionPage() {
         >
           {rules.map((rule) => (
             <tr key={rule.doc_type} className="hover:bg-surface-hover">
-              <td className="px-4 py-3 font-mono font-semibold text-foreground">{rule.doc_type}</td>
+              <td className="px-4 py-3 font-semibold text-foreground">{docTypeLabel(rule.doc_type)}</td>
               <td className="px-4 py-3">
                 <input
                   type="number"
@@ -166,7 +169,7 @@ export default function DocumentRetentionPage() {
                   value={rule.retain_years || ""}
                   disabled={!mayManage}
                   onChange={(e) => edit(rule.doc_type, { retain_years: Number(e.target.value) })}
-                  className="w-20 px-2 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className="w-20 px-2 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-ring"
                 />
               </td>
               <td className="px-4 py-3">
@@ -175,7 +178,7 @@ export default function DocumentRetentionPage() {
                   value={rule.note}
                   disabled={!mayManage}
                   onChange={(e) => edit(rule.doc_type, { note: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-ring"
                 />
               </td>
               <td className="px-4 py-3 text-muted">{rule.total ?? "—"}</td>
@@ -183,7 +186,7 @@ export default function DocumentRetentionPage() {
                 {rule.expired === undefined ? (
                   <span className="text-muted">—</span>
                 ) : rule.expired > 0 ? (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-warning-soft text-warning border border-warning-border">
                     {rule.expired}
                   </span>
                 ) : (
@@ -201,7 +204,7 @@ export default function DocumentRetentionPage() {
                     <span>{t("base.action.save")}</span>
                   </button>
                 ) : (
-                  <span className="text-subtle text-[11px]">—</span>
+                  <span className="text-subtle text-2xs">—</span>
                 )}
               </td>
             </tr>

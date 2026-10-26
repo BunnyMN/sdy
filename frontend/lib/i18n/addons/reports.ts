@@ -65,4 +65,58 @@ export const reports = {
     mn: "Энэ суулгацад и-мэйл илгээх тохиргоо байхгүй тул товлосон тайлан бэлтгэгдэх боловч илгээгдэхгүй. REPORT_SMTP_URL-ийг тохируулна уу.",
     en: "This deployment has no mail transport, so a scheduled report is produced but not delivered. Set REPORT_SMTP_URL.",
   },
+
+  // ─── App names (group headings) ────────────────────────────────────────────
+  "reports.app.organisation": { mn: "Байгууллага", en: "Organisation" },
+  "reports.app.billing": { mn: "Нэхэмжлэх", en: "Billing" },
+  "reports.app.inventory": { mn: "Агуулах", en: "Inventory" },
+  "reports.app.esign": { mn: "Цахим гарын үсэг", en: "E-signature" },
+  "reports.app.documents": { mn: "Баримт бичиг", en: "Documents" },
+  "reports.app.contacts": { mn: "Харилцагч", en: "Contacts" },
+  "reports.app.products": { mn: "Бараа", en: "Products" },
+
+  // ─── Date range ────────────────────────────────────────────────────────────
+  "reports.field.from": { mn: "Эхлэх огноо", en: "From" },
+  "reports.field.to": { mn: "Дуусах огноо", en: "To" },
+  "reports.preset.label": { mn: "Түргэн сонголт", en: "Quick ranges" },
+  "reports.preset.this_month": { mn: "Энэ сар", en: "This month" },
+  "reports.preset.last_month": { mn: "Өнгөрсөн сар", en: "Last month" },
+  "reports.preset.this_quarter": { mn: "Энэ улирал", en: "This quarter" },
+  "reports.preset.this_year": { mn: "Энэ он", en: "This year" },
+  "reports.message.range_inverted": {
+    mn: "Эхлэх огноо дуусах огнооноос хойш байна.",
+    en: "The start date is after the end date.",
+  },
+  "reports.message.chart_truncated": {
+    mn: "Графикт эхний {shown} мөрийг харуулав (нийт {total}). Бүгд доорх хүснэгтэд байна.",
+    en: "The chart shows the first {shown} of {total} rows. All of them are in the table below.",
+  },
+  "reports.message.exporting": { mn: "Файл бэлтгэж байна…", en: "Preparing the file…" },
+
+  // ─── Schedules ─────────────────────────────────────────────────────────────
+  "reports.field.when": { mn: "Хэзээ", en: "When" },
+  "reports.field.frequency": { mn: "Давтамж", en: "How often" },
+  "reports.field.time": { mn: "Цаг", en: "Time" },
+  "reports.field.weekday": { mn: "Гараг", en: "Day of the week" },
+  "reports.field.month_day": { mn: "Сарын өдөр", en: "Day of the month" },
+  "reports.frequency.daily": { mn: "Өдөр бүр", en: "Every day" },
+  "reports.frequency.weekly": { mn: "7 хоног бүр", en: "Every week" },
+  "reports.frequency.monthly": { mn: "Сар бүр", en: "Every month" },
+  "reports.frequency.custom": { mn: "Дэлгэрэнгүй (cron)", en: "Advanced (cron)" },
+  "reports.schedule.daily_at": { mn: "Өдөр бүр {time}", en: "Every day at {time}" },
+  "reports.schedule.weekly_at": { mn: "{day} бүр {time}", en: "Every {day} at {time}" },
+  "reports.schedule.monthly_at": { mn: "Сар бүрийн {day}-нд {time}", en: "On day {day} of every month at {time}" },
+  "reports.schedule.failed": { mn: "Амжилтгүй", en: "Failed" },
+  "reports.weekday.1": { mn: "Даваа", en: "Monday" },
+  "reports.weekday.2": { mn: "Мягмар", en: "Tuesday" },
+  "reports.weekday.3": { mn: "Лхагва", en: "Wednesday" },
+  "reports.weekday.4": { mn: "Пүрэв", en: "Thursday" },
+  "reports.weekday.5": { mn: "Баасан", en: "Friday" },
+  "reports.weekday.6": { mn: "Бямба", en: "Saturday" },
+  "reports.weekday.0": { mn: "Ням", en: "Sunday" },
+  "reports.confirm.remove_schedule_title": { mn: "Хуваарийг устгах уу?", en: "Delete this schedule?" },
+  "reports.confirm.remove_schedule_body": {
+    mn: "«{name}» тайлан цаашид илгээгдэхгүй.",
+    en: "“{name}” will no longer be sent.",
+  },
 } as const;

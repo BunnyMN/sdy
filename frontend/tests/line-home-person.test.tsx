@@ -20,6 +20,11 @@ vi.mock("@/lib/shell", () => ({
 vi.mock("@/lib/api", () => ({ api: { profile: stub.profile, getMe: stub.getMe } }));
 
 import LineHomePage from "@/app/line/[line]/page";
+import { I18nProvider } from "@/lib/i18n";
+
+// The page's words come from the dictionary now, so it renders inside the
+// provider the app wraps it in; Mongolian is the default language.
+const renderPage = () => render(<I18nProvider><LineHomePage /></I18nProvider>);
 
 const PERSON = {
   id: "u-1", name: "Батболд", email: "batbold@example.mn", created_at: "2026-01-05T00:00:00Z",
@@ -34,7 +39,7 @@ test("ширээний шугам нэвтэрсэн хүнийг бүтнээр
   stub.profile.mockResolvedValue(PERSON);
   stub.getMe.mockResolvedValue(SESSION);
 
-  render(<LineHomePage />);
+  renderPage();
 
   expect(await screen.findByText("batbold@example.mn")).toBeDefined();
   expect(screen.getByText("УБ99")).toBeDefined();
@@ -46,7 +51,7 @@ test("олон нийтийн терминал дээр хүний бүртгэ�
   stub.profile.mockResolvedValue(PERSON);
   stub.getMe.mockResolvedValue(SESSION);
 
-  render(<LineHomePage />);
+  renderPage();
 
   expect(stub.profile).not.toHaveBeenCalled();
   expect(screen.queryByText("Нэвтэрсэн хүн")).toBeNull();
@@ -58,7 +63,7 @@ test("нэвтрээгүй үед дэлгэц зогсож, шалтгааны�
   stub.profile.mockRejectedValue(denied);
   stub.getMe.mockRejectedValue(denied);
 
-  render(<LineHomePage />);
+  renderPage();
 
   expect(await screen.findByText(/Нэвтрээгүй байна/)).toBeDefined();
 });

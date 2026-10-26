@@ -5,8 +5,10 @@ import { api } from "@/lib/api";
 import { useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { formatDay } from "@/lib/datetime";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { Banner, LoadingBlock, PageHeader, TableCard } from "@/components/ui";
-import { DocumentRecord, PENDING, RowActions, SignatureDialog, SignatureHistoryButton, SignatureHistoryDialog, SignatureProgress, useDocumentActions } from "@/components/documents/shared";
+import { DocumentRecord, PENDING, RowActions, useDocTypeLabel, SignatureDialog, SignatureHistoryButton, SignatureHistoryDialog, SignatureProgress, useDocumentActions } from "@/components/documents/shared";
 import { ListChecks } from "lucide-react";
 
 /**
@@ -16,6 +18,8 @@ import { ListChecks } from "lucide-react";
  */
 export default function DocumentApprovalsPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const docTypeLabel = useDocTypeLabel();
   const { can, ready } = useAccess();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +98,7 @@ export default function DocumentApprovalsPage() {
       // overwrite what the action that triggered this refresh had just reported, so a
       // completed signature read as a failure.
       if (documents.length === 0) {
-        setMessage({ type: "error", text: err?.message || t("documents.message.load_failed") });
+        setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.load_failed" }) });
       }
     } finally {
       // The spinner belongs to the load that is still running. A superseded one clearing
@@ -134,7 +138,7 @@ export default function DocumentApprovalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<ListChecks className="w-7 h-7 text-indigo-600" />}
+        icon={<ListChecks className="w-7 h-7 text-accent" />}
         title={t("documents.menu.approvals")}
         subtitle={t("documents.view.approvals_hint")}
       />
@@ -145,13 +149,13 @@ export default function DocumentApprovalsPage() {
           after an action is exactly when there are none: the news that the list is stale
           — and the way to try again — must not live only inside the table. */}
       {loadFailed && pending.length === 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border border-amber-200 rounded-xl bg-amber-50">
-          <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border border-warning-border rounded-xl bg-warning-soft">
+          <p className="text-2xs text-warning">{t("documents.message.stale_rows")}</p>
           <button
             type="button"
             disabled={loading}
             onClick={() => loadData()}
-            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-warning-border text-warning hover:brightness-95 disabled:opacity-50"
           >
             {t("documents.action.retry")}
           </button>
@@ -166,23 +170,23 @@ export default function DocumentApprovalsPage() {
           {/* The queue's real size, not this page's — the server counted it. */}
           {/* A dash until there is something to state: during the first load these read
               0, which is the same falsehood the dash exists to prevent. */}
-          <div className="text-2xl font-semibold text-amber-600">{loadFailed || !answered ? "—" : total}</div>
-          <div className="text-[11px] text-muted leading-snug mt-1">{t("documents.stat.awaiting")}</div>
+          <div className="text-2xl font-semibold text-warning">{loadFailed || !answered ? "—" : total}</div>
+          <div className="text-2xs text-muted leading-snug mt-1">{t("documents.stat.awaiting")}</div>
         </div>
         <div className="p-4 bg-surface border border-line rounded-xl">
           <div className="text-2xl font-semibold text-foreground">
             {loadFailed || !answered ? "—" : waitingSince ? days(waitingSince.created_at) : 0}
           </div>
-          <div className="text-[11px] text-muted leading-snug mt-1">{t("documents.stat.oldest_days")}</div>
+          <div className="text-2xs text-muted leading-snug mt-1">{t("documents.stat.oldest_days")}</div>
         </div>
         {/* Counted over the rows this page holds, so a partial queue is marked: the
             server counts the queue as a whole but not its breakdown by type. */}
         {byType.slice(0, 2).map(([docType, count]) => (
           <div key={docType} className="p-4 bg-surface border border-line rounded-xl">
-            <div className="text-2xl font-semibold text-indigo-600">
+            <div className="text-2xl font-semibold text-accent">
               {total > pending.length ? `≥${count}` : count}
             </div>
-            <div className="text-[11px] text-muted leading-snug mt-1 font-mono">{docType}</div>
+            <div className="text-2xs text-muted leading-snug mt-1">{docTypeLabel(docType)}</div>
           </div>
         ))}
       </section>
@@ -216,13 +220,13 @@ export default function DocumentApprovalsPage() {
                 dismissed, and a refresh that failed after an action must not be the only
                 thing that says the rows are old. */}
             {loadFailed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
-                <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-warning-border bg-warning-soft">
+                <p className="text-2xs text-warning">{t("documents.message.stale_rows")}</p>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={() => loadData()}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                  className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-warning-border text-warning hover:brightness-95 disabled:opacity-50"
                 >
                   {t("documents.action.retry")}
                 </button>
@@ -232,14 +236,14 @@ export default function DocumentApprovalsPage() {
             {/* A queue shown in part says so, and can be read to the end. */}
             {hasMore && (
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-line bg-surface-2">
-                <p className="text-[11px] text-muted">
+                <p className="text-2xs text-muted">
                   {t("documents.message.showing_some_oldest", { shown: pending.length, total })}
                 </p>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={loadMore}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
+                  className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
                 >
                   {t("documents.action.load_more")}
                 </button>
@@ -253,12 +257,12 @@ export default function DocumentApprovalsPage() {
               <td className="px-4 py-3 font-semibold text-foreground">{doc.title}</td>
               <td className="px-4 py-3 font-mono text-muted">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span>{doc.doc_type}</span>
+                  <span>{docTypeLabel(doc.doc_type)}</span>
                   <SignatureProgress doc={doc} />
                   <SignatureHistoryButton doc={doc} onOpen={setHistoryTarget} />
                 </div>
               </td>
-              <td className="px-4 py-3 text-muted">{new Date(doc.created_at).toLocaleDateString()}</td>
+              <td className="px-4 py-3 text-muted">{formatDay(doc.created_at)}</td>
               <td className="px-4 py-3 text-muted">{days(doc.created_at)}</td>
               <td className="px-4 py-3 text-right">
                 <RowActions

@@ -7,8 +7,9 @@ import { contracts, InboxDetail } from "@/lib/contracts";
 import { useResource, useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { Banner, LoadingBlock, Modal, cardClass, fieldClass } from "@/components/ui";
-import { CeremonyButton, PartyBadge, fmtWhen } from "@/components/documents/contracts";
+import { CeremonyButton, PartyBadge, PartyDot, fmtWhen } from "@/components/documents/contracts";
 import { ArrowLeft, FileText } from "lucide-react";
 
 /**
@@ -28,19 +29,19 @@ export default function ContractInboxDetailPage() {
   useLoadOnMount(detail.reload);
 
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
-  const fail = (err: unknown) => setMessage({ tone: "error", text: err instanceof Error ? err.message : String(err) });
   const [declining, setDeclining] = useState(false);
 
-  if (detail.loading) return <LoadingBlock />;
-  if (detail.failed || !detail.data) return <Banner tone="error" message={t("contracts.msg.load_failed")} />;
+  // Only the first load blanks the page; a reload after signing keeps it.
+  if (detail.loading && !detail.data) return <LoadingBlock />;
+  if (!detail.data) return <Banner tone="error" message={t("contracts.msg.load_failed")} />;
   const item = detail.data;
   const open = item.state === "invited" || item.state === "viewed";
   const named = item.my_signatories.length > 0;
 
   return (
     <div className="space-y-6">
-      <Link href="/module/documents/inbox" className="inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">
-        <ArrowLeft className="w-4 h-4" />
+      <Link href="/module/documents/inbox" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
+        <ArrowLeft aria-hidden="true" className="w-4 h-4" />
         {t("contracts.view.inbox_back")}
       </Link>
 
@@ -53,10 +54,7 @@ export default function ContractInboxDetailPage() {
         <div className="flex flex-wrap gap-2">
           {item.parties.map((party, index) => (
             <span key={index} className="inline-flex items-center gap-2 bg-surface border border-line rounded-full px-3 py-1 text-xs">
-              <span className={`w-2 h-2 rounded-full ${
-                party.state === "signed" ? "bg-emerald-500" :
-                party.state === "declined" ? "bg-red-500" :
-                party.state === "invited" || party.state === "viewed" ? "bg-amber-400" : "bg-slate-300"}`} />
+              <PartyDot state={party.state} />
               <span className="font-medium text-foreground">
                 {party.display_name}{party.mine ? ` ${t("contracts.msg.you")}` : ""}
               </span>
@@ -66,22 +64,20 @@ export default function ContractInboxDetailPage() {
         </div>
       )}
 
-      {message && <Banner tone={message.tone} message={message.text} />}
-
       {item.has_copy ? (
         <section className={`${cardClass} p-5 space-y-3`}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">{t("contracts.section.body")}</h2>
             <a href={contracts.inboxCopyUrl(pid)} target="_blank" rel="noopener noreferrer"
-              className="text-xs font-semibold text-foreground bg-surface-2 hover:bg-slate-200 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5" />
+              className="min-h-9 text-xs font-semibold text-foreground bg-surface-2 hover:bg-surface-hover border border-line px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
+              <FileText aria-hidden="true" className="w-3.5 h-3.5" />
               {t("contracts.action.view_pdf")}
             </a>
           </div>
           <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground bg-surface-2 border border-line rounded-lg p-4 max-h-[28rem] overflow-auto">
             {item.body_text}
           </div>
-          <p className="text-[11px] text-muted font-mono">{t("contracts.msg.sha", { sha: item.sha256 || "—" })}</p>
+          <p className="text-2xs text-muted font-mono break-all">{t("contracts.msg.sha", { sha: item.sha256 || "—" })}</p>
         </section>
       ) : (
         <Banner tone="warning" message={t("contracts.msg.not_delivered")} />
@@ -101,12 +97,14 @@ export default function ContractInboxDetailPage() {
         ) : (
           <p className="text-sm text-muted">{t("contracts.msg.no_signatory")}</p>
         )}
-        {mayNominate && open && <NominateForm pid={pid} onAdded={detail.reload} onError={fail} />}
+        {mayNominate && open && <NominateForm pid={pid} onAdded={detail.reload} />}
       </section>
 
       {open && item.has_copy && maySign && (
         <section className={`${cardClass} p-5 space-y-3`}>
           <h2 className="text-sm font-semibold text-foreground">{t("contracts.section.decision")}</h2>
+          {/* The outcome of signing, beside the button that started it. */}
+          {message && <Banner tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} />}
           <div className="flex flex-wrap gap-2">
             <CeremonyButton
               label={t("contracts.action.sign")}
@@ -117,21 +115,27 @@ export default function ContractInboxDetailPage() {
                 await detail.reload();
               }}
               onError={(value) => setMessage({ tone: "error", text: value })}
-              className="bg-amber-400 hover:bg-amber-500 text-foreground text-sm font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
+              className="min-h-11 bg-accent hover:bg-accent-hover text-on-accent text-sm font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
             />
-            <button onClick={() => setDeclining(true)}
-              className="bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold px-4 py-2 rounded-lg">
+            <button type="button" onClick={() => setDeclining(true)}
+              className="min-h-11 bg-danger-soft hover:brightness-95 border border-danger-border text-danger text-sm font-semibold px-4 py-2 rounded-lg">
               {t("contracts.action.decline")}
             </button>
           </div>
         </section>
       )}
 
+      {/* Outside the decision section too: a sign that just completed moves
+          the state on, and the decision section with its banner goes. */}
+      {message && !(open && item.has_copy && maySign) && (
+        <Banner tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} />
+      )}
+
       {item.state === "signed" && (
         <section className={`${cardClass} p-5 space-y-3`}>
           <Banner tone="success" message={t("contracts.msg.signed_done")} />
           <a href={contracts.inboxSignedUrl(pid)} target="_blank" rel="noopener noreferrer"
-            className="text-xs font-semibold text-emerald-700 bg-surface border border-emerald-200 hover:bg-emerald-50 px-3 py-1.5 rounded-lg inline-block">
+            className="min-h-9 text-xs font-semibold text-success bg-success-soft border border-success-border hover:brightness-95 px-3 py-1.5 rounded-lg inline-flex items-center">
             {t("contracts.action.signed_pdf")}
           </a>
         </section>
@@ -143,26 +147,30 @@ export default function ContractInboxDetailPage() {
           pid={pid}
           onClose={() => setDeclining(false)}
           onDeclined={async () => { setDeclining(false); await detail.reload(); }}
-          onError={fail}
         />
       )}
     </div>
   );
 }
 
-function NominateForm({ pid, onAdded, onError }: {
+function NominateForm({ pid, onAdded }: {
   pid: string;
   onAdded: () => Promise<void>;
-  onError: (err: unknown) => void;
 }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const [error, setError] = useState<string | null>(null);
+  const ids = React.useId();
   const [form, setForm] = useState({ full_name: "", position: "", reg_number: "" });
   const [busy, setBusy] = useState(false);
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
 
-  const nominate = async () => {
+  const nominate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form.full_name.trim() || !form.reg_number.trim()) return;
     setBusy(true);
+    setError(null);
     try {
       await contracts.inboxNominate(pid, {
         full_name: form.full_name.trim(), position: form.position.trim(), reg_number: form.reg_number.trim(),
@@ -170,63 +178,95 @@ function NominateForm({ pid, onAdded, onError }: {
       setForm({ full_name: "", position: "", reg_number: "" });
       await onAdded();
     } catch (err) {
-      onError(err);
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
 
+  // Visible labels rather than placeholders: a placeholder vanishes on the
+  // first keystroke, and three empty boxes in a row do not say which is which.
+  const label = "block text-xs font-medium text-muted mb-1";
   return (
-    <div className="border-t border-line pt-3 space-y-3">
+    <form onSubmit={nominate} className="border-t border-line pt-3 space-y-3">
       <p className="text-xs text-muted">{t("contracts.msg.nominate_hint")}</p>
+      {error && <Banner tone="error" message={error} onDismiss={() => setError(null)} />}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input className={fieldClass} placeholder={t("contracts.field.full_name")} value={form.full_name} onChange={set("full_name")} />
-        <input className={fieldClass} placeholder={t("contracts.field.reg")} value={form.reg_number} onChange={set("reg_number")} />
-        <input className={fieldClass} placeholder={t("contracts.field.position")} value={form.position} onChange={set("position")} />
+        <div>
+          <label htmlFor={`${ids}-name`} className={label}>{t("contracts.field.full_name")} *</label>
+          <input id={`${ids}-name`} required className={fieldClass} value={form.full_name} onChange={set("full_name")} />
+        </div>
+        <div>
+          <label htmlFor={`${ids}-reg`} className={label}>{t("contracts.field.reg")} *</label>
+          <input id={`${ids}-reg`} required className={fieldClass} value={form.reg_number} onChange={set("reg_number")} />
+        </div>
+        <div>
+          <label htmlFor={`${ids}-position`} className={label}>{t("contracts.field.position")}</label>
+          <input id={`${ids}-position`} className={fieldClass} value={form.position} onChange={set("position")} />
+        </div>
       </div>
-      <button onClick={() => void nominate()} disabled={busy || !form.full_name.trim() || !form.reg_number.trim()}
-        className="bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg">
+      <button type="submit" disabled={busy || !form.full_name.trim() || !form.reg_number.trim()} aria-busy={busy || undefined}
+        className="min-h-11 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold px-4 py-2 rounded-lg">
         {t("contracts.action.nominate")}
       </button>
-    </div>
+    </form>
   );
 }
 
-function DeclineModal({ pid, onClose, onDeclined, onError }: {
+function DeclineModal({ pid, onClose, onDeclined }: {
   pid: string;
   onClose: () => void;
   onDeclined: () => Promise<void>;
-  onError: (err: unknown) => void;
 }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const reasonId = React.useId();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const decline = async () => {
+  // In the dialog: the page behind is dimmed, and an error drawn there was
+  // never seen.
+  const [error, setError] = useState<string | null>(null);
+  const decline = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reason.trim()) return;
     setBusy(true);
+    setError(null);
     try {
       await contracts.inboxDecline(pid, reason.trim());
       await onDeclined();
     } catch (err) {
-      onError(err);
+      setError(errorMessage(err));
       setBusy(false);
     }
   };
   return (
-    <Modal onClose={onClose} label={t("contracts.action.decline")}>
-      <div className="space-y-4">
+    <Modal onClose={onClose} label={t("contracts.action.decline")} dismissible={!busy}>
+      <form onSubmit={decline} className="space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("contracts.action.decline")}</h2>
-        <p className="text-xs text-muted">{t("contracts.msg.decline_hint")}</p>
-        <textarea autoFocus className={`${fieldClass} min-h-[100px]`} value={reason} onChange={(event) => setReason(event.target.value)} />
+        <p id={`${reasonId}-hint`} className="text-xs text-muted">{t("contracts.msg.decline_hint")}</p>
+        {error && <Banner tone="error" message={error} onDismiss={() => setError(null)} />}
+        <div>
+          <label htmlFor={reasonId} className="block text-xs font-medium text-foreground mb-1">{t("contracts.field.reason")} *</label>
+          <textarea
+            id={reasonId}
+            autoFocus
+            required
+            aria-describedby={`${reasonId}-hint`}
+            className={`${fieldClass} min-h-[100px]`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="text-sm font-medium text-muted px-4 py-2 rounded-lg hover:bg-surface-hover">
+          <button type="button" onClick={onClose} disabled={busy} className="min-h-11 text-sm font-medium text-muted px-4 py-2 rounded-lg hover:bg-surface-hover">
             {t("contracts.action.cancel")}
           </button>
-          <button onClick={() => void decline()} disabled={busy || !reason.trim()}
-            className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+          <button type="submit" disabled={busy || !reason.trim()} aria-busy={busy || undefined}
+            className="min-h-11 bg-danger-solid hover:brightness-110 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg">
             {t("contracts.action.decline")}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

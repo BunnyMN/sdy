@@ -11,32 +11,36 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { Smartphone } from "lucide-react";
+import { Loader2, Smartphone } from "lucide-react";
+import { Badge, type BadgeTone } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import type { CeremonyProgress, CeremonySession, ContractState, PartyState } from "@/lib/contracts";
 import { formatDay, formatMoment, formatMoney } from "@/lib/datetime";
 
 // ─────────────────────────────────────────────────────────────────── labels
 
-const CONTRACT_BADGE: Record<ContractState, string> = {
-  NONE: "bg-surface-2 text-muted",
-  DRAFT: "bg-surface-2 text-muted",
-  SENT: "bg-amber-50 text-amber-700",
-  PARTIALLY_SIGNED: "bg-indigo-50 text-indigo-700",
-  EXECUTED: "bg-emerald-50 text-emerald-700",
-  DECLINED: "bg-red-50 text-red-700",
-  WITHDRAWN: "bg-surface-2 text-muted",
-  EXPIRED: "bg-surface-2 text-muted",
-  TERMINATED: "bg-surface-2 text-muted",
+// Tones, not palette classes: the amber/indigo/emerald pastels stayed pale in
+// dark mode. One badge component for both — the platform's.
+const CONTRACT_TONE: Record<ContractState, BadgeTone> = {
+  NONE: "neutral",
+  DRAFT: "neutral",
+  SENT: "warning",
+  PARTIALLY_SIGNED: "info",
+  EXECUTED: "success",
+  DECLINED: "danger",
+  WITHDRAWN: "neutral",
+  EXPIRED: "neutral",
+  TERMINATED: "neutral",
 };
 
-const PARTY_BADGE: Record<PartyState, string> = {
-  draft: "bg-surface-2 text-muted",
-  invited: "bg-amber-50 text-amber-700",
-  viewed: "bg-indigo-50 text-indigo-700",
-  signed: "bg-emerald-50 text-emerald-700",
-  declined: "bg-red-50 text-red-700",
-  withdrawn: "bg-surface-2 text-muted",
-  expired: "bg-surface-2 text-muted",
+const PARTY_TONE: Record<PartyState, BadgeTone> = {
+  draft: "neutral",
+  invited: "warning",
+  viewed: "info",
+  signed: "success",
+  declined: "danger",
+  withdrawn: "neutral",
+  expired: "neutral",
 };
 
 export function useContractLabels() {
@@ -90,19 +94,28 @@ export function useContractLabels() {
 export function ContractBadge({ state }: { state: ContractState }) {
   const { contractState } = useContractLabels();
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${CONTRACT_BADGE[state] ?? "bg-surface-2 text-muted"}`}>
+    <Badge tone={CONTRACT_TONE[state] ?? "neutral"} className="whitespace-nowrap">
       {contractState(state)}
-    </span>
+    </Badge>
   );
 }
 
 export function PartyBadge({ state }: { state: PartyState }) {
   const { partyState } = useContractLabels();
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${PARTY_BADGE[state] ?? "bg-surface-2 text-muted"}`}>
+    <Badge tone={PARTY_TONE[state] ?? "neutral"} className="whitespace-nowrap">
       {partyState(state)}
-    </span>
+    </Badge>
   );
+}
+
+/** The coloured dot before a party's name in the progress strip. */
+export function PartyDot({ state }: { state: PartyState }) {
+  const color =
+    state === "signed" ? "bg-success-solid" :
+    state === "declined" ? "bg-danger-solid" :
+    state === "invited" || state === "viewed" ? "bg-warning" : "bg-line-strong";
+  return <span aria-hidden="true" className={`w-2 h-2 rounded-full ${color}`} />;
 }
 
 export function fmtDate(value?: string | null): string {
@@ -124,6 +137,15 @@ export function fmtMoney(amount?: number | null, currency?: string): string {
 
 // ───────────────────────────────────────────────────────────────── ceremony
 
+/**
+ * Starts a PIN2 ceremony and keeps asking until it settles.
+ *
+ * Three states the button used to collapse into two: idle, *starting* (the
+ * request is out — the button is disabled so a second press cannot open a
+ * second ceremony on the citizen's phone), and waiting on the phone with the
+ * code. Waiting can be stopped from here; the ceremony on the phone then simply
+ * runs out, and pressing again starts a fresh one.
+ */
 export function CeremonyButton({
   label,
   start,
@@ -131,27 +153,41 @@ export function CeremonyButton({
   onDone,
   onError,
   className,
+  disabled = false,
 }: {
   label: string;
   start: () => Promise<CeremonySession>;
   /** Receives the session start returned — the master-sign poll needs its id. */
   poll: (session: CeremonySession) => Promise<CeremonyProgress>;
   onDone: () => void | Promise<void>;
+  /** Already translated: the reader's language, never the server's English. */
   onError: (message: string) => void;
   className?: string;
+  disabled?: boolean;
 }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const [phase, setPhase] = useState<"idle" | "starting" | "waiting">("idle");
   const [code, setCode] = useState<string | null>(null);
-  const cancelled = useRef(false);
-  useEffect(() => () => { cancelled.current = true; }, []);
+  // Which run is current. Unmounting or pressing Stop moves it on, and a loop
+  // that finds itself no longer current stops without touching state.
+  const run = useRef(0);
+  useEffect(() => () => { run.current += 1; }, []);
 
-  const run = async () => {
+  const begin = async () => {
+    if (phase !== "idle") return;
+    const mine = ++run.current;
+    const live = () => run.current === mine;
+    setPhase("starting");
     try {
       const session = await start();
+      if (!live()) return;
       setCode(session.verification_code || "····");
+      setPhase("waiting");
       let failures = 0;
-      while (!cancelled.current) {
+      while (live()) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (!live()) return;
         let progress: CeremonyProgress;
         try {
           progress = await poll(session);
@@ -160,7 +196,7 @@ export function CeremonyButton({
           // connection is not — the ceremony is still open on the phone.
           const status = (err as { status?: number }).status;
           if (status && status >= 400 && status < 500) {
-            onError(err instanceof Error ? err.message : String(err));
+            onError(errorMessage(err));
             break;
           }
           // Сервер огт хариулахаа больсон бол мөнхөд эргэлдэхгүй: 10 удаа
@@ -178,32 +214,75 @@ export function CeremonyButton({
         // Хоёр рельс хоёр өөр үгээр «хүлээж байна» гэдэг: талын зам PENDING,
         // мастерын зам RUNNING. Аль аль нь — асуусаар байх.
         if (progress.state === "PENDING" || progress.state === "RUNNING") continue;
-        onError(progress.state === "REFUSED" ? t("contracts.msg.refused") : t("contracts.msg.ceremony_ended", { state: progress.state }));
+        onError(
+          progress.state === "REFUSED"
+            ? t("contracts.msg.refused")
+            : progress.state === "EXPIRED"
+              ? t("contracts.msg.ceremony_expired")
+              : t("contracts.msg.ceremony_failed"),
+        );
         break;
       }
     } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
+      if (live()) onError(errorMessage(err));
     } finally {
-      if (!cancelled.current) setCode(null);
+      if (live()) {
+        setCode(null);
+        setPhase("idle");
+      }
     }
   };
 
-  if (code) {
-    return (
-      <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 font-mono">
-        <Smartphone className="w-3.5 h-3.5 animate-pulse" />
-        {code}
-        <span className="font-sans font-medium text-indigo-500">{t("contracts.msg.check_phone")}</span>
-      </span>
-    );
-  }
+  const stop = () => {
+    run.current += 1;
+    setCode(null);
+    setPhase("idle");
+  };
+
   return (
-    <button
-      onClick={() => void run()}
-      className={className ?? "bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"}
-    >
-      <Smartphone className="w-3.5 h-3.5" />
-      {label}
-    </button>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {phase === "waiting" && code ? (
+        <>
+          <span className="bg-accent-soft text-accent border border-line text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 font-mono">
+            <Smartphone aria-hidden="true" className="w-3.5 h-3.5 animate-pulse" />
+            <span className="text-base tracking-widest">{code}</span>
+            <span className="font-sans font-medium">{t("contracts.msg.check_phone")}</span>
+          </span>
+          <button
+            type="button"
+            onClick={stop}
+            className="min-h-9 text-xs font-medium text-muted hover:text-foreground border border-line rounded-lg px-3 py-1.5 bg-surface hover:bg-surface-hover"
+          >
+            {t("contracts.action.stop_waiting")}
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void begin()}
+          disabled={disabled || phase !== "idle"}
+          aria-busy={phase === "starting" || undefined}
+          className={`${
+            className ??
+            "min-h-9 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
+          } disabled:opacity-60`}
+        >
+          {phase === "starting" ? (
+            <Loader2 aria-hidden="true" className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Smartphone aria-hidden="true" className="w-3.5 h-3.5" />
+          )}
+          {phase === "starting" ? t("contracts.msg.ceremony_starting") : label}
+        </button>
+      )}
+      {/* Outside the controls, so the code is read out once when it appears. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {phase === "starting"
+          ? t("contracts.msg.ceremony_starting")
+          : phase === "waiting" && code
+            ? t("contracts.msg.ceremony_code", { code: code.split("").join(" ") })
+            : ""}
+      </span>
+    </span>
   );
 }

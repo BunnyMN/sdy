@@ -30,6 +30,10 @@ import { zh as integrations } from "../locales/zh/integrations";
 import { zh as sso_clients } from "../locales/zh/sso_clients";
 import { zh as storefront } from "../locales/zh/storefront";
 import { zh as urtuu } from "../locales/zh/urtuu";
+import { zh as documents } from "../locales/zh/documents";
+import { zh as esign } from "../locales/zh/esign";
+import { zh as line } from "../locales/zh/line";
+import { zh as reports } from "../locales/zh/reports";
 
 // ai.ts sits beside these and is deliberately absent: its keys are part of the
 // core dictionary (lib/i18n/addons/ai.ts, spread in core.ts), not an app's, and
@@ -37,7 +41,7 @@ import { zh as urtuu } from "../locales/zh/urtuu";
 // a dictionary that did not exist before this file did.
 const zh = {
   core,
-  apps: { integrations, sso_clients, storefront, urtuu },
+  apps: { integrations, sso_clients, storefront, urtuu, documents, esign, line, reports },
 };
 
 export default zh;

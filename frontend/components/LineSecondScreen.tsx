@@ -1,4 +1,7 @@
+"use client";
+
 import type { LineContent } from "@/app/line/[line]/lines";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Шугамын хоёр дахь дэлгэц — дөрвөн шугамд нэг бие.
@@ -18,6 +21,7 @@ import type { LineContent } from "@/app/line/[line]/lines";
  *   3. Платформын route руу хөтлөхгүй.
  */
 export default function LineSecondScreen({ content }: { content: LineContent }) {
+  const { t } = useI18n();
   return (
     <div
       className={`line-home line-home--${content.posture}`}
@@ -25,7 +29,7 @@ export default function LineSecondScreen({ content }: { content: LineContent }) 
     >
       <header className="line-mast">
         <p className="line-eyebrow">{content.eyebrow}</p>
-        <h1 className="line-title">2 дахь дэлгэц</h1>
+        <h1 className="line-title">{t("line.second.title")}</h1>
       </header>
     </div>
   );
