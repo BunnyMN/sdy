@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>mn</string>
 	<key>CFBundleDisplayName</key>
-	<string>SDY Гишүүн</string>
+	<string>esdy</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

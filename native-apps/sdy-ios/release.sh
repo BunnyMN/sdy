@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDY Гишүүн — App Store Connect руу archive хийж илгээх.
+# esdy — App Store Connect руу archive хийж илгээх.
 #
 # Шаардлага:
 #   Config/Signing.xcconfig  (SDY_TEAM_ID = XXXXXXXXXX)

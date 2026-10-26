@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDY Гишүүн — симулятор дээр барих (гарын үсэггүй).
+# esdy — симулятор дээр барих (гарын үсэггүй).
 #
 #   ./build.sh                       # Debug, iOS Simulator
 #   CONFIGURATION=Release ./build.sh

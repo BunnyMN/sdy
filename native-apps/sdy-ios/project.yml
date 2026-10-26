@@ -1,4 +1,4 @@
-# SDY Гишүүн — SDY-ийн гишүүдэд зориулсан native iOS апп.
+# esdy — SDY-ийн гишүүдэд зориулсан native iOS апп.
 #
 # project.yml нь эх сурвалж; SDYMember.xcodeproj нь артефакт (.gitignore).
 # Барихын өмнө `xcodegen generate` (build.sh үүнийг өөрөө хийнэ).
@@ -55,7 +55,7 @@ targets:
     info:
       path: SDYMember/Resources/Info.plist
       properties:
-        CFBundleDisplayName: SDY Гишүүн
+        CFBundleDisplayName: esdy
         CFBundleDevelopmentRegion: mn
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

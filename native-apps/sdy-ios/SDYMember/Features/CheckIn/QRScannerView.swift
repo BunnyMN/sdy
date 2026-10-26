@@ -108,7 +108,7 @@ struct QRScannerScreen: View {
                 case .denied, .restricted:
                     message(icon: "camera.fill",
                             title: "Камерын зөвшөөрөл алга",
-                            text: "Ирцийн QR уншихын тулд Тохиргоо → SDY Гишүүн → Камер хэсгийг идэвхжүүлнэ үү.",
+                            text: "Ирцийн QR уншихын тулд Тохиргоо → esdy → Камер хэсгийг идэвхжүүлнэ үү.",
                             action: ("Тохиргоо нээх", { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }))
                 default:
                     message(icon: "camera.metering.unknown",
