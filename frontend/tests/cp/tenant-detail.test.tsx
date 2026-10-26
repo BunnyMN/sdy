@@ -34,7 +34,11 @@ vi.mock("@/lib/cp", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/cp")>()),
   cp: api,
 }));
-vi.mock("next/navigation", () => ({ useParams: () => ({ id: "ten-1" }) }));
+// The real router stand-in, because the open tab lives in the address.
+vi.mock("next/navigation", async () => ({
+  ...(await import("../helpers/navigation")),
+  useParams: () => ({ id: "ten-1" }),
+}));
 
 import Detail from "@/app/cp/tenants/[id]/page";
 
@@ -165,8 +169,14 @@ test("asking for a deletion is a request, and says so before it is sent", async 
   // What the button does is ask a second superadmin, and the operator pressing
   // it should read that before typing a reason, not afterwards.
   expect(within(dialog).getByText("cp.message.deletion_requested")).toBeTruthy();
-  await person.type(within(dialog).getByRole("textbox"), "гэрээ дууссан");
-  await person.click(within(dialog).getByRole("button", { name: "cp.action.confirm" }));
+  await person.type(within(dialog).getByLabelText(/^cp\.field\.reason/), "гэрээ дууссан");
+  // Irreversible, so the organisation's slug has to be typed before Confirm
+  // does anything — a reason alone is one reflex away from the wrong one.
+  const confirm = within(dialog).getByRole("button", { name: "cp.action.confirm" });
+  expect(confirm).toHaveProperty("disabled", true);
+  await person.type(within(dialog).getByLabelText(/base\.confirm\.type_to_confirm/), "gerege");
+  expect(confirm).toHaveProperty("disabled", false);
+  await person.click(confirm);
 
   await waitFor(() => expect(api.requestDeletion).toHaveBeenCalledWith("ten-1", "гэрээ дууссан"));
 });

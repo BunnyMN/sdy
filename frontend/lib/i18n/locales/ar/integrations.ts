@@ -53,4 +53,7 @@ export const ar: Record<string, string> = {
   "integrations.view.create_title": "تسجيل موصل التكامل",
   "integrations.view.subtitle": "إدارة البوابات الحكومية وموصّلات REST API وwebhooks الأحداث",
   "integrations.view.title": "تكاملات الأنظمة الخارجية و Webhook",
+  "integrations.state.active": "نشط",
+  "integrations.state.failing": "به أخطاء",
+  "integrations.state.off": "متوقف",
 };

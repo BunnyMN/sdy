@@ -93,4 +93,7 @@ export const zh: Record<string, string> = {
   "sso_clients.view.endpoints_title": "连接地址",
   "sso_clients.view.subtitle": "通过本平台登录用户的系统所用的 OAuth2 / OIDC 客户端",
   "sso_clients.view.title": "SSO 客户端",
+  "sso_clients.hint.redirect_uris": "每行一个 · 仅限 https（localhost 除外）",
+  "sso_clients.view.provider_active": "SSO 提供方已启用",
+  "sso_clients.keys.name_placeholder": "仓库同步任务",
 };

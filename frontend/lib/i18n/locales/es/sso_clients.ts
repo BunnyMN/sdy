@@ -93,4 +93,7 @@ export const es: Record<string, string> = {
   "sso_clients.view.endpoints_title": "Puntos de conexión",
   "sso_clients.view.subtitle": "Clientes OAuth2 / OIDC de los sistemas que inician sesión de personas a través de esta plataforma",
   "sso_clients.view.title": "Clientes SSO",
+  "sso_clients.hint.redirect_uris": "una por línea · solo https, salvo en localhost",
+  "sso_clients.view.provider_active": "Proveedor SSO activo",
+  "sso_clients.keys.name_placeholder": "Tarea de sincronización del almacén",
 };

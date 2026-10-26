@@ -53,4 +53,7 @@ export const zh: Record<string, string> = {
   "integrations.view.create_title": "注册集成连接器",
   "integrations.view.subtitle": "管理政务网关、REST API 连接器与事件 Webhook",
   "integrations.view.title": "外部系统集成与 Webhook",
+  "integrations.state.active": "已启用",
+  "integrations.state.failing": "出错",
+  "integrations.state.off": "已关闭",
 };

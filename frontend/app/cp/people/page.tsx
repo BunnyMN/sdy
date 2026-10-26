@@ -10,14 +10,25 @@
  * or not at all, so this screen counts first and lists second.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Users } from "lucide-react";
 import Link from "next/link";
 
-import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
-import { cp, type Roster } from "@/lib/cp";
+import { Badge, Card, formatMoment } from "@/components/cp/ui";
+import { cp, type Roster, type RosterPerson } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
 import { useUrlState } from "@/lib/urlState";
+import { ErrorNote, Table } from "@/components/ui";
+
+import { compareValues, SortHeader, type SortDirection } from "../tenants/shared";
+
+/** What each sortable column sorts on — within the page in hand. */
+const SORT_KEYS: Record<string, (person: RosterPerson) => string | number | null> = {
+  name: (person) => person.name || person.email,
+  organisations: (person) => person.organisations,
+  sessions: (person) => person.sessions,
+  seen: (person) => person.last_seen_at,
+};
 
 const FILTERS = ["", "verified", "locked", "homeless"] as const;
 
@@ -26,20 +37,31 @@ export default function People() {
   const [roster, setRoster] = useState<Roster | null>(null);
   // Хайлт, шүүлтүүр, байрлал гурвуулаа хаягт: refresh хийхэд алдагдахгүй,
   // back нь шүүлтүүрийг буцаана, линк нь ижил жагсаалт нээнэ.
-  const [urlState, setUrlState] = useUrlState({ q: "", filter: "", offset: "0" });
+  const [urlState, setUrlState] = useUrlState({ q: "", filter: "", offset: "0", sort: "", dir: "asc" });
   const [search, setSearch] = useState(urlState.q);
   const filter = urlState.filter;
   const setFilter = (which: string) => setUrlState({ filter: which, offset: "0" });
   const offset = Number(urlState.offset) || 0;
   const setOffset = (from: number) => setUrlState({ offset: String(from) });
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
+  // Only the newest request may write: a slow answer to an earlier search
+  // must not replace the list for the one now in the box.
+  const latest = useRef(0);
 
   const load = useCallback(async (query: string, which: string, from: number) => {
+    const ticket = ++latest.current;
+    setLoading(true);
     try {
-      setRoster(await cp.roster(query, which, from));
+      const answer = await cp.roster(query, which, from);
+      if (ticket !== latest.current) return;
+      setRoster(answer);
       setFailure("");
     } catch (error) {
+      if (ticket !== latest.current) return;
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (ticket === latest.current) setLoading(false);
     }
   }, []);
 
@@ -52,7 +74,22 @@ export default function People() {
     return () => clearTimeout(timer);
   }, [load, search, filter, offset, setUrlState]);
 
-  const people = roster?.people ?? [];
+  const sort = urlState.sort in SORT_KEYS ? urlState.sort : "";
+  const direction: SortDirection = urlState.dir === "desc" ? "desc" : "asc";
+  const onSort = (column: string) =>
+    setUrlState({ sort: column, dir: sort === column && direction === "asc" ? "desc" : "asc" });
+  const header = (column: string, label: string) => (
+    <SortHeader label={label} column={column} sort={sort} direction={direction} onSort={onSort} />
+  );
+
+  // The server's order unless a column was chosen; a chosen one sorts the
+  // page in hand.
+  const people = useMemo(() => {
+    const rows = roster?.people ?? [];
+    if (!sort) return rows;
+    const key = SORT_KEYS[sort];
+    return [...rows].sort((a, b) => compareValues(key(a), key(b), direction));
+  }, [roster, sort, direction]);
 
   return (
     <div className="space-y-6">
@@ -64,9 +101,7 @@ export default function People() {
         <p className="mt-1 text-sm text-muted">{t("cp.hint.people")}</p>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label={t("cp.metric.people")} value={roster?.total} />
@@ -77,41 +112,46 @@ export default function People() {
 
       <div className="flex flex-wrap items-center gap-2">
         <input
+          type="search"
           value={search}
           onChange={(event) => {
             setOffset(0);
             setSearch(event.target.value);
           }}
           placeholder={t("cp.field.search_people")}
-          className="flex-1 min-w-56 rounded-lg border border-input px-3 py-2 text-sm"
+          aria-label={t("cp.field.search_people")}
+          className="flex-1 min-w-56 rounded-lg border border-input bg-surface px-3 py-2 text-sm"
         />
-        {FILTERS.map((option) => (
-          <button
-            key={option || "all"}
-            type="button"
-            onClick={() => {
-              setOffset(0);
-              setFilter(option);
-            }}
-            className={`rounded-lg border px-3 py-2 text-sm ${
-              filter === option
-                ? "border-accent bg-accent-soft text-accent"
-                : "border-input text-muted hover:bg-surface-hover"
-            }`}
-          >
-            {t(`cp.filter.${option || "everybody"}` as "cp.filter.everybody")}
-          </button>
-        ))}
+        <div role="group" aria-label={t("cp.filter.people")} className="flex flex-wrap gap-2">
+          {FILTERS.map((option) => (
+            <button
+              key={option || "all"}
+              type="button"
+              aria-pressed={filter === option}
+              onClick={() => {
+                setOffset(0);
+                setFilter(option);
+              }}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                filter === option
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-input text-muted hover:bg-surface-hover"
+              }`}
+            >
+              {t(`cp.filter.${option || "everybody"}` as "cp.filter.everybody")}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card title={t("cp.section.people")}>
         <Table
           head={[
-            t("cp.field.person"),
+            header("name", t("cp.field.person")),
             t("cp.field.identities"),
-            t("cp.field.organisations"),
-            t("cp.field.sessions"),
-            t("cp.field.last_seen"),
+            header("organisations", t("cp.field.organisations")),
+            header("sessions", t("cp.field.sessions")),
+            header("seen", t("cp.field.last_seen")),
           ]}
           rows={people.map((person) => [
             <span key="n" className="min-w-0">
@@ -130,12 +170,13 @@ export default function People() {
               )}
             </span>,
             <span key="o" className="tabular-nums">
-              {person.organisations || <span className="text-amber-700">0</span>}
+              {person.organisations || <span className="text-warning">0</span>}
             </span>,
             <span key="s" className="tabular-nums">{person.sessions}</span>,
             formatMoment(person.last_seen_at) || <span key="l" className="text-xs text-muted">{t("cp.state.never")}</span>,
           ])}
           empty={t("cp.message.no_people")}
+          loading={loading && !roster}
         />
       </Card>
 

@@ -16,6 +16,7 @@ import { RefreshCw, Timer } from "lucide-react";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type Overview } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote } from "@/components/ui";
 
 export default function Jobs() {
   const { t } = useI18n();
@@ -60,9 +61,7 @@ export default function Jobs() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <Card title={t("cp.section.background")}>
         <Table
@@ -78,7 +77,8 @@ export default function Jobs() {
             </Badge>,
             job.pending > 0 ? String(job.pending) : "—",
           ])}
-          empty={t("cp.message.no_activity")}
+          loading={!health && !failure}
+          empty={t("cp.message.no_jobs")}
         />
       </Card>
 
@@ -90,6 +90,7 @@ export default function Jobs() {
             String(trouble.failures),
             <span key="s" className="text-xs text-muted font-mono break-all">{trouble.sample}</span>,
           ])}
+          loading={!health && !failure}
           empty={t("cp.message.no_trouble")}
         />
       </Card>

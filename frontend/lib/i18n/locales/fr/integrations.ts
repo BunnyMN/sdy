@@ -53,4 +53,7 @@ export const fr: Record<string, string> = {
   "integrations.view.create_title": "Enregistrer un connecteur d'intégration",
   "integrations.view.subtitle": "Gérez les passerelles gouvernementales, les connecteurs REST API et les webhooks d'événements",
   "integrations.view.title": "Intégrations de systèmes externes et Webhooks",
+  "integrations.state.active": "Actif",
+  "integrations.state.failing": "En erreur",
+  "integrations.state.off": "Désactivé",
 };

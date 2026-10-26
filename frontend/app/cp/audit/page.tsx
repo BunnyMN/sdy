@@ -13,7 +13,7 @@ import Link from "next/link";
 import { Filter, RefreshCw, ScrollText } from "lucide-react";
 
 import { Badge, formatMoment } from "@/components/cp/ui";
-import { EmptyState, LoadingBlock } from "@/components/ui";
+import { Banner, EmptyState, ErrorNote, LoadingBlock } from "@/components/ui";
 import { cp, type AuditEntry } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
 import { useUrlState } from "@/lib/urlState";
@@ -25,6 +25,14 @@ interface AuditFilters extends Record<string, string> {
 }
 
 const EMPTY_FILTERS: AuditFilters = { action: "", target_type: "", target_id: "" };
+
+/**
+ * How many rows the API returns at most (operator.AuditPageSize). It has no
+ * offset or cursor yet, so a full page means older rows exist that this
+ * screen cannot reach — and the screen says so rather than letting the last
+ * row read as the beginning of the ledger.
+ */
+const AUDIT_PAGE_SIZE = 100;
 
 export default function AuditTrail() {
   const { t } = useI18n();
@@ -71,7 +79,7 @@ export default function AuditTrail() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex-1">
-          <div className="flex items-center gap-2 text-amber-600">
+          <div className="flex items-center gap-2 text-warning">
             <ScrollText className="h-4 w-4" />
             <span className="text-xs font-semibold uppercase tracking-[0.18em]">
               {t("cp.audit.append_only")}
@@ -137,9 +145,9 @@ export default function AuditTrail() {
       </form>
 
       {failure && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <ErrorNote>
           {t("cp.message.load_failed")} {failure}
-        </p>
+        </ErrorNote>
       )}
 
       {entries === null && !failure && <LoadingBlock label={t("base.message.loading")} rows={6} />}
@@ -159,6 +167,10 @@ export default function AuditTrail() {
             message={filtered ? t("cp.audit.empty_filtered") : t("cp.audit.empty")}
           />
         </div>
+      )}
+
+      {entries && entries.length >= AUDIT_PAGE_SIZE && (
+        <Banner tone="info" message={t("cp.audit.capped", { count: AUDIT_PAGE_SIZE })} />
       )}
 
       {entries && entries.length > 0 && (
@@ -190,7 +202,7 @@ function FilterField({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono text-sm"
+        className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono text-sm"
       />
     </label>
   );
@@ -206,10 +218,10 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
         <time dateTime={entry.created_at} className="tabular-nums">
           {formatMoment(entry.created_at)}
         </time>
-        <span className="mt-1 block font-mono text-[11px] text-muted">{entry.ip || "—"}</span>
+        <span className="mt-1 block font-mono text-2xs text-muted">{entry.ip || "—"}</span>
       </div>
 
-      <div className="relative px-5 py-4 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-amber-400">
+      <div className="relative px-5 py-4 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-warning-border">
         <div className="flex flex-wrap items-center gap-2">
           <strong className="font-mono text-sm text-foreground">{entry.action}</strong>
           <Badge tone="slate">{entry.target_type}</Badge>
@@ -225,10 +237,10 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
 
         {changed && (
           <details className="mt-3 rounded-lg border border-line bg-surface-2 open:bg-surface">
-            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted marker:text-amber-500">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted marker:text-warning">
               {t("cp.audit.change")}
             </summary>
-            <div className="grid gap-px border-t border-line bg-slate-200 lg:grid-cols-2">
+            <div className="grid gap-px border-t border-line bg-line lg:grid-cols-2">
               <Snapshot label={t("cp.audit.before")} value={entry.before} />
               <Snapshot label={t("cp.audit.after")} value={entry.after} />
             </div>
@@ -245,7 +257,7 @@ function Target({ entry }: { entry: AuditEntry }) {
     return (
       <Link
         href={`/cp/tenants/${encodeURIComponent(entry.target_id)}`}
-        className="max-w-full truncate font-mono text-xs text-muted underline decoration-slate-300 underline-offset-2 hover:text-foreground"
+        className="max-w-full truncate font-mono text-xs text-muted underline decoration-line underline-offset-2 hover:text-foreground"
       >
         {value}
       </Link>
@@ -257,7 +269,7 @@ function Target({ entry }: { entry: AuditEntry }) {
 function Snapshot({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="min-w-0 bg-surface p-3">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</p>
+      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-muted">{label}</p>
       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-foreground">
         {hasValue(value) ? JSON.stringify(value, null, 2) : "—"}
       </pre>

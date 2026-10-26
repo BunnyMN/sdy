@@ -32,8 +32,22 @@ import { useConsole } from "@/components/cp/Console";
 import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type Quota, type TenantDetail, type VerifiedPerson } from "@/lib/cp";
+import { formatDay } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { daysUntil } from "@/lib/ubTime";
+import { useUrlState } from "@/lib/urlState";
+import { ErrorNote, LoadingBlock, Modal } from "@/components/ui";
+
+import { requiredLabel, TenantStateBadge, useStepUp, useVerifiedPeople } from "../shared";
+
+const TABS = ["members", "apps", "impersonations", "activity", "operator_actions"] as const;
+type Tab = (typeof TABS)[number];
+
+/** How many rows a history tab shows before "view all". */
+const PREVIEW_ROWS = 10;
+
+/** The grace period the server gives an approved deletion (lifecycle.go). */
+const DELETION_GRACE_DAYS = 30;
 
 export default function Detail() {
   const { t } = useI18n();
@@ -46,6 +60,10 @@ export default function Detail() {
   const [failure, setFailure] = useState("");
   const [quotaOpen, setQuotaOpen] = useState(false);
   const [addingPerson, setAddingPerson] = useState(false);
+  // Which section is open lives in the address, so a link to "this
+  // organisation's operator actions" opens on them.
+  const [urlState, setUrlState] = useUrlState({ tab: "members" });
+  const tab: Tab = (TABS as readonly string[]).includes(urlState.tab) ? (urlState.tab as Tab) : "members";
 
   const load = useCallback(async () => {
     try {
@@ -64,13 +82,11 @@ export default function Detail() {
     return (
       <div className="space-y-4">
         <BackLink label={t("cp.action.back")} />
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">
-          {t("cp.message.load_failed")}
-        </p>
+        <ErrorNote>{t("cp.message.load_failed")}</ErrorNote>
       </div>
     );
   }
-  if (!tenant) return <div className="text-muted">…</div>;
+  if (!tenant) return <LoadingBlock />;
 
   const suspended = !!tenant.suspended_at;
   const deleting = !!tenant.deletion_scheduled_at;
@@ -85,20 +101,16 @@ export default function Detail() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
             {tenant.name}
-            <StateBadge tenant={tenant} />
+            <TenantStateBadge tenant={tenant} />
           </h1>
           <p className="text-sm text-muted">
             {tenant.slug}
             {tenant.legal_name ? ` · ${tenant.legal_name}` : ""}
           </p>
           {suspended && tenant.suspension_reason && (
-            <p className="mt-1 text-sm text-amber-700">{tenant.suspension_reason}</p>
+            <p className="mt-1 text-sm text-warning">{tenant.suspension_reason}</p>
           )}
-          {deleting && (
-            <p className="mt-1 text-sm text-red-700">
-              {formatMoment(tenant.deletion_scheduled_at)}
-            </p>
-          )}
+          {deleting && <DeletionDate at={tenant.deletion_scheduled_at} />}
         </div>
       </div>
 
@@ -165,6 +177,18 @@ export default function Detail() {
                 action.run({
                   title: t("cp.action.delete"),
                   detail: t("cp.message.deletion_requested"),
+                  // The name of what is being deleted, typed — a reason alone
+                  // is one reflexive sentence away from the wrong organisation.
+                  confirmText: tenant.slug,
+                  body: (
+                    <p>
+                      <strong>{tenant.name}</strong>
+                      {" · "}
+                      {t("cp.message.deletion_when", {
+                        date: formatDay(Date.now() + DELETION_GRACE_DAYS * 24 * 60 * 60 * 1000),
+                      })}
+                    </p>
+                  ),
                   danger: true,
                   perform: (reason) => cp.requestDeletion(tenant.id, reason),
                   onDone: load,
@@ -219,112 +243,155 @@ export default function Detail() {
         />
       </dl>
 
-      <Card title={t("cp.section.apps")}>
-        <Table
-          head={[t("cp.field.apps"), t("cp.field.version"), t("cp.field.status"), t("cp.field.installed")]}
-          rows={tenant.apps.map((app) => [
-            app.name,
-            app.version,
-            app.enabled ? app.status : `${app.status} · off`,
-            formatMoment(app.installed_at),
-          ])}
-          empty={t("cp.message.no_activity")}
-        />
-      </Card>
-
-      <Card
-        title={t("cp.section.members")}
-        action={
-          !suspended && (
-            <button
-              type="button"
-              onClick={() => setAddingPerson(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-hover"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              {t("cp.action.add_person")}
-            </button>
-          )
-        }
+      <div
+        role="tablist"
+        aria-label={t("cp.tab.tenant")}
+        className="flex gap-1 overflow-x-auto border-b border-line"
+        onKeyDown={(event) => {
+          // Arrow keys move between tabs, as the tab pattern promises.
+          if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+          const step = event.key === "ArrowRight" ? 1 : -1;
+          const next = TABS[(TABS.indexOf(tab) + step + TABS.length) % TABS.length];
+          setUrlState({ tab: next });
+          document.getElementById(`tenant-tab-${next}`)?.focus();
+        }}
       >
-        <Table
-          head={[t("cp.field.email"), t("cp.field.person"), t("cp.field.roles"), ""]}
-          rows={tenant.members.map((member) => [
-            member.email,
-            member.name,
-            member.roles.length ? member.roles.join(", ") : "—",
-            // Looking at the platform as somebody is a decision about *which*
-            // somebody. It used to be a button on the action bar above that
-            // took tenant.members[0] — whoever the list happened to start
-            // with — so the operator got an arbitrary person and the reason
-            // they typed named a different one.
-            may("user.impersonate") && !suspended ? (
-              <button
-                key="i"
-                type="button"
-                onClick={() =>
-                  action.run({
-                    title: t("cp.action.impersonate"),
-                    detail: member.email,
-                    perform: async (reason) => {
-                      const { url } = await cp.impersonate(tenant.id, member.user_id, reason);
-                      // A new tab, so the console stays where it is: the
-                      // operator is about to be two people at once and should
-                      // not lose the window that can end it.
-                      window.open(url, "_blank", "noopener");
-                    },
-                  })
-                }
-                className="inline-flex items-center gap-1.5 text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                {t("cp.action.impersonate")}
-              </button>
-            ) : (
-              <span key="i" />
-            ),
-          ])}
-          empty={t("cp.message.no_activity")}
-        />
-      </Card>
+        {TABS.map((name) => (
+          <button
+            key={name}
+            id={`tenant-tab-${name}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            aria-controls="tenant-tab-panel"
+            tabIndex={tab === name ? 0 : -1}
+            onClick={() => setUrlState({ tab: name })}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium -mb-px ${
+              tab === name ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground"
+            }`}
+          >
+            {t(`cp.section.${name}` as "cp.section.apps")}
+          </button>
+        ))}
+      </div>
 
-      <Card title={t("cp.section.impersonations")}>
-        <Table
-          head={[t("cp.field.when"), t("cp.field.operator"), t("cp.field.person"), t("cp.field.reason")]}
-          rows={tenant.impersonations.map((visit) => [
-            formatMoment(visit.created_at),
-            visit.operator_email,
-            visit.user_email,
-            visit.reason,
-          ])}
-          empty={t("cp.message.no_activity")}
-        />
-      </Card>
+      <div id="tenant-tab-panel" role="tabpanel" aria-labelledby={`tenant-tab-${tab}`}>
+        {tab === "apps" && (
+          <Card title={t("cp.section.apps")}>
+            <Table
+              head={[t("cp.field.apps"), t("cp.field.version"), t("cp.field.status"), t("cp.field.installed")]}
+              rows={tenant.apps.map((app) => [
+                app.name,
+                app.version,
+                <span key="s" className="inline-flex flex-wrap items-center gap-1.5">
+                  {app.status}
+                  {!app.enabled && <Badge tone="slate">{t("cp.state.off")}</Badge>}
+                </span>,
+                formatMoment(app.installed_at),
+              ])}
+              empty={t("cp.message.no_apps")}
+            />
+          </Card>
+        )}
 
-      <Card title={t("cp.section.activity")}>
-        <Table
-          head={[t("cp.field.when"), t("cp.field.action"), t("cp.field.resource")]}
-          rows={tenant.activity.map((entry) => [
-            formatMoment(entry.created_at),
-            entry.action,
-            entry.resource,
-          ])}
-          empty={t("cp.message.no_activity")}
-        />
-      </Card>
+        {tab === "members" && (
+          <Card
+            title={t("cp.section.members")}
+            action={
+              !suspended && (
+                <button
+                  type="button"
+                  onClick={() => setAddingPerson(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-hover"
+                >
+                  <UserPlus aria-hidden="true" className="w-3.5 h-3.5" />
+                  {t("cp.action.add_person")}
+                </button>
+              )
+            }
+          >
+            <Table
+              head={[t("cp.field.email"), t("cp.field.person"), t("cp.field.roles"), ""]}
+              rows={tenant.members.map((member) => [
+                member.email,
+                member.name,
+                member.roles.length ? member.roles.join(", ") : "—",
+                // Looking at the platform as somebody is a decision about *which*
+                // somebody. It used to be a button on the action bar above that
+                // took tenant.members[0] — whoever the list happened to start
+                // with — so the operator got an arbitrary person and the reason
+                // they typed named a different one.
+                may("user.impersonate") && !suspended ? (
+                  <button
+                    key="i"
+                    type="button"
+                    onClick={() =>
+                      action.run({
+                        title: t("cp.action.impersonate"),
+                        detail: member.email,
+                        perform: async (reason) => {
+                          const { url } = await cp.impersonate(tenant.id, member.user_id, reason);
+                          // A new tab, so the console stays where it is: the
+                          // operator is about to be two people at once and should
+                          // not lose the window that can end it.
+                          window.open(url, "_blank", "noopener");
+                        },
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover"
+                  >
+                    <Eye aria-hidden="true" className="w-3.5 h-3.5" />
+                    {t("cp.action.impersonate")}
+                  </button>
+                ) : (
+                  <span key="i" />
+                ),
+              ])}
+              empty={t("cp.message.no_members")}
+            />
+          </Card>
+        )}
 
-      <Card title={t("cp.section.operator_actions")}>
-        <Table
-          head={[t("cp.field.when"), t("cp.field.operator"), t("cp.field.action"), t("cp.field.reason")]}
-          rows={tenant.operator_actions.map((entry) => [
-            formatMoment(entry.created_at),
-            entry.operator_email,
-            entry.action,
-            entry.reason || "—",
-          ])}
-          empty={t("cp.message.no_activity")}
-        />
-      </Card>
+        {tab === "impersonations" && (
+          <History
+            title={t("cp.section.impersonations")}
+            head={[t("cp.field.when"), t("cp.field.operator"), t("cp.field.person"), t("cp.field.reason")]}
+            rows={tenant.impersonations.map((visit) => [
+              formatMoment(visit.created_at),
+              visit.operator_email,
+              visit.user_email,
+              visit.reason,
+            ])}
+            empty={t("cp.message.no_impersonations")}
+          />
+        )}
+
+        {tab === "activity" && (
+          <History
+            title={t("cp.section.activity")}
+            head={[t("cp.field.when"), t("cp.field.action"), t("cp.field.resource")]}
+            rows={tenant.activity.map((entry) => [formatMoment(entry.created_at), entry.action, entry.resource])}
+            empty={t("cp.message.no_activity")}
+          />
+        )}
+
+        {tab === "operator_actions" && (
+          <History
+            title={t("cp.section.operator_actions")}
+            head={[t("cp.field.when"), t("cp.field.operator"), t("cp.field.action"), t("cp.field.reason")]}
+            rows={tenant.operator_actions.map((entry) => [
+              formatMoment(entry.created_at),
+              entry.operator_email,
+              entry.action,
+              entry.reason || "—",
+            ])}
+            empty={t("cp.message.no_operator_actions")}
+            // The full trail is the audit screen, filtered to this organisation —
+            // the same filter the server used to pick these rows.
+            allHref={`/cp/audit?target_type=tenant&target_id=${encodeURIComponent(tenant.id)}`}
+          />
+        )}
+      </div>
 
       {addingPerson && (
         <AddPersonDialog
@@ -372,15 +439,65 @@ function allowed(role: string, capability: string): boolean {
   return (CAPABILITIES[role] ?? []).includes(capability);
 }
 
-function StateBadge({ tenant }: { tenant: { suspended_at: string | null; deletion_scheduled_at: string | null } }) {
+/** When an organisation on its way out is actually removed, and how long that leaves. */
+function DeletionDate({ at }: { at: string | null }) {
   const { t } = useI18n();
-  if (tenant.deletion_scheduled_at) {
-    return <Badge tone="red">{t("cp.state.deleting")}</Badge>;
-  }
-  if (tenant.suspended_at) {
-    return <Badge tone="amber">{t("cp.state.suspended")}</Badge>;
-  }
-  return <Badge tone="emerald">{t("cp.state.active")}</Badge>;
+  const days = daysUntil(at);
+  const date = formatMoment(at);
+  return (
+    <p className="mt-1 text-sm text-danger">
+      {days !== null && days > 0
+        ? t("cp.message.deletion_scheduled", { date, days: String(days) })
+        : t("cp.message.deletion_due", { date })}
+    </p>
+  );
+}
+
+/**
+ * One of the history tabs: the latest rows, and the way to the rest. With
+ * `allHref` the rest is another screen; without it, the rows already loaded.
+ */
+function History({
+  title,
+  head,
+  rows,
+  empty,
+  allHref,
+}: {
+  title: string;
+  head: string[];
+  rows: React.ReactNode[][];
+  empty: string;
+  allHref?: string;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const more = rows.length > PREVIEW_ROWS;
+  const shown = expanded ? rows : rows.slice(0, PREVIEW_ROWS);
+  const viewAll = allHref ? (
+    <Link href={allHref} className="text-xs font-medium text-accent hover:underline">
+      {t("cp.action.view_all")}
+    </Link>
+  ) : more ? (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      onClick={() => setExpanded((open) => !open)}
+      className="text-xs font-medium text-accent hover:underline"
+    >
+      {expanded ? t("cp.action.show_fewer") : t("cp.action.view_all")}
+    </button>
+  ) : null;
+  return (
+    <Card title={title} action={viewAll ?? undefined}>
+      <Table head={head} rows={shown} empty={empty} />
+      {more && !expanded && (
+        <p className="px-4 py-2 text-xs text-muted border-t border-line">
+          {t("cp.message.showing", { shown: String(PREVIEW_ROWS), total: String(rows.length) })}
+        </p>
+      )}
+    </Card>
+  );
 }
 
 function ActionButton({
@@ -400,7 +517,7 @@ function ActionButton({
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
         danger
-          ? "border-red-200 text-red-700 hover:bg-red-50"
+          ? "border-danger-border text-danger hover:bg-danger-soft"
           : "border-input text-foreground hover:bg-surface-hover"
       }`}
     >
@@ -429,6 +546,7 @@ function QuotaDialog({
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const stepUp = useStepUp();
 
   // An empty field is no limit at all, which is not the same as zero — the
   // server keeps the distinction and so does this form.
@@ -439,15 +557,18 @@ function QuotaDialog({
     setBusy(true);
     setFailure("");
     try {
-      await cp.setQuota(tenantID, {
-        max_users: number(users),
-        max_storage_mb: number(storage),
-        max_ai_calls_monthly: number(ai),
-        enforcement,
-        reason,
-      });
+      await stepUp.run(() =>
+        cp.setQuota(tenantID, {
+          max_users: number(users),
+          max_storage_mb: number(storage),
+          max_ai_calls_monthly: number(ai),
+          enforcement,
+          reason,
+        }),
+      );
       onSaved();
     } catch (error) {
+      if (stepUp.isStepUp(error)) return;
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -455,13 +576,12 @@ function QuotaDialog({
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.section.limits")}>
+    <Modal onClose={busy ? undefined : onClose} label={t("cp.section.limits")}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.section.limits")}</h2>
 
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {stepUp.prompt}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         <Field label={t("cp.field.max_users")} value={users} onChange={setUsers} />
         <Field label={t("cp.field.max_storage")} value={storage} onChange={setStorage} hint={t("cp.hint.not_enforced")} />
@@ -472,7 +592,7 @@ function QuotaDialog({
           <select
             value={enforcement}
             onChange={(event) => setEnforcement(event.target.value as "soft" | "hard")}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           >
             <option value="soft">{t("cp.state.soft")}</option>
             <option value="hard">{t("cp.state.hard")}</option>
@@ -480,17 +600,22 @@ function QuotaDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className={`text-muted ${requiredLabel}`}>{t("cp.field.reason")}</span>
           <input
             required
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
+          >
             {t("cp.action.cancel")}
           </button>
           <button
@@ -524,9 +649,9 @@ function Field({
         inputMode="numeric"
         value={value}
         onChange={(event) => onChange(event.target.value.replace(/\D/g, ""))}
-        className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+        className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
       />
-      {hint && <span className="mt-1 block text-xs text-amber-700">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-warning">{hint}</span>}
     </label>
   );
 }
@@ -570,25 +695,15 @@ function AddPersonDialog({
   onAdded: () => void;
 }) {
   const { t } = useI18n();
-  const [people, setPeople] = useState<VerifiedPerson[]>([]);
-  const [search, setSearch] = useState("");
   const [chosen, setChosen] = useState<VerifiedPerson | null>(null);
   const [reason, setReason] = useState("");
-  const [code, setCode] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const loadPeople = useCallback(async (query: string) => {
-    try {
-      setPeople((await cp.verifiedPeople(query)).people);
-    } catch (error) {
-      setFailure(error instanceof Error ? error.message : String(error));
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadPeople("");
-  }, [loadPeople]);
+  const { search, setSearch, people, loading: peopleLoading } = useVerifiedPeople(setFailure);
+  // The API asks for the second factor before it hands anybody the keys to an
+  // organisation's data. The code is asked for when the server says so, and
+  // proved on submit — the same order as useAction.
+  const stepUp = useStepUp();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -596,9 +711,10 @@ function AddPersonDialog({
     setBusy(true);
     setFailure("");
     try {
-      await cp.addMember(tenantID, chosen.user_id, reason);
+      await stepUp.run(() => cp.addMember(tenantID, chosen.user_id, reason));
       onAdded();
     } catch (error) {
+      if (stepUp.isStepUp(error)) return;
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -606,14 +722,13 @@ function AddPersonDialog({
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.action.add_person")}>
+    <Modal onClose={busy ? undefined : onClose} label={t("cp.action.add_person")}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.action.add_person")}</h2>
         <p className="text-xs text-muted">{t("cp.hint.member_is_chosen")}</p>
 
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {stepUp.prompt}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         {chosen ? (
           <div className="flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-3 py-2">
@@ -632,15 +747,17 @@ function AddPersonDialog({
         ) : (
           <div className="space-y-2">
             <input
+              type="search"
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                void loadPeople(event.target.value);
-              }}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder={t("cp.field.search_people")}
-              className="w-full rounded-lg border border-input px-3 py-2 text-sm"
+              aria-label={t("cp.field.search_people")}
+              className="w-full rounded-lg border border-input bg-surface px-3 py-2 text-sm"
             />
-            <div className="max-h-48 overflow-y-auto divide-y divide-line rounded-lg border border-line">
+            <div
+              aria-busy={peopleLoading}
+              className="max-h-48 overflow-y-auto divide-y divide-line rounded-lg border border-line"
+            >
               {people.map((person) => (
                 <button
                   key={person.user_id}
@@ -657,7 +774,7 @@ function AddPersonDialog({
                   </span>
                 </button>
               ))}
-              {people.length === 0 && (
+              {people.length === 0 && !peopleLoading && (
                 <p className="px-3 py-3 text-sm text-muted">{t("cp.message.no_verified_people")}</p>
               )}
             </div>
@@ -665,44 +782,24 @@ function AddPersonDialog({
         )}
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className={`text-muted ${requiredLabel}`}>{t("cp.field.reason")}</span>
           <input
             required
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
-        {/* The API asks for the second factor before it hands anybody the keys
-            to an organisation's data; confirming it here keeps what has been
-            typed. */}
-        <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.code")}</span>
-          <input
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-            onBlur={async () => {
-              if (code.length === 6) {
-                try {
-                  await cp.stepUp(code);
-                  setCode("");
-                  setFailure("");
-                } catch (error) {
-                  setFailure(error instanceof Error ? error.message : String(error));
-                }
-              }
-            }}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono tracking-[0.4em]"
-          />
-          <small className="text-xs text-muted">{t("cp.hint.step_up")}</small>
-        </label>
+        {stepUp.field}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
+          >
             {t("cp.action.cancel")}
           </button>
           <button

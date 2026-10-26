@@ -93,4 +93,7 @@ export const ru: Record<string, string> = {
   "sso_clients.view.endpoints_title": "Адреса подключения",
   "sso_clients.view.subtitle": "Клиенты OAuth2 / OIDC для систем, которые выполняют вход пользователей через эту платформу",
   "sso_clients.view.title": "SSO-клиенты",
+  "sso_clients.hint.redirect_uris": "по одному в строке · только https, кроме localhost",
+  "sso_clients.view.provider_active": "SSO-провайдер активен",
+  "sso_clients.keys.name_placeholder": "Задание синхронизации склада",
 };

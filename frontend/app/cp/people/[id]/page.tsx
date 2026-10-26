@@ -22,6 +22,7 @@ import { useParams } from "next/navigation";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type PersonDetail } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote, LoadingBlock } from "@/components/ui";
 
 export default function Person() {
   const { t } = useI18n();
@@ -50,11 +51,11 @@ export default function Person() {
           <ArrowLeft className="w-4 h-4" />
           {t("cp.section.people")}
         </Link>
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
+        <ErrorNote>{failure}</ErrorNote>
       </div>
     );
   }
-  if (!person) return <p className="text-sm text-muted">…</p>;
+  if (!person) return <LoadingBlock />;
 
   return (
     <div className="space-y-6">

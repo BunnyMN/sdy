@@ -56,6 +56,7 @@ import { cp, Unauthorized, type Operator } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
 import { useBrand } from "@/lib/brandContext";
 import { useTheme } from "@/lib/theme";
+import { LoadingBlock } from "@/components/ui";
 
 // The console's apps, in the shape the workspace draws them: a tile in the
 // rail, and under it the groups of destinations its panel shows. Ids are
@@ -189,7 +190,6 @@ export default function Console({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [closedGroups, setClosedGroups] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
 
   useEffect(() => setPanelOpen(localStorage.getItem(PANEL_KEY) !== "false"), []);
   useEffect(() => {
@@ -210,13 +210,6 @@ export default function Console({ children }: { children: React.ReactNode }) {
   function toggleGroup(id: string) { persistGroups(closedGroups.includes(id) ? closedGroups.filter((x) => x !== id) : [...closedGroups, id]); }
   const allGroupsOpen = app.sections.every((section) => !closedGroups.includes(section.id));
   function toggleAllGroups() { persistGroups(allGroupsOpen ? app.sections.map((section) => section.id) : []); }
-
-  const needle = query.trim().toLocaleLowerCase();
-  const results = needle
-    ? APPS.flatMap((entry) => entry.sections.flatMap((section) => section.items.map((item) => ({ ...item, group: section.id }))))
-        .filter((item) => t(item.label).toLocaleLowerCase().includes(needle))
-        .slice(0, 8)
-    : [];
 
   const load = useCallback(async () => {
     try {
@@ -249,8 +242,10 @@ export default function Console({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-dvh grid place-items-center text-muted">
-        <div className="animate-pulse">…</div>
+      <div className="min-h-dvh grid place-items-center px-4">
+        <div className="w-full max-w-md">
+          <LoadingBlock label={t("base.message.loading")} rows={3} />
+        </div>
       </div>
     );
   }
@@ -273,6 +268,12 @@ export default function Console({ children }: { children: React.ReactNode }) {
         so a change to the design reaches both.
       */}
       <div className="gerege-shell min-h-dvh flex flex-col">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-tooltip focus:rounded-lg focus:border focus:border-line focus:bg-surface focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
+        >
+          {t("base.a11y.skip_to_content")}
+        </a>
         <header className="gerege-topbar h-16 flex items-center border-b sticky top-0 z-sticky">
           <Link
             href="/cp"
@@ -293,7 +294,7 @@ export default function Console({ children }: { children: React.ReactNode }) {
           <div className={`gerege-header-context h-full flex items-center gap-3 overflow-hidden transition-all duration-200 ${panelOpen ? "is-open" : ""}`}>
             <span className="shrink-0 text-accent">{app.icon}</span>
             <span className="min-w-0">
-              <small className="block text-[11px] leading-4 text-muted truncate">{brand.name}</small>
+              <small className="block text-2xs leading-4 text-muted truncate">{brand.name}</small>
               <strong className="block text-[15px] leading-5 text-foreground truncate">{t(app.label)}</strong>
             </span>
           </div>
@@ -319,29 +320,7 @@ export default function Console({ children }: { children: React.ReactNode }) {
             <strong className="text-base text-foreground font-semibold truncate max-w-56">{operator.name}</strong>
           </div>
           <div className="gerege-header-search hidden md:flex flex-1 items-center justify-center min-w-0 px-5 relative">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter" && results[0]) { router.push(results[0].href); setQuery(""); } }}
-                placeholder={t("web.view.search_placeholder")}
-                className="w-full h-10 rounded-full border border-line bg-surface-2 pl-10 pr-4 text-sm focus:border-accent focus:ring-2 focus:ring-[color-mix(in_srgb,var(--gerege-blue)_15%,transparent)]"
-              />
-              {results.length > 0 && (
-                <div className="gerege-topbar-onlight absolute top-12 inset-x-0 bg-surface border border-line rounded-xl shadow-lg p-1.5 z-dropdown">
-                  {results.map((item) => (
-                    <button key={item.href} type="button" onClick={() => { router.push(item.href); setQuery(""); }} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
-                      <span className="text-accent">{item.icon}</span>
-                      <span className="min-w-0">
-                        <strong className="block text-sm truncate">{t(item.label)}</strong>
-                        <small className="text-muted truncate">{t(item.group)}</small>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ConsoleSearch onNavigate={(href) => router.push(href)} />
           </div>
           {/* The product's own account menu, with the two parts a console has
               no session for turned off: no organisations to switch between,
@@ -362,7 +341,7 @@ export default function Console({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className="flex flex-1 min-h-0">
-          {mobileOpen && <button type="button" className="gerege-mobile-backdrop fixed inset-0 top-16 bg-slate-950/40 z-overlay" aria-label={t("web.action.close_menu")} onClick={() => setMobileOpen(false)} />}
+          {mobileOpen && <button type="button" className="gerege-mobile-backdrop fixed inset-0 top-16 bg-overlay z-overlay" aria-label={t("web.action.close_menu")} onClick={() => setMobileOpen(false)} />}
           <div className={`gerege-sidebar top-16 bottom-0 left-0 z-modal flex overflow-hidden ${mobileOpen ? "is-mobile-open" : ""} ${panelOpen ? "is-desktop-open" : ""}`}>
             {/* Division one: the app rail, a tile per console app. */}
             <nav className="w-16 min-w-16 shrink-0 py-3 flex flex-col items-center gap-2 border-r border-line">
@@ -386,6 +365,18 @@ export default function Console({ children }: { children: React.ReactNode }) {
             {/* Division two: the current app's modules. */}
             <aside className="gerege-menu-panel overflow-hidden">
               <div className="w-56 py-4">
+                {/* The search, for the screens too narrow to have it in the
+                    bar: the drawer is where a phone's navigation lives. */}
+                {mobileOpen && (
+                  <div className="px-2 pb-4 md:hidden">
+                    <ConsoleSearch
+                      onNavigate={(href) => {
+                        setMobileOpen(false);
+                        router.push(href);
+                      }}
+                    />
+                  </div>
+                )}
                 <nav className="space-y-1 px-2">
                   {app.sections.map((section) => (
                     <MenuGroup key={section.id} id={section.id} title={t(section.id)} closed={closedGroups.includes(section.id)} onToggle={toggleGroup}>
@@ -401,10 +392,125 @@ export default function Console({ children }: { children: React.ReactNode }) {
           {/* No centring wrapper: the workspace's main fills its column, and
               a max-w-6xl here left a wide screen with a band of empty chrome
               down each side of a page whose tables want the width. */}
-          <main className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">{children}</main>
+          <main id="main" tabIndex={-1} className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 focus:outline-none">
+            {children}
+          </main>
         </div>
       </div>
     </ConsoleContext.Provider>
+  );
+}
+
+/**
+ * Jump to any destination in the console by name.
+ *
+ * A combobox in the ARIA sense: the input owns a listbox, the arrow keys move
+ * the highlighted option (announced through aria-activedescendant, so focus
+ * never leaves the field), Enter opens it, and Escape closes the list — and,
+ * pressed again on an already closed list, clears what was typed. The earlier
+ * version answered only Enter and the mouse, so a keyboard user could reach
+ * the first match and nothing else.
+ */
+function ConsoleSearch({ onNavigate }: { onNavigate: (href: string) => void }) {
+  const { t } = useI18n();
+  const listId = React.useId();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+
+  const needle = query.trim().toLocaleLowerCase();
+  const results = needle
+    ? APPS.flatMap((entry) => entry.sections.flatMap((section) => section.items.map((item) => ({ ...item, group: section.id }))))
+        .filter((item) => t(item.label).toLocaleLowerCase().includes(needle))
+        .slice(0, 8)
+    : [];
+  const expanded = open && results.length > 0;
+  const current = Math.min(active, Math.max(results.length - 1, 0));
+  const optionId = (index: number) => `${listId}-option-${index}`;
+
+  function go(href: string) {
+    setQuery("");
+    setOpen(false);
+    setActive(0);
+    onNavigate(href);
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      if (results.length) setActive((current + 1) % results.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+      if (results.length) setActive((current - 1 + results.length) % results.length);
+    } else if (event.key === "Enter") {
+      if (expanded && results[current]) {
+        event.preventDefault();
+        go(results[current].href);
+      }
+    } else if (event.key === "Escape") {
+      if (expanded) setOpen(false);
+      else setQuery("");
+    }
+  }
+
+  return (
+    <div className="relative w-full max-w-md">
+      <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+      <input
+        type="search"
+        role="combobox"
+        aria-label={t("web.view.search_placeholder")}
+        aria-expanded={expanded}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={expanded ? optionId(current) : undefined}
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setActive(0);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={onKeyDown}
+        placeholder={t("web.view.search_placeholder")}
+        className="w-full h-10 rounded-full border border-line bg-surface-2 pl-10 pr-4 text-sm focus:border-accent focus:ring-2 focus:ring-[color-mix(in_srgb,var(--gerege-blue)_15%,transparent)]"
+      />
+      <ul
+        id={listId}
+        role="listbox"
+        aria-label={t("web.view.search_placeholder")}
+        hidden={!expanded}
+        className="gerege-topbar-onlight absolute top-12 inset-x-0 bg-surface border border-line rounded-xl shadow-lg p-1.5 z-dropdown"
+      >
+        {results.map((item, index) => (
+          <li
+            key={item.href}
+            id={optionId(index)}
+            role="option"
+            aria-selected={index === current}
+            // mousedown, not click: the input's blur closes the list before a
+            // click would land, and preventing the default keeps focus put.
+            onMouseDown={(event) => {
+              event.preventDefault();
+              go(item.href);
+            }}
+            onMouseEnter={() => setActive(index)}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left cursor-pointer ${
+              index === current ? "bg-surface-2" : "hover:bg-surface-2"
+            }`}
+          >
+            <span aria-hidden="true" className="text-accent">{item.icon}</span>
+            <span className="min-w-0">
+              <strong className="block text-sm truncate">{t(item.label)}</strong>
+              <small className="text-muted truncate">{t(item.group)}</small>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -418,7 +524,7 @@ function MenuGroup({ id, title, closed, onToggle, children }: { id: string; titl
   return (
     <section className="gerege-menu-group mb-6">
       <h3 className="mb-2">
-        <button type="button" onClick={() => onToggle(id)} aria-expanded={!closed} aria-controls={bodyId} className="w-full flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-muted hover:bg-surface-2 transition">
+        <button type="button" onClick={() => onToggle(id)} aria-expanded={!closed} aria-controls={bodyId} className="w-full flex items-center gap-1.5 px-3 py-1 rounded-md text-2xs font-semibold uppercase tracking-wider text-muted hover:text-muted hover:bg-surface-2 transition">
           <span className="min-w-0 truncate text-left">{title}</span>
           <ChevronDown className={`w-3.5 h-3.5 ml-auto shrink-0 transition-transform duration-200 ${closed ? "" : "rotate-180"}`} />
         </button>

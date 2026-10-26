@@ -11,12 +11,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Check, Code2, Copy, KeyRound, Loader2, Plus,
-  RefreshCw, Server, Shield, Smartphone, Trash2, X,
+  Code2, Plus, RefreshCw, Server, Shield, Smartphone, Trash2, X,
 } from "lucide-react";
 import { api, type OAuth2Client, type OAuth2ClientDraft, type OAuth2Scope } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Modal as Dialog } from "@/components/ui";
+import {
+  ConfirmDialog, CopyButton, ErrorNote, Loading, Modal as Dialog, SecretRevealDialog, useCopy,
+} from "@/components/ui";
 import { ReadOnlyNote, useAccess } from "@/lib/permissions";
 import { formatDay } from "@/lib/datetime";
 
@@ -44,7 +45,9 @@ export default function SSOClientsPage() {
   const [editing, setEditing] = useState<{ draft: OAuth2ClientDraft; clientID?: string } | null>(null);
   const [revealed, setRevealed] = useState<OAuth2Client | null>(null);
   const [confirming, setConfirming] = useState<{ app: OAuth2Client; action: "delete" | "rotate" } | null>(null);
-  const [copied, setCopied] = useState("");
+  // The tick waits for the clipboard to say yes; one shared hook so a page of
+  // cards shows one tick at a time.
+  const { copied, failed, copy } = useCopy();
 
   async function load() {
     setLoading(true);
@@ -66,12 +69,6 @@ export default function SSOClientsPage() {
     }
   }
   useEffect(() => { void load(); }, []);
-
-  function copy(value: string, id: string) {
-    void navigator.clipboard.writeText(value);
-    setCopied(id);
-    setTimeout(() => setCopied(""), 2000);
-  }
 
   async function save(draft: OAuth2ClientDraft, clientID?: string) {
     setError("");
@@ -112,37 +109,31 @@ export default function SSOClientsPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
-            <Code2 className="w-7 h-7 text-indigo-600" />
+            <Code2 aria-hidden="true" className="w-7 h-7 text-accent" />
             {t("sso_clients.view.title")}
           </h1>
           <p className="text-sm text-muted mt-1">{t("sso_clients.view.subtitle")}</p>
         </div>
         {canManage && <button
           onClick={() => setEditing({ draft: { ...emptyDraft } })}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm"
+          className="bg-accent hover:bg-accent-hover text-on-accent px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus aria-hidden="true" className="w-4 h-4" />
           {t("sso_clients.action.create")}
         </button>}
       </header>
 
       {!canManage && <ReadOnlyNote permission="sso_clients.manage" />}
 
-      <EndpointCard endpoints={endpoints} copied={copied} onCopy={copy} title={t("sso_clients.view.endpoints_title")} />
+      <EndpointCard endpoints={endpoints} copied={copied} failed={failed} onCopy={copy} title={t("sso_clients.view.endpoints_title")} />
 
-      {error && (
-        <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
-        </p>
-      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
 
       {loading ? (
-        <p className="p-12 text-center text-muted flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> {t("sso_clients.message.loading")}
-        </p>
+        <Loading label={t("sso_clients.message.loading")} className="p-12" />
       ) : apps.length === 0 ? (
         <div className="p-12 text-center border border-dashed border-input rounded-xl bg-surface">
-          <Shield className="w-9 h-9 text-slate-300 mx-auto mb-3" />
+          <Shield aria-hidden="true" className="w-9 h-9 text-muted mx-auto mb-3" />
           <h2 className="font-semibold text-foreground">{t("sso_clients.view.empty_title")}</h2>
           <p className="text-sm text-muted mt-1 max-w-md mx-auto">{t("sso_clients.view.empty_body")}</p>
         </div>
@@ -154,6 +145,7 @@ export default function SSOClientsPage() {
               app={app}
               scopes={scopes}
               copied={copied}
+              failed={failed}
               onCopy={copy}
               onEdit={() => setEditing({ clientID: app.client_id, draft: toDraft(app) })}
               onRotate={() => setConfirming({ app, action: "rotate" })}
@@ -177,18 +169,29 @@ export default function SSOClientsPage() {
       )}
 
       {revealed?.client_secret && (
-        <SecretModal secret={revealed.client_secret} clientID={revealed.client_id} copied={copied} onCopy={copy} onClose={() => setRevealed(null)} />
+        // Not dismissible by Escape or the backdrop, and Done waits for "I have
+        // saved it": the server keeps only a digest, so this is the last look.
+        <SecretRevealDialog
+          title={t("sso_clients.message.secret_once_title")}
+          body={t("sso_clients.message.secret_once_body")}
+          items={[
+            { label: "client_id", value: revealed.client_id },
+            { label: "client_secret", value: revealed.client_secret, secret: true },
+          ]}
+          doneLabel={t("sso_clients.action.done")}
+          onDone={() => setRevealed(null)}
+        />
       )}
 
       {confirming && (
-        <ConfirmModal
+        <ConfirmDialog
           title={confirming.app.client_name}
           body={confirming.action === "delete" ? t("sso_clients.message.delete_warning") : t("sso_clients.message.rotate_warning")}
-          danger={confirming.action === "delete"}
+          tone={confirming.action === "delete" ? "danger" : "default"}
           confirmLabel={confirming.action === "delete" ? t("base.action.delete") : t("sso_clients.action.rotate")}
           cancelLabel={t("base.action.cancel")}
           onCancel={() => setConfirming(null)}
-          onConfirm={runConfirmed}
+          onConfirm={() => void runConfirmed()}
         />
       )}
     </div>
@@ -208,10 +211,11 @@ function toDraft(app: OAuth2Client): OAuth2ClientDraft {
   };
 }
 
-function EndpointCard({ endpoints, copied, onCopy, title }: {
-  endpoints: Record<string, string>; copied: string; title: string;
-  onCopy: (value: string, id: string) => void;
+function EndpointCard({ endpoints, copied, failed, onCopy, title }: {
+  endpoints: Record<string, string>; copied: string; failed: string; title: string;
+  onCopy: (value: string, id: string) => unknown;
 }) {
+  const { t } = useI18n();
   const rows: [string, string][] = [
     ["Discovery", endpoints.discovery],
     ["Authorization", endpoints.authorization_endpoint],
@@ -222,22 +226,20 @@ function EndpointCard({ endpoints, copied, onCopy, title }: {
   if (rows.length === 0) return null;
 
   return (
-    <section className="bg-slate-900 text-white rounded-xl border border-slate-800 p-5">
+    <section className="bg-surface text-foreground rounded-xl border border-line p-5">
       <div className="flex items-center gap-3 mb-4">
-        <Shield className="w-6 h-6 text-cyan-400" />
-        <h2 className="font-semibold text-sm text-white">{title}</h2>
-        <span className="ml-auto text-[11px] bg-emerald-500/20 text-emerald-300 font-mono px-3 py-1 rounded-full border border-emerald-500/30">
-          Active SSO Provider
+        <Shield aria-hidden="true" className="w-6 h-6 text-accent" />
+        <h2 className="font-semibold text-sm text-foreground">{title}</h2>
+        <span className="ml-auto text-2xs bg-success-soft text-success font-mono px-3 py-1 rounded-full border border-success-border">
+          {t("sso_clients.view.provider_active")}
         </span>
       </div>
       <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
         {rows.map(([label, url]) => (
           <div key={label} className="flex items-center gap-2 min-w-0">
-            <dt className="text-[11px] uppercase tracking-wide text-muted w-24 shrink-0">{label}</dt>
-            <dd className="font-mono text-xs text-slate-300 truncate flex-1">{url}</dd>
-            <button onClick={() => onCopy(url, label)} className="text-muted hover:text-white shrink-0">
-              {copied === label ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
+            <dt className="text-2xs uppercase tracking-wide text-muted w-24 shrink-0">{label}</dt>
+            <dd className="font-mono text-xs text-muted truncate flex-1" title={url}>{url}</dd>
+            <CopyButton value={url} id={label} copied={copied} failed={failed} onCopy={onCopy} />
           </div>
         ))}
       </dl>
@@ -245,9 +247,9 @@ function EndpointCard({ endpoints, copied, onCopy, title }: {
   );
 }
 
-function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canManage }: {
-  app: OAuth2Client; scopes: OAuth2Scope[]; copied: string;
-  onCopy: (value: string, id: string) => void;
+function AppCard({ app, scopes, copied, failed, onCopy, onEdit, onRotate, onDelete, canManage }: {
+  app: OAuth2Client; scopes: OAuth2Scope[]; copied: string; failed: string;
+  onCopy: (value: string, id: string) => unknown;
   onEdit: () => void; onRotate: () => void; onDelete: () => void; canManage: boolean;
 }) {
   const { t } = useI18n();
@@ -261,7 +263,7 @@ function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canM
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-foreground truncate">{app.client_name}</h3>
-          <p className="text-[11px] text-muted mt-0.5">
+          <p className="text-2xs text-muted mt-0.5">
             {app.last_used_at
               ? `${t("sso_clients.field.last_used")}: ${formatDay(app.last_used_at)}`
               : t("sso_clients.message.never_used")}
@@ -269,11 +271,11 @@ function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canM
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {app.disabled && (
-            <span className="text-[11px] bg-surface-2 text-muted px-2 py-0.5 rounded-full">
+            <span className="text-2xs bg-surface-2 text-muted px-2 py-0.5 rounded-full">
               {t("sso_clients.message.disabled")}
             </span>
           )}
-          <span className="text-[11px] bg-indigo-50 text-indigo-700 font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+          <span className="text-2xs bg-accent-soft text-accent font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
             {app.client_type === "public" ? <Smartphone className="w-3 h-3" /> : <Server className="w-3 h-3" />}
             {app.client_type}
           </span>
@@ -283,16 +285,12 @@ function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canM
       <div className="text-xs font-mono bg-surface-2 p-3 rounded-lg border border-line space-y-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted shrink-0">client_id</span>
-          <span className="text-foreground font-semibold truncate">{app.client_id}</span>
-          <button onClick={() => onCopy(app.client_id, app.client_id)} className="shrink-0">
-            {copied === app.client_id
-              ? <Check className="w-3.5 h-3.5 text-emerald-600" />
-              : <Copy className="w-3.5 h-3.5 text-muted" />}
-          </button>
+          <span className="text-foreground font-semibold truncate" title={app.client_id}>{app.client_id}</span>
+          <CopyButton value={app.client_id} id={app.client_id} copied={copied} failed={failed} onCopy={onCopy} />
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted shrink-0">client_secret</span>
-          <span className="text-muted italic font-sans text-[11px]">
+          <span className="text-muted italic font-sans text-2xs">
             {app.client_type === "public" ? "—" : t("sso_clients.message.secret_hidden")}
           </span>
         </div>
@@ -329,11 +327,11 @@ function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canM
           {t("sso_clients.view.edit_title")}
         </button>
         {app.client_type !== "public" && (
-          <button onClick={onRotate} className="text-xs font-semibold text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg mt-2 flex items-center gap-1.5">
+          <button onClick={onRotate} className="text-xs font-semibold text-warning hover:bg-warning-soft px-3 py-1.5 rounded-lg mt-2 flex items-center gap-1.5">
             <RefreshCw className="w-3.5 h-3.5" /> {t("sso_clients.action.rotate")}
           </button>
         )}
-        <button onClick={onDelete} className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg mt-2 ml-auto flex items-center gap-1.5">
+        <button onClick={onDelete} className="text-xs font-semibold text-danger hover:bg-danger-soft px-3 py-1.5 rounded-lg mt-2 ml-auto flex items-center gap-1.5">
           <Trash2 className="w-3.5 h-3.5" /> {t("base.action.delete")}
         </button>
       </div>
@@ -344,7 +342,7 @@ function AppCard({ app, scopes, copied, onCopy, onEdit, onRotate, onDelete, canM
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <span className="text-[11px] font-semibold text-foreground block mb-1">{label}</span>
+      <span className="text-2xs font-semibold text-foreground block mb-1">{label}</span>
       <div className="flex flex-wrap gap-1">{children}</div>
     </div>
   );
@@ -355,11 +353,11 @@ function Chip({ children, mono, tone = "slate" }: {
 }) {
   const tones = {
     slate: "bg-surface-2 text-muted",
-    blue: "bg-blue-50 text-blue-700",
-    amber: "bg-amber-50 text-amber-700 border border-amber-200",
+    blue: "bg-info-soft text-info",
+    amber: "bg-warning-soft text-warning border border-warning-border",
   };
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded ${tones[tone]} ${mono ? "font-mono" : ""} break-all`}>
+    <span className={`text-2xs px-2 py-0.5 rounded ${tones[tone]} ${mono ? "font-mono" : ""} break-all`}>
       {children}
     </span>
   );
@@ -382,6 +380,13 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
     });
   }
 
+  // Compared as data rather than by the Modal's field scan: the scope and
+  // grant checkboxes are controlled, so their defaultChecked says nothing.
+  const dirty =
+    JSON.stringify(draft) !== JSON.stringify(initial) ||
+    uris !== initial.redirect_uris.join("\n") ||
+    logoutUris !== (initial.post_logout_redirect_uris || []).join("\n");
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     onSave({
@@ -392,7 +397,7 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
   }
 
   return (
-    <Modal onClose={onCancel} wide label={isNew ? t("sso_clients.view.create_title") : t("sso_clients.view.edit_title")}>
+    <Modal onClose={onCancel} wide dirty={dirty} label={isNew ? t("sso_clients.view.create_title") : t("sso_clients.view.edit_title")}>
       <form onSubmit={submit} className="space-y-4">
         <h2 className="text-lg font-semibold text-foreground">
           {isNew ? t("sso_clients.view.create_title") : t("sso_clients.view.edit_title")}
@@ -425,7 +430,7 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
               {(["confidential", "public"] as const).map((type) => (
                 <label
                   key={type}
-                  className={`border rounded-lg p-3 cursor-pointer text-xs ${draft.client_type === type ? "border-indigo-500 bg-indigo-50" : "border-line"}`}
+                  className={`border rounded-lg p-3 cursor-pointer text-xs ${draft.client_type === type ? "border-accent bg-accent-soft" : "border-line"}`}
                 >
                   <input
                     type="radio"
@@ -456,9 +461,9 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
             placeholder={"https://app.example.mn/callback\nhttp://localhost:3000/callback"}
             className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-lg font-mono"
           />
-          <span className="text-[11px] text-muted">
+          <span className="text-2xs text-muted">
             {/* Exact matching is what stops a code being delivered somewhere else. */}
-            one per line · https only, except on localhost
+            {t("sso_clients.hint.redirect_uris")}
           </span>
         </label>
 
@@ -471,7 +476,7 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
             placeholder={"https://app.example.mn/"}
             className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-lg font-mono"
           />
-          <span className="text-[11px] text-muted">
+          <span className="text-2xs text-muted">
             {/* Matched exactly too: an unchecked return address would make the
                 logout endpoint an open redirector. */}
             {t("sso_clients.hint.post_logout_redirect_uris")}
@@ -484,14 +489,14 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
             {grantTypes.map((grant) => (
               <label
                 key={grant}
-                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border cursor-pointer ${draft.grant_types?.includes(grant) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-line text-muted"}`}
+                className={`text-2xs font-mono px-2.5 py-1 rounded-lg border cursor-pointer ${draft.grant_types?.includes(grant) ? "border-accent bg-accent-soft text-accent" : "border-line text-muted"}`}
               >
                 <input type="checkbox" className="sr-only" checked={draft.grant_types?.includes(grant)} onChange={() => toggle("grant_types", grant)} />
                 {grant}
               </label>
             ))}
           </div>
-          <p className="text-[11px] text-muted mt-1">{t("sso_clients.message.pkce_note")}</p>
+          <p className="text-2xs text-muted mt-1">{t("sso_clients.message.pkce_note")}</p>
         </fieldset>
 
         <fieldset>
@@ -508,8 +513,8 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
                 <span>
                   <span className="font-mono text-foreground">{scope.name}</span>
                   {scope.sensitive && (
-                    <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">
-                      sensitive
+                    <span className="ml-1.5 text-2xs bg-warning-soft text-warning border border-warning-border px-1 rounded">
+                      {t("oauth.consent.sensitive")}
                     </span>
                   )}
                   <span className="block text-muted">{describe(scope)}</span>
@@ -530,7 +535,7 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
           <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-muted hover:bg-surface-hover rounded-lg">
             {t("base.action.cancel")}
           </button>
-          <button type="submit" className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold">
+          <button type="submit" className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-on-accent rounded-lg font-semibold">
             {t("base.action.save")}
           </button>
         </div>
@@ -539,89 +544,20 @@ function AppForm({ initial, isNew, scopes, grantTypes, describe, onCancel, onSav
   );
 }
 
-function SecretModal({ secret, clientID, copied, onCopy, onClose }: {
-  secret: string; clientID: string; copied: string;
-  onCopy: (value: string, id: string) => void; onClose: () => void;
+// The platform's dialog, with an X in the corner. The one-time secret and the
+// confirmation are the shared SecretRevealDialog and ConfirmDialog now; this is
+// the registration form. Escape and the backdrop close it too, asking first
+// when the form has been edited (`dirty`).
+function Modal({ children, onClose, wide, label, dirty }: {
+  children: React.ReactNode; onClose: () => void; wide?: boolean; label?: string; dirty?: boolean;
 }) {
   const { t } = useI18n();
   return (
-    <Modal onClose={onClose} label={t("sso_clients.message.secret_once_title")}>
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <KeyRound className="w-5 h-5 text-amber-600" />
-          {t("sso_clients.message.secret_once_title")}
-        </h2>
-        <p className="text-sm text-muted">{t("sso_clients.message.secret_once_body")}</p>
-
-        <div className="space-y-2">
-          <ReadOnlyField label="client_id" value={clientID} copied={copied} onCopy={onCopy} />
-          <ReadOnlyField label="client_secret" value={secret} copied={copied} onCopy={onCopy} highlight />
-        </div>
-
-        <div className="flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold">
-            {t("sso_clients.action.done")}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ReadOnlyField({ label, value, copied, onCopy, highlight }: {
-  label: string; value: string; copied: string; highlight?: boolean;
-  onCopy: (value: string, id: string) => void;
-}) {
-  return (
-    <div className={`flex items-center gap-2 p-3 rounded-lg border ${highlight ? "bg-amber-50 border-amber-200" : "bg-surface-2 border-line"}`}>
-      <span className="text-[11px] font-semibold text-muted w-24 shrink-0">{label}</span>
-      <code className="text-xs font-mono text-foreground break-all flex-1">{value}</code>
-      <button onClick={() => onCopy(value, label)} className="shrink-0">
-        {copied === label ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-muted" />}
-      </button>
-    </div>
-  );
-}
-
-function ConfirmModal({ title, body, danger, confirmLabel, cancelLabel, onCancel, onConfirm }: {
-  title: string; body: string; danger?: boolean; confirmLabel: string; cancelLabel: string;
-  onCancel: () => void; onConfirm: () => void;
-}) {
-  return (
-    <Modal onClose={onCancel} label={title}>
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <AlertTriangle className={`w-5 h-5 ${danger ? "text-rose-600" : "text-amber-600"}`} />
-          {title}
-        </h2>
-        <p className="text-sm text-muted">{body}</p>
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm text-muted hover:bg-surface-hover rounded-lg">
-            {cancelLabel}
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`px-4 py-2 text-sm text-white rounded-lg font-semibold ${danger ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"}`}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-// The platform's dialog, with the close affordance these three need. The shared
-// one deliberately has no dismissal — most dialogs here hold typed input — but a
-// secret shown once, and a confirmation, are read and dismissed, so they carry
-// an X. What comes from the shared component is what no dialog should be
-// without: the role, the name, focus taken on open and returned on close, and
-// Tab that cannot walk out into the page behind.
-function Modal({ children, onClose, wide, label }: { children: React.ReactNode; onClose: () => void; wide?: boolean; label?: string }) {
-  return (
-    <Dialog size={wide ? "lg" : "md"} scrollable label={label} className="my-8 relative">
-      <button type="button" onClick={onClose} className="absolute top-4 right-4 text-muted hover:text-muted" aria-label={label ? undefined : "close"}>
-        <X className="w-4 h-4" />
+    <Dialog size={wide ? "lg" : "md"} scrollable label={label} onClose={onClose} dirty={dirty} className="my-8 relative">
+      {/* Always named "Close": the dialog's label is the dialog's name, not
+          the button's, and an icon-only button needs one of its own. */}
+      <button type="button" onClick={onClose} className="absolute top-4 right-4 grid h-9 w-9 place-items-center rounded-md text-muted hover:text-foreground hover:bg-surface-hover" aria-label={t("base.action.close")}>
+        <X aria-hidden="true" className="w-4 h-4" />
       </button>
       {children}
     </Dialog>

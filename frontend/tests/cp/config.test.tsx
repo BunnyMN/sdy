@@ -179,7 +179,7 @@ test("changing a setting sends the new value with a reason", async () => {
 
   render(<Config />);
   await screen.findByText("session.idle_timeout");
-  await person.click(screen.getByRole("button", { name: "cp.action.change" }));
+  await person.click(screen.getByRole("button", { name: "cp.action.change: session.idle_timeout" }));
 
   const dialog = await screen.findByRole("dialog", { name: "session.idle_timeout" });
   // The default and the environment variable are named inside the same label,

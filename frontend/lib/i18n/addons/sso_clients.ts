@@ -18,6 +18,12 @@ export const sso_clients = {
     mn: "мөр бүрт нэг · энэ апп хэрэглэгчийг гаргасны дараа буцаах хаяг",
     en: "one per line · where this app may return somebody after signing them out here",
   },
+  "sso_clients.hint.redirect_uris": {
+    mn: "мөр бүрт нэг · localhost-оос бусад нь зөвхөн https",
+    en: "one per line · https only, except on localhost",
+  },
+  "sso_clients.view.provider_active": { mn: "SSO үйлчилгээ идэвхтэй", en: "Active SSO provider" },
+  "sso_clients.keys.name_placeholder": { mn: "Агуулахын синк ажил", en: "Warehouse sync job" },
   "sso_clients.field.scopes": { mn: "Scope-ууд", en: "Scopes" },
   "sso_clients.field.name": { mn: "Аппын нэр", en: "Application name" },
   "sso_clients.field.client_type": { mn: "Клиентийн төрөл", en: "Client type" },

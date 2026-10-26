@@ -18,7 +18,7 @@ import { formatMoment } from "@/lib/datetime";
 
 export default function SigningKeysPage() {
   const { t } = useI18n();
-  const { copied, copy } = useCopy();
+  const { copied, failed, copy } = useCopy();
   const [keys, setKeys] = useState<SigningKey[]>([]);
   const [jwksURI, setJwksURI] = useState("");
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export default function SigningKeysPage() {
           <div className="flex items-center gap-2 mt-3 bg-surface border border-line rounded-lg px-3 py-2">
             <span className="text-[11px] font-semibold text-muted shrink-0">jwks_uri</span>
             <code className="text-xs font-mono text-foreground break-all flex-1">{jwksURI}</code>
-            <CopyButton value={jwksURI} id="jwks" copied={copied} onCopy={copy} />
+            <CopyButton value={jwksURI} id="jwks" copied={copied} failed={failed} onCopy={copy} />
           </div>
         )}
       </Panel>
@@ -64,11 +64,11 @@ export default function SigningKeysPage() {
       ) : (
         <div className="space-y-3">
           {keys.map((key) => (
-            <Panel key={key.kid} className={`p-4 ${key.active ? "border-emerald-200" : ""}`}>
+            <Panel key={key.kid} className={`p-4 ${key.active ? "border-success-border" : ""}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <code className="text-sm font-mono font-semibold text-foreground break-all">{key.kid}</code>
-                  <CopyButton value={key.kid} id={key.kid} copied={copied} onCopy={copy} />
+                  <CopyButton value={key.kid} id={key.kid} copied={copied} failed={failed} onCopy={copy} />
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Chip mono>{key.algorithm}</Chip>

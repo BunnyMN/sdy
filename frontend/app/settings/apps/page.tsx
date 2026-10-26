@@ -5,6 +5,7 @@ import { api, type StoreOverviewApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Settings, Clock, ArrowUpCircle, ShieldAlert, Pin, GitCompareArrows } from "lucide-react";
 import { formatDay, formatMoment } from "@/lib/datetime";
+import { Banner, ConfirmDialog, LoadingBlock } from "@/components/ui";
 
 interface InstalledApp {
   id: string;
@@ -44,13 +45,22 @@ export default function InstalledAppsSettingsPage() {
   const [drifted, setDrifted] = useState<StoreOverviewApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // What the last action came to, said on the screen. These used to go to
+  // console.error, so a refused update looked exactly like a button that did
+  // nothing.
+  const [notice, setNotice] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  // Disabling is asked about first, with what it does to the people using it.
+  const [disabling, setDisabling] = useState<InstalledApp | null>(null);
+
+  const failure = (err: unknown, fallback: string) =>
+    setNotice({ tone: "error", text: err instanceof Error && err.message ? `${fallback}: ${err.message}` : fallback });
 
   const loadInstalled = async () => {
     try {
       const data = await api.getInstalledApps();
       setApps(data || []);
     } catch (err) {
-      console.error(err);
+      failure(err, t("app_store.message.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -81,11 +91,16 @@ export default function InstalledAppsSettingsPage() {
   // forward with the version.
   const handleUpdate = async (app: InstalledApp) => {
     setActionLoading(app.slug);
+    setNotice(null);
     try {
       await api.upgradeApp(app.slug);
       await loadInstalled();
+      setNotice({
+        tone: "success",
+        text: t("app_store.message.update_succeeded", { app: app.name, version: app.latest_version || "" }),
+      });
     } catch (err) {
-      console.error(err);
+      failure(err, t("app_store.message.update_failed", { app: app.name }));
     } finally {
       setActionLoading(null);
     }
@@ -93,11 +108,12 @@ export default function InstalledAppsSettingsPage() {
 
   const handleAutoUpdate = async (app: InstalledApp) => {
     setActionLoading(app.slug);
+    setNotice(null);
     try {
       await api.setAutoUpdate(app.slug, !app.auto_update);
       await loadInstalled();
     } catch (err) {
-      console.error(err);
+      failure(err, t("app_store.message.action_failed"));
     } finally {
       setActionLoading(null);
     }
@@ -105,6 +121,7 @@ export default function InstalledAppsSettingsPage() {
 
   const handleToggle = async (app: InstalledApp) => {
     setActionLoading(app.slug);
+    setNotice(null);
     try {
       if (app.enabled) {
         await api.disableApp(app.slug);
@@ -112,8 +129,12 @@ export default function InstalledAppsSettingsPage() {
         await api.enableApp(app.slug);
       }
       await loadInstalled();
+      setNotice({
+        tone: "success",
+        text: app.enabled ? t("app_store.message.disabled", { app: app.name }) : t("app_store.message.enabled", { app: app.name }),
+      });
     } catch (err) {
-      console.error(err);
+      failure(err, t("app_store.message.action_failed"));
     } finally {
       setActionLoading(null);
     }
@@ -131,6 +152,8 @@ export default function InstalledAppsSettingsPage() {
         </p>
       </div>
 
+      {notice && <Banner tone={notice.tone} message={notice.text} onDismiss={() => setNotice(null)} />}
+
       {status && (
         <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="font-semibold text-foreground">
@@ -147,7 +170,7 @@ export default function InstalledAppsSettingsPage() {
           {/* A failing registry is the thing nobody notices: the store keeps
               serving the catalogue it already has, so nothing looks wrong. */}
           {status.last_sync_error && (
-            <span className="text-red-600">
+            <span className="text-danger">
               {t("app_store.message.sync_failed")}: {status.last_sync_error}
             </span>
           )}
@@ -155,15 +178,15 @@ export default function InstalledAppsSettingsPage() {
       )}
 
       {drifted.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm">
-          <p className="font-semibold text-rose-800 flex items-center gap-2">
-            <GitCompareArrows className="w-4 h-4" />
+        <div role="status" className="bg-danger-soft border border-danger-border rounded-xl px-4 py-3 text-sm">
+          <p className="font-semibold text-danger flex items-center gap-2">
+            <GitCompareArrows aria-hidden="true" className="w-4 h-4" />
             {t("app_store.overview.drifted")}
           </p>
-          <p className="text-rose-700 mt-0.5">{t("app_store.overview.drift_note")}</p>
+          <p className="text-danger mt-0.5">{t("app_store.overview.drift_note")}</p>
           <ul className="mt-2 space-y-0.5">
             {drifted.map((row) => (
-              <li key={row.app_id} className="text-rose-800 font-mono text-xs">
+              <li key={row.app_id} className="text-danger font-mono text-xs">
                 {row.name}: {t("app_store.overview.binary")} v{row.binary_version} ≠{" "}
                 {t("app_store.overview.catalog")} v{row.catalog_version}
               </li>
@@ -173,26 +196,26 @@ export default function InstalledAppsSettingsPage() {
       )}
 
       {loading ? (
-        <div className="py-8 text-muted text-sm">{t("app_store.message.loading_installed")}</div>
+        <LoadingBlock label={t("app_store.message.loading_installed")} />
       ) : apps.length === 0 ? (
         <div className="bg-surface border border-line rounded-xl p-8 text-center text-muted text-sm">
           {t("app_store.message.none_installed")}{" "}
-          <a href="/apps" className="text-indigo-600 font-semibold underline">
+          <a href="/apps" className="text-accent font-semibold underline">
             {t("app_store.action.browse_store")}
           </a>
         </div>
       ) : (
-        <div className="bg-surface border border-line rounded-xl overflow-hidden">
+        <div className="bg-surface border border-line rounded-xl overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="bg-surface-2 border-b border-line text-muted font-semibold text-xs uppercase tracking-wider">
-                <th className="py-3 px-4">{t("app_store.field.application_name")}</th>
-                <th className="py-3 px-4">{t("app_store.field.module_id")}</th>
-                <th className="py-3 px-4">{t("app_store.field.installed_version")}</th>
-                <th className="py-3 px-4">{t("app_store.field.updates")}</th>
-                <th className="py-3 px-4">{t("base.field.status")}</th>
-                <th className="py-3 px-4">{t("app_store.field.installed_date")}</th>
-                <th className="py-3 px-4 text-right">{t("base.field.actions")}</th>
+                <th scope="col" className="py-3 px-4">{t("app_store.field.application_name")}</th>
+                <th scope="col" className="py-3 px-4">{t("app_store.field.module_id")}</th>
+                <th scope="col" className="py-3 px-4">{t("app_store.field.installed_version")}</th>
+                <th scope="col" className="py-3 px-4">{t("app_store.field.updates")}</th>
+                <th scope="col" className="py-3 px-4">{t("base.field.status")}</th>
+                <th scope="col" className="py-3 px-4">{t("app_store.field.installed_date")}</th>
+                <th scope="col" className="py-3 px-4 text-right">{t("base.field.actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -203,7 +226,7 @@ export default function InstalledAppsSettingsPage() {
                   <td className="py-3.5 px-4 font-semibold text-foreground">
                     v{app.installed_version}
                     {app.update_available && app.latest_version && (
-                      <span className="ml-1.5 text-xs font-normal text-indigo-600">→ v{app.latest_version}</span>
+                      <span className="ml-1.5 text-xs font-normal text-accent">→ v{app.latest_version}</span>
                     )}
                   </td>
                   <td className="py-3.5 px-4">
@@ -216,21 +239,21 @@ export default function InstalledAppsSettingsPage() {
                         disabled={actionLoading === app.slug}
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
                           app.auto_update
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            ? "border-success-border bg-success-soft text-success hover:brightness-95"
                             : "border-line bg-surface-2 text-muted hover:bg-surface-hover"
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${app.auto_update ? "bg-emerald-500" : "bg-slate-400"}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${app.auto_update ? "bg-success-solid" : "bg-muted"}`} />
                         <span>{app.auto_update ? t("app_store.state.auto_update_on") : t("app_store.state.auto_update_off")}</span>
                       </button>
                       {app.pinned_version && (
-                        <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+                        <span className="inline-flex items-center gap-1 text-xs text-warning">
                           <Pin className="w-3 h-3" />
                           {t("app_store.state.pinned", { version: app.pinned_version })}
                         </span>
                       )}
                       {(app.held_reason || (app.held_for && app.held_for.length > 0)) && (
-                        <span className="inline-flex items-start gap-1 text-xs text-amber-700 max-w-56">
+                        <span className="inline-flex items-start gap-1 text-xs text-warning max-w-56">
                           <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>
                             {app.held_for && app.held_for.length > 0 ? (
@@ -254,11 +277,11 @@ export default function InstalledAppsSettingsPage() {
                     <span
                       className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                         app.enabled
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          ? "bg-success-soft text-success border border-success-border"
                           : "bg-surface-2 text-muted border border-line"
                       }`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${app.enabled ? "bg-emerald-500" : "bg-slate-400"}`}></span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${app.enabled ? "bg-success-solid" : "bg-muted"}`}></span>
                       <span>{app.enabled ? t("base.state.active") : t("app_store.state.disabled")}</span>
                     </span>
                   </td>
@@ -271,7 +294,7 @@ export default function InstalledAppsSettingsPage() {
                       <button
                         onClick={() => handleUpdate(app)}
                         disabled={actionLoading === app.slug}
-                        className="mr-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center gap-1.5"
+                        className="mr-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-accent bg-accent text-on-accent hover:bg-accent-hover inline-flex items-center gap-1.5 disabled:opacity-50"
                       >
                         <ArrowUpCircle className="w-3.5 h-3.5" />
                         {/* Approving a held version and updating an ordinary
@@ -287,12 +310,12 @@ export default function InstalledAppsSettingsPage() {
                         sign-in, the organisation's own profile, settings —
                         is not an app and does not appear in this list. */}
                     <button
-                        onClick={() => handleToggle(app)}
+                        onClick={() => (app.enabled ? setDisabling(app) : void handleToggle(app))}
                         disabled={actionLoading === app.slug}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border disabled:opacity-50 ${
                           app.enabled
-                            ? "border-red-200 text-red-600 hover:bg-red-50"
-                            : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                            ? "border-danger-border text-danger hover:bg-danger-soft"
+                            : "border-accent bg-accent text-on-accent hover:bg-accent-hover"
                         }`}
                       >
                         {app.enabled ? t("app_store.action.disable") : t("app_store.action.enable")}
@@ -303,6 +326,22 @@ export default function InstalledAppsSettingsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {disabling && (
+        <ConfirmDialog
+          title={t("app_store.message.confirm_disable", { app: disabling.name })}
+          body={t("app_store.message.disable_impact")}
+          confirmLabel={t("app_store.action.disable")}
+          tone="danger"
+          busy={actionLoading === disabling.slug}
+          onCancel={() => setDisabling(null)}
+          onConfirm={() => {
+            const app = disabling;
+            setDisabling(null);
+            void handleToggle(app);
+          }}
+        />
       )}
     </div>
   );

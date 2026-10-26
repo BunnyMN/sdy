@@ -9,7 +9,7 @@
  */
 
 import { expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { anOverview } from "../helpers/fixtures";
@@ -38,9 +38,9 @@ test("the API's three numbers are blank when the API's numbers could not be read
 
   render(<Metrics />);
 
-  // The banner across the top. Waited for by its own element rather than by
-  // the text, which the two empty tables also carry before the answer arrives.
-  await screen.findByText("cp.message.no_monitoring", { selector: "p" });
+  // The banner across the top. Until the answer arrives the two tables show
+  // skeleton rows rather than this sentence, so its count settles at three.
+  await waitFor(() => expect(screen.getAllByText("cp.message.no_monitoring")).toHaveLength(3));
   // And once in each of the two tables that have nothing to put in them.
   expect(screen.getAllByText("cp.message.no_monitoring")).toHaveLength(3);
   // Three gauges, three dashes — not "0.0", "0.00%" and "0 ms", which is what
@@ -56,7 +56,7 @@ test("an error rate over one percent is drawn as a problem", async () => {
   render(<Metrics />);
 
   const rate = await screen.findByText("4.20%");
-  expect(rate.className).toContain("text-red-600");
+  expect(rate.className).toContain("text-danger");
   expect(screen.getByText("8.0")).toBeTruthy();
   expect(screen.getByText("200 ms")).toBeTruthy();
 });
@@ -184,5 +184,5 @@ test("organisations a job keeps failing for are named, not counted", async () =>
   expect(within(row).getByText("12")).toBeTruthy();
   expect(within(row).getByText("smtp: 550 mailbox unavailable")).toBeTruthy();
   // The jobs table above it is empty and says so on its own.
-  expect(screen.getByText("cp.message.no_activity")).toBeTruthy();
+  expect(screen.getByText("cp.message.no_jobs")).toBeTruthy();
 });

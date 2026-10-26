@@ -15,6 +15,7 @@ import { BellRing, ExternalLink, RefreshCw, ShieldAlert, VolumeX } from "lucide-
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type Overview } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote } from "@/components/ui";
 
 export default function Alerts() {
   const { t } = useI18n();
@@ -62,9 +63,7 @@ export default function Alerts() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <Card title={t("cp.section.firing")}>
         <Table
@@ -96,6 +95,7 @@ export default function Alerts() {
               <span key="r" className="text-xs text-muted">—</span>
             ),
           ])}
+          loading={!health && !failure}
           empty={t("cp.message.nothing_firing")}
         />
       </Card>
@@ -104,7 +104,7 @@ export default function Alerts() {
         <div className="p-4 space-y-2">
           {warnings.length === 0 && <p className="text-sm text-muted">{t("cp.message.no_warnings")}</p>}
           {warnings.map((warning) => (
-            <p key={warning} className="flex items-start gap-2 text-sm rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2">
+            <p key={warning} className="flex items-start gap-2 text-sm rounded-lg bg-warning-soft border border-warning-border text-warning px-3 py-2">
               <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
               {warning}
             </p>

@@ -187,7 +187,41 @@ test("search finds a destination in the other app and goes there", async () => {
   // The console's own app is showing; the search reaches the whole console,
   // which is the point of it.
   await person.type(screen.getByPlaceholderText("web.view.search_placeholder"), "cp.section.backups");
-  await person.click(await screen.findByRole("button", { name: /cp\.section\.backups/ }));
+  await person.click(await screen.findByRole("option", { name: /cp\.section\.backups/ }));
 
   expect(route.push).toHaveBeenCalledWith("/cp/ops/backups");
+});
+
+test("the search is a combobox the keyboard can walk, and Escape closes it", async () => {
+  api.me.mockResolvedValue({ operator: OPERATOR, expires_at: "", stepped_up: false });
+  const person = userEvent.setup();
+
+  frame("/cp");
+  await screen.findByText("дэлгэцийн агуулга");
+
+  const box = screen.getByRole("combobox", { name: "web.view.search_placeholder" });
+  // "cp.section." matches every destination; the second one is reached with
+  // the arrow key, not only the first with Enter.
+  await person.type(box, "cp.section.");
+  expect(box.getAttribute("aria-expanded")).toBe("true");
+  const options = screen.getAllByRole("option");
+  expect(options[0].getAttribute("aria-selected")).toBe("true");
+  await person.keyboard("{ArrowDown}");
+  expect(box.getAttribute("aria-activedescendant")).toBe(options[1].id);
+
+  await person.keyboard("{Escape}");
+  expect(box.getAttribute("aria-expanded")).toBe("false");
+
+  await person.keyboard("{ArrowDown}{Enter}");
+  expect(route.push).toHaveBeenCalledTimes(1);
+});
+
+test("the page carries a skip link to the console's main region", async () => {
+  api.me.mockResolvedValue({ operator: OPERATOR, expires_at: "", stepped_up: false });
+
+  frame("/cp");
+  await screen.findByText("дэлгэцийн агуулга");
+
+  expect(screen.getByRole("link", { name: "base.a11y.skip_to_content" }).getAttribute("href")).toBe("#main");
+  expect(screen.getByRole("main").id).toBe("main");
 });

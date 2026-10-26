@@ -66,7 +66,7 @@ export default function OAuthScopesPage() {
           {scopes.map((scope) => {
             const users = usage.get(scope.name) || [];
             return (
-              <Panel key={scope.name} className={`p-4 ${scope.sensitive ? "border-amber-200" : ""}`}>
+              <Panel key={scope.name} className={`p-4 ${scope.sensitive ? "border-warning-border" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
                   <code className="text-sm font-mono font-semibold text-foreground">{scope.name}</code>
                   {scope.sensitive && <Chip tone="amber">{t("oauth.consent.sensitive")}</Chip>}

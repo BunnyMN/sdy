@@ -33,6 +33,7 @@ import {
 import { Badge, Card, formatMoment } from "@/components/cp/ui";
 import { cp, type Usage, type UsageSeries } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote, LoadingBlock } from "@/components/ui";
 
 export default function UsageScreen() {
   const { t } = useI18n();
@@ -55,9 +56,9 @@ export default function UsageScreen() {
   }, [id, load]);
 
   if (failure) {
-    return <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>;
+    return <ErrorNote>{failure}</ErrorNote>;
   }
-  if (!usage) return <div className="text-muted">…</div>;
+  if (!usage) return <LoadingBlock />;
 
   return (
     <div className="space-y-6">

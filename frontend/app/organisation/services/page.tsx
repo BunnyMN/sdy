@@ -11,7 +11,7 @@ import { Megaphone, Plus, Trash2 } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass } from "@/components/ui";
+import { Banner, fieldClass, useConfirm } from "@/components/ui";
 import { useAccess } from "@/lib/permissions";
 
 /**
@@ -31,6 +31,7 @@ export default function PublishedServices() {
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState("");
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -51,19 +52,28 @@ export default function PublishedServices() {
       setTitle("");
       await load();
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(err instanceof Error && err.message ? err.message : t("base.message.error"));
     } finally {
       setBusy(false);
     }
   }
 
-  async function withdraw(id: string) {
+  async function withdraw(one: { id: string; code: string; title: string }) {
+    // Withdrawing is public: citizens stop finding the organisation by this
+    // service the moment it goes, so it is asked, and named, first.
+    const ok = await confirm({
+      title: t("core.message.confirm_withdraw", { name: one.title || one.code }),
+      confirmLabel: t("core.action.withdraw"),
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
+    setFailed("");
     try {
-      await api.withdrawService(id);
+      await api.withdrawService(one.id);
       await load();
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(err instanceof Error && err.message ? err.message : t("base.message.error"));
     } finally {
       setBusy(false);
     }
@@ -80,19 +90,19 @@ export default function PublishedServices() {
       </header>
 
       <section className="rounded-xl border border-line bg-surface overflow-hidden">
-      {failed && <div className="p-4"><Banner tone="error" message={failed} /></div>}
+      {failed && <div className="p-4"><Banner tone="error" message={failed} onDismiss={() => setFailed("")} /></div>}
       {services.length === 0
         ? <p className="p-6 text-center text-sm italic text-muted">{t("core.message.no_services")}</p>
-        : <ul className="divide-y">{services.map((one) => (
+        : <ul className="divide-y divide-line">{services.map((one) => (
             <li key={one.id} className="flex items-center justify-between gap-3 p-4">
               <span className="min-w-0"><strong className="block text-sm">{one.title || one.code}</strong><code className="text-xs text-muted">{one.code}</code></span>
-              {canManage && <button disabled={busy} onClick={() => void withdraw(one.id)} aria-label={t("core.action.withdraw")} className="rounded-lg border border-red-200 p-2 text-red-600 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>}
+              {canManage && <button disabled={busy} onClick={() => void withdraw(one)} aria-label={`${t("core.action.withdraw")}: ${one.title || one.code}`} className="rounded-lg border border-danger-border p-2 text-danger hover:bg-danger-soft disabled:opacity-50"><Trash2 aria-hidden="true" className="w-4 h-4" /></button>}
             </li>))}
           </ul>}
       {canManage && (
-        <div className="flex flex-col gap-2 border-t p-4 sm:flex-row">
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("core.field.service_code")} className={`${fieldClass} sm:w-56`} />
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("core.field.service_title")} className={`${fieldClass} flex-1`} />
+        <div className="flex flex-col gap-2 border-t border-line p-4 sm:flex-row">
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("core.field.service_code")} aria-label={t("core.field.service_code")} className={`${fieldClass} sm:w-56`} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("core.field.service_title")} aria-label={t("core.field.service_title")} className={`${fieldClass} flex-1`} />
           <button disabled={busy || code.trim() === ""} onClick={() => void publish()} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50">
             <Plus className="inline w-4 h-4 mr-1" />{t("core.action.publish")}
           </button>

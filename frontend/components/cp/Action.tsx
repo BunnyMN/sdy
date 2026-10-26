@@ -22,7 +22,8 @@ import React, { useCallback, useState } from "react";
 
 import { cp, StepUpRequired } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { Loader2 } from "lucide-react";
+import { Banner, ErrorNote, Modal } from "@/components/ui";
 
 interface Request {
   title: string;
@@ -32,6 +33,14 @@ interface Request {
   onDone?: () => void;
   /** Destructive actions get the red button. */
   danger?: boolean;
+  /**
+   * Text the operator must type before Confirm enables — the tenant's slug,
+   * say. For the actions that cannot be walked back, where a reason alone is
+   * one reflexive sentence away from the wrong organisation.
+   */
+  confirmText?: string;
+  /** Extra lines under the detail: what will happen, and when. */
+  body?: React.ReactNode;
 }
 
 export function useAction() {
@@ -51,11 +60,15 @@ function ActionDialog({ request, onClose }: { request: Request; onClose: () => v
   // operator inside the five-minute window is never shown a box they do not
   // need to fill in.
   const [needsCode, setNeedsCode] = useState(false);
+  const [stepUpAsked, setStepUpAsked] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState("");
+  const typedOk = !request.confirmText || typed.trim() === request.confirmText;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy || !typedOk) return;
     setBusy(true);
     setFailure("");
     try {
@@ -72,9 +85,11 @@ function ActionDialog({ request, onClose }: { request: Request; onClose: () => v
     } catch (error) {
       if (error instanceof StepUpRequired) {
         setNeedsCode(true);
-        setFailure(t("cp.message.step_up"));
+        setStepUpAsked(true);
+        setFailure("");
         return;
       }
+      setStepUpAsked(false);
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -82,34 +97,55 @@ function ActionDialog({ request, onClose }: { request: Request; onClose: () => v
   }
 
   return (
-    <Modal onClose={onClose} label={request.title}>
+    // While the request is out the dialog stays put: closing it would not
+    // stop the action, only hide whether it happened.
+    <Modal onClose={busy ? undefined : onClose} label={request.title}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">{request.title}</h2>
           {request.detail && <p className="mt-1 text-sm text-muted">{request.detail}</p>}
+          {request.body && <div className="mt-2 text-sm text-foreground">{request.body}</div>}
         </div>
 
-        {failure && (
-          <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2">
-            {failure}
-          </p>
-        )}
+        {stepUpAsked && <Banner tone="warning" message={t("cp.message.step_up")} />}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+            {t("cp.field.reason")}
+          </span>
           <textarea
             required
             rows={2}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
           <span className="mt-1 block text-xs text-muted">{t("cp.hint.reason")}</span>
         </label>
 
+        {request.confirmText && (
+          <label className="block text-sm">
+            <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+              {t("base.confirm.type_to_confirm", { text: request.confirmText })}
+            </span>
+            <input
+              required
+              autoComplete="off"
+              spellCheck={false}
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              aria-invalid={typed !== "" && !typedOk}
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono"
+            />
+          </label>
+        )}
+
         {needsCode && (
           <label className="block text-sm">
-            <span className="text-muted">{t("cp.field.code")}</span>
+            <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+              {t("cp.field.code")}
+            </span>
             <input
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -117,7 +153,7 @@ function ActionDialog({ request, onClose }: { request: Request; onClose: () => v
               required
               value={code}
               onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono tracking-[0.4em]"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono tracking-[0.4em]"
             />
           </label>
         )}
@@ -126,17 +162,20 @@ function ActionDialog({ request, onClose }: { request: Request; onClose: () => v
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover"
+            disabled={busy}
+            className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
           >
             {t("cp.action.cancel")}
           </button>
           <button
             type="submit"
-            disabled={busy}
-            className={`rounded-lg px-4 py-2 text-sm font-medium text-on-accent disabled:opacity-60 ${
-              request.danger ? "bg-red-600 hover:bg-red-700" : "bg-accent hover:brightness-105"
+            disabled={busy || !typedOk}
+            aria-busy={busy}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+              request.danger ? "bg-danger-solid text-white hover:brightness-110" : "bg-accent text-on-accent hover:brightness-105"
             }`}
           >
+            {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
             {t("cp.action.confirm")}
           </button>
         </div>

@@ -14,15 +14,15 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { KeyRound, Search, ShieldCheck, UserPlus } from "lucide-react";
+import { KeyRound, Loader2, Search, ShieldCheck, UserPlus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { useAction } from "@/components/cp/Action";
 import { useConsole } from "@/components/cp/Console";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
-import { cp, type CreatedOperator, type OperatorSummary } from "@/lib/cp";
+import { cp, StepUpRequired, type CreatedOperator, type OperatorSummary } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { Banner, CopyButton, ErrorNote, Modal } from "@/components/ui";
 
 const ROLES = ["superadmin", "operator", "support", "auditor"] as const;
 
@@ -31,7 +31,14 @@ export default function Operators() {
   const { operator: me } = useConsole();
   const action = useAction();
   const [operators, setOperators] = useState<OperatorSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState("");
+  const [notice, setNotice] = useState("");
+  // The role each row's dropdown is showing, before it is applied. Picking a
+  // role no longer opens the dialog by itself: a stray scroll-wheel over the
+  // select, or an arrow key while tabbing through the row, used to ask to
+  // demote somebody.
+  const [pickedRoles, setPickedRoles] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [changing, setChanging] = useState(false);
   const [handover, setHandover] = useState<CreatedOperator | null>(null);
@@ -39,9 +46,12 @@ export default function Operators() {
   const load = useCallback(async () => {
     try {
       setOperators((await cp.operators()).operators);
+      setPickedRoles({});
       setFailure("");
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -81,9 +91,8 @@ export default function Operators() {
         )}
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
+      {notice && <Banner tone="success" message={notice} onDismiss={() => setNotice("")} />}
 
       <Card title={t("cp.section.operators")}>
         <Table
@@ -94,6 +103,7 @@ export default function Operators() {
             t("cp.field.last_login"),
             "",
           ]}
+          loading={loading}
           rows={operators.map((row) => [
             <span key="n" className="min-w-0">
               <strong className="text-foreground">{row.name}</strong>
@@ -111,20 +121,12 @@ export default function Operators() {
             </Badge>,
             formatMoment(row.last_login_at) || <span key="l" className="text-xs text-muted">{t("cp.state.never")}</span>,
             superadmin && row.id !== me.id ? (
-              <span key="a" className="flex items-center gap-2">
+              <span key="a" className="flex flex-wrap items-center gap-2">
                 <select
-                  value={row.role}
+                  value={pickedRoles[row.id] ?? row.role}
                   aria-label={t("cp.field.role")}
-                  onChange={(event) => {
-                    const role = event.target.value;
-                    action.run({
-                      title: t("cp.action.change_role"),
-                      detail: `${row.email} → ${t(`cp.role.${role}` as "cp.role.operator")}`,
-                      perform: (reason) => cp.setOperatorRole(row.id, role, reason),
-                      onDone: load,
-                    });
-                  }}
-                  className="rounded-lg border border-input px-2 py-1 text-xs"
+                  onChange={(event) => setPickedRoles((current) => ({ ...current, [row.id]: event.target.value }))}
+                  className="rounded-lg border border-input bg-surface px-2 py-1 text-xs"
                 >
                   {ROLES.map((role) => (
                     <option key={role} value={role}>
@@ -132,6 +134,23 @@ export default function Operators() {
                     </option>
                   ))}
                 </select>
+                {(pickedRoles[row.id] ?? row.role) !== row.role && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const role = pickedRoles[row.id];
+                      action.run({
+                        title: t("cp.action.change_role"),
+                        detail: `${row.email} → ${t(`cp.role.${role}` as "cp.role.operator")}`,
+                        perform: (reason) => cp.setOperatorRole(row.id, role, reason),
+                        onDone: load,
+                      });
+                    }}
+                    className="text-xs rounded-lg bg-accent text-on-accent px-2 py-1 hover:brightness-105"
+                  >
+                    {t("cp.action.change_role")}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -152,7 +171,7 @@ export default function Operators() {
               <span key="a" className="text-xs text-muted">{row.id === me.id ? t("cp.state.you") : "—"}</span>
             ),
           ])}
-          empty={t("cp.message.no_activity")}
+          empty={t("cp.message.no_operators")}
         />
       </Card>
 
@@ -175,7 +194,15 @@ export default function Operators() {
           }}
         />
       )}
-      {changing && <PasswordDialog onClose={() => setChanging(false)} />}
+      {changing && (
+        <PasswordDialog
+          onClose={() => setChanging(false)}
+          onChanged={() => {
+            setChanging(false);
+            setNotice(t("cp.message.password_changed"));
+          }}
+        />
+      )}
       {action.dialog}
     </div>
   );
@@ -191,6 +218,9 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
   const [role, setRole] = useState<string>("operator");
   const [reason, setReason] = useState("");
   const [code, setCode] = useState("");
+  // Set once the server has refused for want of a fresh second factor: the
+  // code is then required, and the next submit proves it before adding.
+  const [needsCode, setNeedsCode] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -217,13 +247,22 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setFailure("");
     try {
+      // The same order as useAction: prove the second factor first, then do
+      // what was asked — never as a side effect of leaving the code field.
+      if (code.length === 6) {
+        await cp.stepUp(code);
+        setCode("");
+      }
       onAdded(await cp.addOperator({ email, name, role, reason }));
     } catch (error) {
-      // A step-up asks for the code and comes back here; anything else is said
-      // as it arrived.
+      if (error instanceof StepUpRequired) {
+        setNeedsCode(true);
+        return;
+      }
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -234,9 +273,8 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
     <Modal onClose={onClose} label={t("cp.action.add_operator")}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.action.add_operator")}</h2>
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {needsCode && <Banner tone="warning" message={t("cp.message.step_up")} />}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
         {/* The register first: the two fields below are filled from its
             answer, and typed over only when it is wrong or silent. */}
         <div className="flex items-end gap-2">
@@ -245,7 +283,7 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
             <input
               value={registration}
               onChange={(event) => setRegistration(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
             />
           </label>
           <button
@@ -265,22 +303,26 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
         )}
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.email")}</span>
+          <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+            {t("cp.field.email")}
+          </span>
           <input
             type="email"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.name")}</span>
+          <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+            {t("cp.field.name")}
+          </span>
           <input
             required
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
         <label className="block text-sm">
@@ -288,7 +330,7 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
           <select
             value={role}
             onChange={(event) => setRole(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           >
             {ROLES.map((option) => (
               <option key={option} value={option}>
@@ -298,49 +340,51 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
           </select>
         </label>
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+            {t("cp.field.reason")}
+          </span>
           <input
             required
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
         {/* The console asks for the second factor before it mints an account;
             the API refuses without it. Kept in the same dialog so the step-up
             does not throw away what has been typed. */}
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.code")}</span>
+          <span className={`text-muted${needsCode ? " after:ml-0.5 after:text-danger after:content-['*']" : ""}`}>
+            {t("cp.field.code")}
+          </span>
           <input
             inputMode="numeric"
-            pattern="[0-9]*"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
             maxLength={6}
+            required={needsCode}
             value={code}
             onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-            onBlur={async () => {
-              if (code.length === 6) {
-                try {
-                  await cp.stepUp(code);
-                  setCode("");
-                  setFailure("");
-                } catch (error) {
-                  setFailure(error instanceof Error ? error.message : String(error));
-                }
-              }
-            }}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono tracking-[0.4em]"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono tracking-[0.4em]"
           />
           <small className="text-xs text-muted">{t("cp.hint.step_up")}</small>
         </label>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-input px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-input px-4 py-2 text-sm disabled:opacity-60"
+          >
             {t("cp.action.cancel")}
           </button>
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
+            aria-busy={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
           >
+            {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
             {t("cp.action.add_operator")}
           </button>
         </div>
@@ -355,20 +399,28 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (create
  * Nothing on the server can show the password or the secret again, so the
  * dialog says so and the enrolment is finished here, with the new operator's
  * own authenticator, before anybody walks away.
+ *
+ * The same contract as SecretRevealDialog — Escape and the backdrop do
+ * nothing, each value has a copy button that waits for the clipboard, and
+ * Close stays disabled until the operator ticks that the values are stored —
+ * built on Modal directly only because this one also carries the QR code and
+ * the enrolment form, which SecretRevealDialog's text-only body cannot hold.
  */
 function HandoverDialog({ created, onClose }: { created: CreatedOperator; onClose: () => void }) {
   const { t } = useI18n();
   const [code, setCode] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const ackId = React.useId();
 
   async function confirm(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setFailure("");
     try {
-      await cp.confirmEnrolment(created.id, code, `enrolled ${created.email}`);
+      await cp.confirmEnrolment(created.id, code, t("cp.audit.enrolled", { email: created.email }));
       setConfirmed(true);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
@@ -378,57 +430,73 @@ function HandoverDialog({ created, onClose }: { created: CreatedOperator; onClos
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.view.handover")}>
+    <Modal onClose={onClose} dismissible={false} label={t("cp.view.handover")}>
       <div className="p-5 space-y-4">
-        <h2 className="text-lg font-semibold text-foreground">{t("cp.view.handover")}</h2>
-        <p className="text-sm rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2">
-          {t("cp.message.handover_once")}
-        </p>
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <KeyRound aria-hidden="true" className="w-5 h-5 text-warning" />
+          {t("cp.view.handover")}
+        </h2>
+        <Banner tone="warning" message={t("cp.message.handover_once")} />
 
         <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] items-start">
-          <div className="rounded-xl border border-line p-3 bg-surface">
+          <div className="rounded-xl border border-line p-3 bg-white">
             <QRCodeSVG value={created.uri} size={148} />
           </div>
           <div className="space-y-2 min-w-0">
             <Field label={t("cp.field.email")} value={created.email} />
-            <Field label={t("cp.field.password")} value={created.password} />
-            <Field label={t("cp.field.secret")} value={created.secret} />
+            <Field label={t("cp.field.password")} value={created.password} secret />
+            <Field label={t("cp.field.secret")} value={created.secret} secret />
           </div>
         </div>
 
         {confirmed ? (
-          <p className="text-sm rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2">
-            {t("cp.message.enrolled")}
-          </p>
+          <Banner tone="success" message={t("cp.message.enrolled")} />
         ) : (
           <form onSubmit={confirm} className="space-y-3">
             <p className="text-sm text-muted">{t("cp.hint.confirm_enrolment")}</p>
-            {failure && (
-              <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-            )}
+            {failure && <ErrorNote>{failure}</ErrorNote>}
             <div className="flex items-center gap-2">
               <input
                 inputMode="numeric"
+                autoComplete="one-time-code"
                 pattern="[0-9]*"
                 maxLength={6}
                 required
+                aria-label={t("cp.field.code")}
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-                className="w-40 rounded-lg border border-input px-3 py-2 font-mono tracking-[0.4em]"
+                className="w-40 rounded-lg border border-input bg-surface px-3 py-2 font-mono tracking-[0.4em]"
               />
               <button
                 type="submit"
                 disabled={busy}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
+                aria-busy={busy}
+                className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
               >
+                {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
                 {t("cp.action.confirm")}
               </button>
             </div>
           </form>
         )}
 
+        <label htmlFor={ackId} className="flex min-h-11 items-center gap-3 text-sm text-foreground">
+          <input
+            id={ackId}
+            type="checkbox"
+            checked={saved}
+            onChange={(event) => setSaved(event.target.checked)}
+            className="h-5 w-5 shrink-0"
+          />
+          {t("base.secret.saved_ack")}
+        </label>
         <div className="flex justify-end">
-          <button type="button" onClick={onClose} className="rounded-lg border border-input px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={!saved || busy}
+            className="rounded-lg border border-input px-4 py-2 text-sm disabled:opacity-50"
+          >
             {t("base.action.close")}
           </button>
         </div>
@@ -437,7 +505,7 @@ function HandoverDialog({ created, onClose }: { created: CreatedOperator; onClos
   );
 }
 
-function PasswordDialog({ onClose }: { onClose: () => void }) {
+function PasswordDialog({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const { t } = useI18n();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -455,7 +523,7 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
     setFailure("");
     try {
       await cp.changePassword(current, next);
-      onClose();
+      onChanged();
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
@@ -464,38 +532,45 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.action.change_password")}>
+    <Modal onClose={busy ? undefined : onClose} label={t("cp.action.change_password")}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.action.change_password")}</h2>
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
         {[
           { label: t("cp.field.current_password"), value: current, set: setCurrent, autoComplete: "current-password" },
           { label: t("cp.field.new_password"), value: next, set: setNext, autoComplete: "new-password" },
           { label: t("cp.field.repeat_password"), value: again, set: setAgain, autoComplete: "new-password" },
         ].map((field) => (
           <label key={field.label} className="block text-sm">
-            <span className="text-muted">{field.label}</span>
+            <span className="text-muted after:ml-0.5 after:text-danger after:content-['*']">
+              {field.label}
+            </span>
             <input
               type="password"
               required
               autoComplete={field.autoComplete}
               value={field.value}
               onChange={(event) => field.set(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
             />
           </label>
         ))}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-input px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-input px-4 py-2 text-sm disabled:opacity-60"
+          >
             {t("cp.action.cancel")}
           </button>
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
+            aria-busy={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
           >
+            {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
             {t("base.action.save")}
           </button>
         </div>
@@ -504,11 +579,21 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
+  const text = React.useRef<HTMLParagraphElement>(null);
   return (
-    <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className="font-mono text-sm text-foreground break-all select-all">{value}</p>
+    <div
+      className={`min-w-0 flex items-start gap-2 rounded-lg border px-3 py-2 ${
+        secret ? "bg-warning-soft border-warning-border" : "bg-surface-2 border-line"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+        <p ref={text} className="font-mono text-sm text-foreground break-all select-all">
+          {value}
+        </p>
+      </div>
+      <CopyButton value={value} id={label} selectOnFail={text} />
     </div>
   );
 }

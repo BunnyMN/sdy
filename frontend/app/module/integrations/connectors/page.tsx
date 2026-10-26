@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Integration, IntegrationProvider, api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Banner, LoadingBlock, Modal, fieldClass } from "@/components/ui";
+import { Banner, ErrorNote, LoadingBlock, Modal, fieldClass, useConfirm } from "@/components/ui";
 import { AdminOnly, useAccess } from "@/lib/permissions";
 import {
   Activity, AlertTriangle, CheckCircle2, Cloud, Globe, HardDrive, Link2, Plus,
@@ -71,6 +71,10 @@ export default function IntegrationsPage() {
   const [banner, setBanner] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  // A failed registration is said inside the dialog, where the form is; the
+  // page banner sits behind the backdrop and would go unread.
+  const [formError, setFormError] = useState("");
+  const confirm = useConfirm();
 
   const report = useCallback((err: unknown, fallback: string) => {
     const message = err instanceof Error && err.message ? err.message : fallback;
@@ -121,6 +125,7 @@ export default function IntegrationsPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setBanner(null);
+    setFormError("");
     try {
       const config: Record<string, string> = {};
       if (form.provider === "google_drive" && form.folder) config.folder_id = form.folder;
@@ -141,7 +146,7 @@ export default function IntegrationsPage() {
       setForm(emptyForm);
       await loadData();
     } catch (err) {
-      report(err, t("integrations.message.register_failed"));
+      setFormError(err instanceof Error && err.message ? err.message : t("integrations.message.register_failed"));
     }
   }
 
@@ -171,7 +176,12 @@ export default function IntegrationsPage() {
   }
 
   async function handleDelete(item: Integration) {
-    if (!window.confirm(t("integrations.message.confirm_delete", { name: item.name }))) return;
+    const ok = await confirm({
+      title: t("integrations.message.confirm_delete", { name: item.name }),
+      confirmLabel: t("base.action.delete"),
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusy(item.id);
     try {
       await api.deleteIntegration(item.id);
@@ -189,7 +199,7 @@ export default function IntegrationsPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-foreground flex items-center space-x-2">
-          <Share2 className="w-7 h-7 text-indigo-600" />
+          <Share2 aria-hidden="true" className="w-7 h-7 text-accent" />
           <span>{t("integrations.view.title")}</span>
         </h1>
         <AdminOnly />
@@ -202,7 +212,7 @@ export default function IntegrationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground flex items-center space-x-2">
-            <Share2 className="w-7 h-7 text-indigo-600" />
+            <Share2 aria-hidden="true" className="w-7 h-7 text-accent" />
             <span>{t("integrations.view.title")}</span>
           </h1>
           <p className="text-sm text-muted mt-1">{t("integrations.view.subtitle")}</p>
@@ -217,7 +227,7 @@ export default function IntegrationsPage() {
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
+            className="bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
             <span>{t("integrations.action.create")}</span>
@@ -258,12 +268,12 @@ export default function IntegrationsPage() {
                 <div>
                   <div className="flex items-start justify-between mb-3 gap-3">
                     <div className="flex items-center space-x-3 min-w-0">
-                      <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                      <div className="p-2.5 bg-accent-soft text-accent rounded-lg shrink-0">
                         {PROVIDER_ICONS[item.provider]}
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-foreground text-base truncate">{item.name}</h3>
-                        <span className="text-[11px] bg-surface-2 text-muted px-2 py-0.5 rounded">
+                        <span className="text-2xs bg-surface-2 text-muted px-2 py-0.5 rounded">
                           {t(PROVIDER_LABEL_KEYS[item.provider])}
                         </span>
                       </div>
@@ -271,10 +281,10 @@ export default function IntegrationsPage() {
                     <span
                       className={`inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${
                         health === "ok"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          ? "bg-success-soft text-success border border-success-border"
                           : health === "failing"
-                            ? "bg-red-50 text-red-700 border border-red-200"
-                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                            ? "bg-danger-soft text-danger border border-danger-border"
+                            : "bg-warning-soft text-warning border border-warning-border"
                       }`}
                     >
                       {health === "ok" ? (
@@ -284,7 +294,13 @@ export default function IntegrationsPage() {
                       ) : (
                         <ShieldAlert className="w-3.5 h-3.5" />
                       )}
-                      <span>{health === "failing" ? "ERROR" : item.status}</span>
+                      <span>
+                        {health === "ok"
+                          ? t("integrations.state.active")
+                          : health === "failing"
+                            ? t("integrations.state.failing")
+                            : t("integrations.state.off")}
+                      </span>
                     </span>
                   </div>
 
@@ -299,7 +315,7 @@ export default function IntegrationsPage() {
                       <div className="truncate font-mono">{item.target_url}</div>
                     )}
                     {item.config?.auto_export === "true" && (
-                      <div className="text-emerald-700">{t("integrations.message.auto_export_on")}</div>
+                      <div className="text-success">{t("integrations.message.auto_export_on")}</div>
                     )}
                     {item.last_ping_at && (
                       <div className="flex items-center gap-1">
@@ -307,7 +323,7 @@ export default function IntegrationsPage() {
                         {formatMoment(item.last_ping_at)}
                       </div>
                     )}
-                    {item.last_error && <div className="text-red-600 break-words">{item.last_error}</div>}
+                    {item.last_error && <div className="text-danger break-words">{item.last_error}</div>}
                   </div>
                 </div>
 
@@ -326,7 +342,7 @@ export default function IntegrationsPage() {
                       <button
                         onClick={() => void handleConnect(item)}
                         disabled={busy === item.id}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 rounded-lg disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold py-2 rounded-lg disabled:opacity-50"
                       >
                         <Link2 className="w-3.5 h-3.5" />
                         {t("integrations.action.connect")}
@@ -336,7 +352,7 @@ export default function IntegrationsPage() {
                     onClick={() => void handleDelete(item)}
                     disabled={busy === item.id}
                     aria-label={t("base.action.delete")}
-                    className="p-2 border border-input text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                    className="p-2 border border-input text-danger hover:bg-danger-soft rounded-lg disabled:opacity-50"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -348,9 +364,18 @@ export default function IntegrationsPage() {
       )}
 
       {showModal && (
-        <Modal onClose={() => setShowModal(false)} className="max-h-[90vh] overflow-y-auto" label={t("integrations.view.create_title")}>
+        <Modal
+          onClose={() => {
+            setShowModal(false);
+            setFormError("");
+          }}
+          dirty={JSON.stringify(form) !== JSON.stringify(emptyForm)}
+          className="max-h-[90vh] overflow-y-auto"
+          label={t("integrations.view.create_title")}
+        >
           <h2 className="text-xl font-semibold text-foreground mb-4">{t("integrations.view.create_title")}</h2>
           <form onSubmit={handleCreate} className="space-y-4">
+            {formError && <ErrorNote>{formError}</ErrorNote>}
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1">
                 {t("integrations.field.type")}
@@ -371,7 +396,7 @@ export default function IntegrationsPage() {
                 })}
               </select>
               {selected && !selected.available && (
-                <p className="mt-1 text-[11px] text-amber-700">{selected.reason}</p>
+                <p className="mt-1 text-2xs text-warning">{selected.reason}</p>
               )}
             </div>
 
@@ -463,23 +488,26 @@ export default function IntegrationsPage() {
                   onChange={(e) => setForm({ ...form, calendar_id: e.target.value })}
                   className={fieldClass}
                 />
-                <p className="mt-1 text-[11px] text-muted">{t("integrations.message.meet_via_calendar")}</p>
+                <p className="mt-1 text-2xs text-muted">{t("integrations.message.meet_via_calendar")}</p>
               </div>
             )}
 
-            {isOAuth && <p className="text-[11px] text-muted">{t("integrations.message.connect_after_save")}</p>}
+            {isOAuth && <p className="text-2xs text-muted">{t("integrations.message.connect_after_save")}</p>}
 
             <div className="flex items-center space-x-2 pt-2">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
-                className="w-1/2 bg-surface-2 hover:bg-slate-200 text-foreground font-medium py-2 rounded-lg text-xs"
+                onClick={() => {
+                  setShowModal(false);
+                  setFormError("");
+                }}
+                className="w-1/2 bg-surface-2 hover:bg-surface-hover text-foreground font-medium py-2 rounded-lg text-xs"
               >
                 {t("base.action.cancel")}
               </button>
               <button
                 type="submit"
-                className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs"
+                className="w-1/2 bg-accent hover:bg-accent-hover text-on-accent font-medium py-2 rounded-lg text-xs"
               >
                 {t("integrations.action.register")}
               </button>

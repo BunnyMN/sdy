@@ -17,6 +17,7 @@ import {
   relativeDate, useAccess,
 } from "../shared";
 import { formatDay } from "@/lib/datetime";
+import { Banner } from "@/components/ui";
 
 type Pending =
   | { kind: "tokens"; client: ClientActivity }
@@ -75,11 +76,7 @@ export default function AccessAuditPage() {
     >
       {!canManage && <ReadOnlyNote permission="sso_clients.manage" />}
       {error && <ErrorNote>{error}</ErrorNote>}
-      {notice && (
-        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-          {notice}
-        </p>
-      )}
+      {notice && <Banner tone="success" message={notice} onDismiss={() => setNotice("")} />}
 
       {loading ? (
         <Loading label={t("sso_clients.message.loading")} />
@@ -103,7 +100,7 @@ export default function AccessAuditPage() {
                 {clients.map((client) => {
                   const live = client.active_access_tokens + client.active_refresh_tokens;
                   return (
-                    <tr key={client.client_id} className="hover:bg-slate-50/60">
+                    <tr key={client.client_id} className="hover:bg-surface-hover">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-foreground flex items-center gap-2">
                           {client.client_name}
@@ -126,7 +123,7 @@ export default function AccessAuditPage() {
                           onClick={() => setPending({ kind: "tokens", client })}
                           disabled={live === 0 || !canManage}
                           hidden={!canManage}
-                          className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-30 disabled:hover:bg-transparent"
+                          className="text-xs font-semibold text-danger hover:bg-danger-soft px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                           <ShieldOff className="w-3.5 h-3.5" /> {t("sso_clients.audit.revoke_tokens")}
                         </button>
@@ -166,7 +163,7 @@ export default function AccessAuditPage() {
                 <button
                   onClick={() => setPending({ kind: "consent", consent })}
                   hidden={!canManage}
-                  className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                  className="text-xs font-semibold text-danger hover:bg-danger-soft px-3 py-1.5 rounded-lg flex items-center gap-1.5"
                 >
                   <UserMinus className="w-3.5 h-3.5" /> {t("sso_clients.audit.withdraw")}
                 </button>
