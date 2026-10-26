@@ -9,7 +9,8 @@ import {resetAccess} from "@/lib/access";
 import {useI18n} from "@/lib/i18n";
 import {useBrand} from "@/lib/brandContext";
 import type {TranslationKey} from "@/lib/i18n";
-import {ChevronDown,HelpCircle,Lock,ShieldCheck} from "lucide-react";
+import {ChevronDown,Eye,EyeOff,HelpCircle,Loader2,Lock,ShieldCheck} from "lucide-react";
+import {useErrorMessage} from "@/lib/useErrorMessage";
 import "@/components/membership/member.css";
 import { GoogleMark } from "@/components/ProviderMark";
 import {safeReturnPath} from "@/lib/safeReturnPath.mjs";
@@ -37,7 +38,8 @@ const SSO_ERRORS:Record<string,TranslationKey>={no_account:"auth.sso.error_no_ac
  * Демо суулгацад тохирох байсан ч бүх суулгацад тохирохгүй, мөн демо гэдгийг
  * энэ дэлгэц мэдэх ч аргагүй.
  */
-export default function LoginPage(){const router=useRouter();const {t}=useI18n();const brand=useBrand();const [next,setNext]=useState("/member"),[admin,setAdmin]=useState(false),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");
+export default function LoginPage(){const router=useRouter();const {t}=useI18n();const brand=useBrand();const [next,setNext]=useState("/member"),[admin,setAdmin]=useState(false),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState(""),[pwError,setPwError]=useState(""),[busy,setBusy]=useState(false),[reveal,setReveal]=useState(false);
+  const errorMessage=useErrorMessage({fallback:"auth.message.error_password"});
   // undefined = хараахан асуугаагүй. Энэ ялгаа чухал: асуухаас өмнө eID
   // хэлбэрийг зурчихвал холбоосон суулгац дээр хүн энд нэвтэрч болно гэж
   // хэсэг хугацаанд итгэж, дараа нь өөр рүү шилжсэн нь будлиантай.
@@ -67,11 +69,13 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
   function startGoogle(){if(sso?.google?.start_url)window.location.assign(`${sso.google.start_url}?next=${encodeURIComponent(next)}`)}
   // resetAccess before the push: router.push is a client-side navigation, so
   // whatever the previous session left cached would answer for this one.
-  async function passwordLogin(e:React.FormEvent){e.preventDefault();setError("");try{await api.login(email,password);resetAccess();
+  // The failure is this form's own, so it is said once, inside the form —
+  // not a second time in the banner above it, which belongs to SSO.
+  async function passwordLogin(e:React.FormEvent){e.preventDefault();if(busy)return;setPwError("");setBusy(true);try{await api.login(email,password);resetAccess();
     // /oauth2/* belongs to the API, not to this Next app, so a client-side
     // push would 404 instead of resuming the authorization request. eID sign-in
     // already navigates for real; this path has to as well.
-    if(next.startsWith("/oauth2/"))window.location.assign(next);else router.push(next)}catch(err:any){setError(err.message||t("auth.message.error_password"))}}
+    if(next.startsWith("/oauth2/"))window.location.assign(next);else router.push(next)}catch(err:unknown){setPwError(errorMessage(err));setBusy(false)}}
 
   const federated=sso?.enabled===true;
   const provider=sso?.provider_name||"";
@@ -104,8 +108,8 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
 
         {federated&&!redirecting&&<>
           <div><h1 className="signin-card__title">{t("auth.signin.title")}</h1><p className="signin-card__lede">{t("auth.sso.card_body",{provider})}</p></div>
-          {error&&<p className="signin-alert">{error}</p>}
-          <button className="signin-btn signin-btn--eid" onClick={startSSO}><ShieldCheck size={18}/> {t("auth.sso.sign_in",{provider})}</button>
+          {error&&<p className="signin-alert" role="alert">{error}</p>}
+          <button type="button" className="signin-btn signin-btn--eid" onClick={startSSO}><ShieldCheck size={18}/> {t("auth.sso.sign_in",{provider})}</button>
         </>}
 
         {showLocal&&<>
@@ -116,7 +120,7 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
               the same way whatever this screen shows, and this is the sentence
               that makes the refusal make sense. */}
           {sso?.access_mode==="private"&&<p className="signin-note">{t("auth.message.platform_private")}</p>}
-          {error&&!federated&&<p className="signin-alert">{error}</p>}
+          {error&&!federated&&<p className="signin-alert" role="alert">{error}</p>}
           {/* eID нь сервер тохируулсан үед л. Хуучин хариу (eid талбаргүй)
               бол өмнөх шигээ харуулна. */}
           {eidEnabled&&<EIDLogin next={next} variant="signin"/>}
@@ -126,19 +130,30 @@ export default function LoginPage(){const router=useRouter();const {t}=useI18n()
               эвдрэл. */}
           {sso?.google?.enabled&&<>
             <div className="signin-or">{t("auth.signin.or")}</div>
-            <button className="signin-btn signin-btn--google" onClick={startGoogle}><GoogleMark/> {t("auth.signin.google")}</button>
+            <button type="button" className="signin-btn signin-btn--google" onClick={startGoogle}><GoogleMark/> {t("auth.signin.google")}</button>
           </>}
 
           <div className="signin-footer">
             <hr/>
             {/* eID-гүй суулгац дээр нууц үг бол цорын ганц зам: түүнийг
                 эвхээд нуух нь дэлгэцийг хоосон болгоно, тиймээс шууд нээлттэй. */}
-            {eidEnabled&&<button className="admin-disclosure" onClick={()=>setAdmin(v=>!v)}><Lock/> {t("auth.action.admin_disclosure")} <ChevronDown className={admin?"rotate-180":""}/></button>}
-            {(admin||!eidEnabled)&&<form className="admin-login" onSubmit={passwordLogin}>{error&&<p>{error}</p>}<label className="sdy-login-field"><span>{t("auth.field.email")}</span><input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>setEmail(e.target.value)} required/></label><label className="sdy-login-field"><span>{t("auth.field.password")}</span><input type="password" autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button>{t("auth.action.admin_sign_in")}</button></form>}
+            {eidEnabled&&<button type="button" className="admin-disclosure" aria-expanded={admin} onClick={()=>setAdmin(v=>!v)}><Lock aria-hidden="true"/> {t("auth.action.admin_disclosure")} <ChevronDown aria-hidden="true" className={admin?"rotate-180":""}/></button>}
+            {(admin||!eidEnabled)&&<form className="admin-login" onSubmit={passwordLogin} aria-busy={busy||undefined}>
+              {pwError&&<p id="admin-login-error" role="alert">{pwError}</p>}
+              <label className="sdy-login-field"><span>{t("auth.field.email")}</span><input type="email" autoComplete="username" placeholder={t("auth.field.email")} value={email} onChange={e=>{setEmail(e.target.value);setPwError("")}} required aria-invalid={!!pwError||undefined} aria-describedby={pwError?"admin-login-error":undefined}/></label>
+              <label className="sdy-login-field"><span>{t("auth.field.password")}</span>
+                <span className="relative block">
+                  <input type={reveal?"text":"password"} autoComplete="current-password" placeholder={t("auth.field.password")} value={password} onChange={e=>{setPassword(e.target.value);setPwError("")}} required style={{paddingInlineEnd:48}} aria-invalid={!!pwError||undefined} aria-describedby={pwError?"admin-login-error":undefined}/>
+                  <button type="button" onClick={()=>setReveal(v=>!v)} aria-pressed={reveal} aria-label={t(reveal?"auth.action.hide_password":"auth.action.show_password")} title={t(reveal?"auth.action.hide_password":"auth.action.show_password")}
+                    className="absolute inset-y-0 end-0 flex items-center justify-center text-muted" style={{width:44,height:"100%",background:"transparent",border:0}}>{reveal?<EyeOff aria-hidden="true" size={18}/>:<Eye aria-hidden="true" size={18}/>}</button>
+                </span>
+              </label>
+              <button type="submit" disabled={busy} className="inline-flex items-center justify-center gap-2 disabled:opacity-60">{busy&&<Loader2 aria-hidden="true" size={16} className="animate-spin"/>}{t(busy?"auth.action.signing_in":"auth.action.admin_sign_in")}</button>
+            </form>}
             {/* Link rather than an anchor: this points at a page of this
                 application, and a full page load here throws away the sign-in
                 state the screen is holding. */}
-            <Link className="signin-footer__help" href="/"><HelpCircle size={15}/> {t("auth.signin.help")}</Link>
+            <Link className="signin-footer__help" href="/support"><HelpCircle size={15} aria-hidden="true"/> {t("auth.signin.help")}</Link>
           </div>
         </>}
       </div>

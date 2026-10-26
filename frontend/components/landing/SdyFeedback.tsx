@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Bug, CheckCircle2, Lightbulb, MessageCircle, Send, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bug, CheckCircle2, Lightbulb, MessageCircle, Send, ShieldAlert, Sparkles } from "lucide-react";
 import { apiBase } from "@/lib/apiBase";
 import styles from "./sdy-landing.module.css";
 
@@ -15,6 +15,8 @@ const categories: { value: Category; label: string; icon: typeof Lightbulb }[] =
 ];
 
 const MAX_MESSAGE = 2000;
+// The counter turns to the accent colour this close to the limit.
+const NEAR_LIMIT = 1800;
 const PAGE = 12;
 
 type Status = "new" | "seen" | "planned" | "done";
@@ -43,6 +45,12 @@ export default function SdyFeedback() {
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
   const [listState, setListState] = useState<"loading" | "ready" | "failed">("loading");
+  const done = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+
+  // The form is replaced by the thank-you card; focus follows it, or a keyboard
+  // and screen-reader user is left on a button that no longer exists.
+  useEffect(() => { if (state === "sent") done.current?.focus(); }, [state]);
 
   const loadPage = useCallback(async (offset: number) => {
     try {
@@ -65,6 +73,7 @@ export default function SdyFeedback() {
     event.preventDefault();
     if (message.trim().length < 5) {
       setFailure("Саналаа арай дэлгэрэнгүй бичнэ үү.");
+      field.current?.focus();
       return;
     }
     setState("sending");
@@ -76,18 +85,21 @@ export default function SdyFeedback() {
         credentials: "same-origin",
         body: JSON.stringify({ category, message, name, contact, website, page: window.location.pathname }),
       });
+      // The API answers in English; this page speaks Mongolian, so the reason
+      // is chosen here and the server's sentence stays in the server's log.
       if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
         throw new Error(response.status === 429
           ? "Хэт олон удаа илгээлээ. Түр хүлээгээд дахин оролдоно уу."
-          : body?.error || body?.message || "Илгээж чадсангүй. Дахин оролдоно уу.");
+          : response.status === 400 || response.status === 422
+            ? "Саналын агуулгыг шалгаад дахин илгээнэ үү."
+            : "Илгээж чадсангүй. Дахин оролдоно уу.");
       }
       setState("sent");
       setMessage("");
       void loadPage(0);
     } catch (error) {
       setState("idle");
-      setFailure(error instanceof Error ? error.message : "Илгээж чадсангүй. Дахин оролдоно уу.");
+      setFailure(error instanceof Error && /[\u0400-\u04FF]/.test(error.message) ? error.message : "Илгээж чадсангүй. Холболтоо шалгаад дахин оролдоно уу.");
     }
   }
 
@@ -107,7 +119,7 @@ export default function SdyFeedback() {
 
         {state === "sent" ? (
           <div className={styles.feedbackCard} role="status">
-            <div className={styles.feedbackDone}>
+            <div className={styles.feedbackDone} ref={done} tabIndex={-1}>
               <CheckCircle2 aria-hidden="true" />
               <h3>Баярлалаа!</h3>
               <p>Таны санал хүлээн авагдаж, доорх жагсаалтад нэмэгдлээ. Систем сайжрахад таны оролцоо чухал.</p>
@@ -128,10 +140,14 @@ export default function SdyFeedback() {
 
             <label className={styles.feedbackField}>
               <span>Таны санал <em aria-hidden="true">*</em></span>
-              <textarea required rows={5} maxLength={MAX_MESSAGE} value={message} onChange={event => setMessage(event.target.value)}
+              <textarea ref={field} required rows={5} maxLength={MAX_MESSAGE} value={message}
+                onChange={event => { setMessage(event.target.value); if (failure) setFailure(""); }}
+                aria-invalid={failure ? true : undefined} aria-describedby={failure ? "feedback-error feedback-privacy feedback-count" : "feedback-privacy feedback-count"}
                 placeholder="Жишээ нь: Арга хэмжээний мэдэгдэл утсанд ирдэг болвол сайн байна…" />
-              <small>{message.length}/{MAX_MESSAGE}</small>
+              <small id="feedback-count" data-near={message.length >= NEAR_LIMIT || undefined}>{message.length}/{MAX_MESSAGE}</small>
             </label>
+            {/* The list below is public, so this is said before anything is typed. */}
+            <p id="feedback-privacy" className={styles.feedbackPrivacy}><ShieldAlert aria-hidden="true" /> Саналд хувийн мэдээллээ (регистрийн дугаар, утас, хаяг) бүү бичээрэй — саналууд нийтэд харагдана.</p>
 
             <div className={styles.feedbackRow}>
               <label className={styles.feedbackField}>
@@ -149,7 +165,7 @@ export default function SdyFeedback() {
               Website <input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} />
             </label>
 
-            {failure && <p className={styles.feedbackError} role="alert">{failure}</p>}
+            {failure && <p id="feedback-error" className={styles.feedbackError} role="alert">{failure}</p>}
 
             <button type="submit" className={`${styles.button} ${styles.primary}`} disabled={state === "sending"}>
               {state === "sending" ? "Илгээж байна…" : "Санал илгээх"} <Send aria-hidden="true" />
@@ -158,10 +174,12 @@ export default function SdyFeedback() {
         )}
       </div>
 
-      <div className={styles.feedbackWall} aria-labelledby="feedback-wall-title">
+      {/* A visitor has nothing to do about a list that did not load, so a
+          failure hides the list rather than putting an error on the front
+          page. The form above still works. */}
+      {listState !== "failed" && <section className={styles.feedbackWall} aria-labelledby="feedback-wall-title" aria-busy={listState === "loading" || undefined}>
         <h3 id="feedback-wall-title">Ирсэн санал хүсэлт{listState === "ready" && <span> · {total}</span>}</h3>
         {listState === "loading" && <p className={styles.feedbackEmpty}>Ачааллаж байна…</p>}
-        {listState === "failed" && <p className={styles.feedbackEmpty}>Саналуудыг ачаалж чадсангүй. <button type="button" onClick={() => { setListState("loading"); void loadPage(0); }}>Дахин оролдох</button></p>}
         {listState === "ready" && items.length === 0 && <p className={styles.feedbackEmpty}>Одоогоор санал ирээгүй байна. Эхний саналыг та өгөөрэй!</p>}
         {items.length > 0 && <ul className={styles.feedbackList}>
           {items.map(item => <li key={item.id} className={styles.feedbackItem}>
@@ -174,7 +192,7 @@ export default function SdyFeedback() {
           </li>)}
         </ul>}
         {listState === "ready" && items.length < total && <button type="button" className={styles.button} onClick={() => void loadPage(items.length)}>Цааш үзэх</button>}
-      </div>
+      </section>}
     </section>
   );
 }

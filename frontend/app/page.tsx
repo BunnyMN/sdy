@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import SiteFooter from "@/components/landing/SiteFooter";
@@ -66,11 +67,20 @@ import { fetchStorefrontOnServer } from "@/lib/storefront";
 // arrive.
 export const dynamic = "force-dynamic";
 
-export function generateMetadata() {
-  if (brandFromEnv().shortName !== "SDY") return {};
+export function generateMetadata(): Metadata {
+  const brand = brandFromEnv();
+  if (brand.shortName !== "SDY") return {};
+  const title = "SDY — Гишүүнчлэл, оролцоо нэг дор";
+  const description = "SDY-ийн салбартаа элсэж, арга хэмжээнд оролцон, ирц, оноо, сарын хураамжаа нэг дороос хянаарай. eID Mongolia апп-аар нэвтэрнэ.";
+  // Composed from the union's mark and its festival poster (public/sdy/og.png).
+  // Relative: app/layout.tsx sets metadataBase to https://e-sdy.mn.
+  const image = { url: "/sdy/og.png", width: 1200, height: 630, alt: "SDY — Гишүүний цахим систем" };
   return {
-    title: "SDY — Гишүүнчлэл, оролцоо нэг дор",
-    description: "SDY-ийн салбартаа элсэж, арга хэмжээнд оролцон, ирц, оноо, сарын хураамжаа нэг дороос хянаарай. e-ID Mongolia апп ашиглан нэвтэрнэ.",
+    title,
+    description,
+    alternates: { canonical: "/" },
+    openGraph: { type: "website", siteName: brand.name, locale: "mn_MN", url: "/", title, description, images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image.url] },
   };
 }
 

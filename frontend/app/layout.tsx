@@ -10,6 +10,7 @@ import { brandCSSVariables, brandFromEnv } from "@/lib/brandEnv";
 import { brandCopyFromEnv } from "@/lib/brandCopy";
 import { localizedBrand } from "@/lib/brand";
 import { DEFAULT_LOCALE, LOCALE_KEY } from "@/lib/locale";
+import { siteOriginFromEnv } from "@/lib/siteOrigin";
 
 /**
  * Rendered per request, because the deployment's name is not the build's to
@@ -60,9 +61,23 @@ export async function generateMetadata(): Promise<Metadata> {
   // had.
   const locale = (await cookies()).get(LOCALE_KEY)?.value || DEFAULT_LOCALE;
   const brand = localizedBrand(brandFromEnv(), brandCopyFromEnv(), locale);
+  const origin = siteOriginFromEnv();
   return {
+    // What relative Open Graph image addresses resolve against. Only when the
+    // deployment's address is known (lib/siteOrigin.ts); Next falls back to
+    // the request's host otherwise.
+    ...(origin ? { metadataBase: new URL(origin) } : {}),
     title: brand.name,
     description: brand.description,
+    // A link shared anywhere unfurls with the deployment's name rather than a
+    // bare URL. Pages with a picture of their own (app/page.tsx) replace this.
+    openGraph: {
+      type: "website",
+      siteName: brand.name,
+      title: brand.name,
+      description: brand.description,
+      locale: OG_LOCALES[locale] ?? "mn_MN",
+    },
     // Apple reads none of the manifest: on iOS the name under the icon and the
     // status bar are decided by these instead. The short name is what there is
     // room for under an icon.
@@ -94,6 +109,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export function generateViewport(): Viewport {
   return { themeColor: brandFromEnv().themeColor };
 }
+
+/** Open Graph wants a language_TERRITORY pair, not the switcher's bare code. */
+const OG_LOCALES: Record<string, string> = { mn: "mn_MN", en: "en_US", ru: "ru_RU", zh: "zh_CN", ar: "ar_AR", fr: "fr_FR", es: "es_ES" };
 
 /** The languages the switcher can write into the cookie; anything else is the default. */
 const LOCALE_CODES = new Set(["mn", "ar", "zh", "en", "fr", "ru", "es"]);

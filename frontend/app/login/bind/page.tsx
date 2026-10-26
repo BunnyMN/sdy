@@ -8,6 +8,7 @@ import {useI18n} from "@/lib/i18n";
 import {useBrand} from "@/lib/brandContext";
 import {ShieldCheck} from "lucide-react";
 import {safeReturnPath} from "@/lib/safeReturnPath.mjs";
+import {useErrorMessage} from "@/lib/useErrorMessage";
 
 /**
  * Гадны провайдераар анх удаа ирсэн хүнийг eID-ээр баталгаажуулах дэлгэц.
@@ -16,7 +17,7 @@ import {safeReturnPath} from "@/lib/safeReturnPath.mjs";
  * үзүүлж зөвшөөрөл авна — утсанд push мэдэгдэл ирсэн хойно тайлбарлах нь
  * оройтсон байна. Дараа нь eID. Бүртгэл нь хоёулаа биелсэн хойно үүснэ.
  */
-export default function BindPage(){const {t}=useI18n();const brand=useBrand();
+export default function BindPage(){const {t}=useI18n();const brand=useBrand();const errorMessage=useErrorMessage({fallback:"auth.bind.expired"});
   const [binding,setBinding]=useState("");
   const [info,setInfo]=useState<{provider:string;email:string;name:string;consented:boolean;claims:Record<string,unknown>;eid_claims:string[]}|null>(null);
   const [error,setError]=useState("");
@@ -27,7 +28,7 @@ export default function BindPage(){const {t}=useI18n();const brand=useBrand();
     if(!b){setError(t("auth.bind.expired"));return}
     void api.bindingSession(b).then(s=>{setInfo(s);setConsented(s.consented)}).catch(()=>setError(t("auth.bind.expired")))},[t]);
 
-  async function agree(){try{await api.bindingConsent(binding);setConsented(true)}catch(e:any){setError(e?.message||t("auth.bind.expired"))}}
+  async function agree(){try{await api.bindingConsent(binding);setConsented(true)}catch(e:unknown){setError(errorMessage(e))}}
 
   // Провайдерийн хэлснийг тайлбарлахын оронд шууд үзүүлнэ: хуваалцахыг
   // зөвшөөрч буй хүн тэр зүйлээ харах эрхтэй.
@@ -46,7 +47,7 @@ export default function BindPage(){const {t}=useI18n();const brand=useBrand();
         </div>
         <hr className="signin-card__rule"/>
 
-        {error&&<p className="signin-alert">{error}</p>}
+        {error&&<p className="signin-alert" role="alert">{error}</p>}
 
         {info&&!consented&&<>
           <div className="bind-block">

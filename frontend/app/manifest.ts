@@ -60,8 +60,17 @@ function icons(brand: Brand): MetadataRoute.Manifest["icons"] {
   return supplied;
 }
 
+// The icon a long-press menu draws beside each shortcut: the deployment's own
+// when it named one, so an SDY install does not show Gerege's mark in its menu.
+function shortcutIcon(brand: Brand) {
+  return brand.iconUrl
+    ? [{ src: brand.iconUrl, sizes: "any" }]
+    : [{ src: "/icons/app-192.png", sizes: "192x192" }];
+}
+
 export default function manifest(): MetadataRoute.Manifest {
   const brand = brandFromEnv();
+  const shortcutIcons = shortcutIcon(brand);
   return {
     // `id` is what the browser matches an installed copy against. It is pinned
     // rather than derived from start_url, so changing where the app opens does
@@ -91,19 +100,19 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Миний гишүүнчлэл",
         short_name: "Нүүр",
         url: "/member",
-        icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
+        icons: shortcutIcons,
       },
       {
         name: "Арга хэмжээ",
         short_name: "Арга хэмжээ",
         url: "/module/events",
-        icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
+        icons: shortcutIcons,
       },
       {
         name: "Миний бүртгэл",
         short_name: "Бүртгэл",
         url: "/profile",
-        icons: [{ src: "/icons/app-192.png", sizes: "192x192" }],
+        icons: shortcutIcons,
       },
     ],
   };

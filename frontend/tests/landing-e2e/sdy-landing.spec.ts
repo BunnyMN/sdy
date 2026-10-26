@@ -13,7 +13,7 @@ for (const width of [320, 375, 768, 1280, 1920]) {
       await expect(page.locator("html")).toHaveClass(mode === "dark" ? /dark/ : /^(?!.*\bdark\b)/);
       await expect(page.getByRole("heading", { name: "Оролцоо бүрээ нэг дороос" })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      const signIn = page.getByRole("link", { name: "e-ID-аар нэвтрэх", exact: true }).filter({ visible: true });
+      const signIn = page.getByRole("link", { name: "eID-ээр нэвтрэх", exact: true }).filter({ visible: true });
       expect(await signIn.count()).toBeGreaterThanOrEqual(2);
       for (const link of await signIn.all()) {
         await expect(link).toHaveAttribute("href", "/login?next=%2Fmember");
@@ -37,9 +37,15 @@ test("утасны цэс, FAQ, хуучин холбоос болон нэвт�
   await expect(page.getByRole("link", { name: "Үндсэн агуулга руу очих" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("main")).toBeFocused();
-  const menu = page.locator('summary[aria-label="Цэс нээх"]');
+  const menu = page.locator("summary[data-menu-toggle]");
+  await expect(menu).toHaveAttribute("aria-label", "Цэс нээх");
   await menu.click();
   await expect(page.getByRole("navigation", { name: "Гар утасны цэс" })).toBeVisible();
+  await expect(menu).toHaveAttribute("aria-label", "Цэс хаах");
+  // A tap outside closes it.
+  await page.mouse.click(20, 760);
+  await expect(page.getByRole("navigation", { name: "Гар утасны цэс" })).toBeHidden();
+  await menu.click();
   await page.keyboard.press("Escape");
   await expect(menu).toBeFocused();
   await expect(page.getByRole("navigation", { name: "Гар утасны цэс" })).toBeHidden();
@@ -53,7 +59,11 @@ test("утасны цэс, FAQ, хуучин холбоос болон нэвт�
   await page.goto("/trust");
   await expect(page).toHaveURL(/\/#data-access$/);
   await expect(page.locator('[data-sdy-landing="true"]')).toBeVisible();
-  await page.getByRole("link", { name: "e-ID-аар нэвтрэх", exact: true }).filter({ visible: true }).first().click();
+  // The address opens the answer it points at.
+  await expect(page.locator("#data-access p")).toBeVisible();
+  // On a phone the header keeps a short way in.
+  await expect(page.getByRole("banner").getByRole("link", { name: "Нэвтрэх", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "eID-ээр нэвтрэх", exact: true }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/login\?next=%2Fmember$/);
   await expect(page.locator(".signin-card")).toBeVisible();
 });
@@ -64,7 +74,7 @@ test("JavaScript унтарсан үед нүүр, FAQ болон цэс ажи�
     const page = await context.newPage();
     await page.goto("http://nexus.localhost:3212/");
     await expect(page.locator("h1")).toBeVisible();
-    await page.locator('summary[aria-label="Цэс нээх"]').click();
+    await page.locator("summary[data-menu-toggle]").click();
     await expect(page.getByRole("navigation", { name: "Гар утасны цэс" })).toBeVisible();
     await page.locator("#dues-payment summary").click();
     await expect(page.locator("#dues-payment p")).toBeVisible();
