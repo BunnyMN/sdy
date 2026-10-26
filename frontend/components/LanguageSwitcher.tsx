@@ -58,7 +58,9 @@ export default function LanguageSwitcher({ variant = "light" }: { variant?: "lig
           type="button"
           onClick={() => setLocale(option.code)}
           aria-pressed={locale === option.code}
-          className={`flex items-center rounded px-2 py-1 text-xs font-semibold transition ${
+          // 44px tall and wide to press — the visible pill is still the short
+          // code; the extra is padding a thumb lands on.
+          className={`flex min-h-11 min-w-11 items-center justify-center rounded px-2 text-xs font-semibold transition ${
             locale === option.code ? activeStyle : idleStyle
           }`}
         >

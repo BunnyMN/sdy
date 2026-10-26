@@ -24,17 +24,19 @@ export default function NotFound() {
 
 function NotFoundContent() {
   const { t } = useI18n();
+  // A <div>, not a <main>: inside the shell this renders within its
+  // <main id="main">, and nesting a second one gives two "main" landmarks.
   return (
-    <main className="mx-auto flex max-w-[46rem] flex-col items-start gap-4 py-16">
+    <div className="mx-auto flex max-w-[46rem] flex-col items-start gap-4 py-16">
       <FileQuestion className="h-8 w-8 text-muted" aria-hidden="true" />
       <h1 className="text-2xl font-semibold text-foreground">{t("base.error.not_found_title")}</h1>
       <p className="text-sm text-muted">{t("base.error.not_found_body")}</p>
       <Link
         href="/"
-        className="mt-2 inline-flex items-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105"
+        className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
       >
         {t("base.error.home")}
       </Link>
-    </main>
+    </div>
   );
 }

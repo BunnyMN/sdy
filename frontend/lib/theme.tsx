@@ -16,7 +16,11 @@ export interface ThemePreferences {
 }
 
 const STORAGE_KEY = "gerege_theme";
-const defaults: ThemePreferences = { design: "original", mode: "light", accent: "neutral", density: "comfortable" };
+// "system", the same answer public/theme-init.js gives a reader who has never
+// chosen. The two used to disagree — the pre-paint script painted dark for a
+// dark-OS reader and this provider then repainted light on hydration, and
+// "Reset" put them back into that disagreement.
+const defaults: ThemePreferences = { design: "original", mode: "system", accent: "neutral", density: "comfortable" };
 
 interface ThemeContextValue extends ThemePreferences {
   resolvedMode: "light" | "dark";

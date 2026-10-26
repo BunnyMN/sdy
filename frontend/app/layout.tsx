@@ -95,14 +95,33 @@ export function generateViewport(): Viewport {
   return { themeColor: brandFromEnv().themeColor };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/** The languages the switcher can write into the cookie; anything else is the default. */
+const LOCALE_CODES = new Set(["mn", "ar", "zh", "en", "fr", "ru", "es"]);
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // <html lang> from the same cookie generateMetadata reads, so the first byte
+  // of HTML already names the language the page will be read in. It used to be
+  // "mn" for everybody until I18nProvider corrected it after hydration — a
+  // screen reader that started on an English page began in Mongolian
+  // pronunciation, and Arabic laid out left-to-right for a frame. The cookie
+  // is already being read for the title, so this costs nothing new: the route
+  // is force-dynamic either way.
+  const saved = (await cookies()).get(LOCALE_KEY)?.value || "";
+  const lang = LOCALE_CODES.has(saved) ? saved : DEFAULT_LOCALE;
   return (
-    // I18nProvider keeps <html lang> in step with the selected locale.
+    // I18nProvider keeps <html lang> in step with the selected locale after
+    // this, when the reader switches.
     // suppressHydrationWarning на <html>: public/theme-init.js нь React
     // ачаалахаас өмнө `dark` ангийг нэмдэг тул сервер илгээсэн className
     // болон бодит DOM-ынх нэг байхаа болино. Энэ бол яг тэр хүлээгдэж буй
     // зөрүү — өөр юуг ч нуухгүй: зөвхөн энэ элементийн атрибутад үйлчилнэ.
-    <html lang="mn" className={geist.variable} style={brandCSSVariables(brandFromEnv()) as React.CSSProperties} suppressHydrationWarning>
+    <html
+      lang={lang}
+      dir={lang === "ar" ? "rtl" : "ltr"}
+      className={geist.variable}
+      style={brandCSSVariables(brandFromEnv()) as React.CSSProperties}
+      suppressHydrationWarning
+    >
       <head>
         {/*
           Read before anything is painted, so a reader who chose dark never

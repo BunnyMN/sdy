@@ -34,4 +34,8 @@ export const zh: Record<string, string> = {
   "ai.view.tab_translate": "翻译",
   "ai.view.title": "AI 助手",
   "ai.view.translate_placeholder": "要翻译的文本...",
+  "ai.message.request_failed": "助手无法回答，请重试。",
+  "ai.action.record": "录制语音消息",
+  "ai.action.send": "发送",
+  "ai.field.message": "消息",
 };

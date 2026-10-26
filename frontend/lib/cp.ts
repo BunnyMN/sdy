@@ -16,6 +16,8 @@
 // Production stays same-origin. Development deliberately uses two hostnames
 // and two ports, so the optional value lets admin.localhost:3000 call the API at
 // admin.localhost:8080 without weakening either host gate.
+import { ApiError, fallbackErrorText } from "@/lib/errorMessage";
+
 const BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_API_URL || "/api/platform/v1";
 
 export type OperatorRole = "superadmin" | "operator" | "support" | "auditor";
@@ -206,7 +208,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     if (body?.code === "step_up_required") throw new StepUpRequired();
-    throw new Error(body?.error || `request failed with ${response.status}`);
+    // The status rides along, and the fallback is a sentence rather than
+    // "request failed with 502": a screen printing `err.message` shows it to
+    // an operator. lib/errorMessage.ts's errorText() reads the status.
+    throw new ApiError(body?.error || fallbackErrorText(response.status), response.status, body?.code);
   }
   return (body ?? {}) as T;
 }

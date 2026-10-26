@@ -12,8 +12,9 @@
  * being the reason it cannot.
  *
  * It reads exactly what lib/theme.tsx writes (one JSON blob under
- * `gerege_theme`) and sets exactly what globals.css reads. Nothing else: if it
- * throws, the page still renders, in light.
+ * `gerege_theme`) and sets exactly what globals.css reads, with the same
+ * defaults lib/theme.tsx uses — "system" for a reader who never chose.
+ * Nothing else: if it throws, the page still renders, in light.
  */
 (function () {
   try {
@@ -33,7 +34,7 @@
     // Native form controls, scrollbars and <select> popups follow this, not
     // the class — without it dark mode keeps a white scrollbar.
     root.style.colorScheme = dark ? "dark" : "light";
-  } catch (e) {
+  } catch {
     /* localStorage can be unavailable (private mode, blocked cookies). Light. */
   }
 })();

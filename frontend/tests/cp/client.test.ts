@@ -12,6 +12,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 
 import { cp, StepUpRequired, Unauthorized } from "@/lib/cp";
+import { fallbackErrorText } from "@/lib/errorMessage";
 
 /** The API's answer, in the shape fetch returns it. */
 function answers(status: number, body: string, ok = status < 400) {
@@ -55,7 +56,14 @@ test("a proxy's error page is reported as its status, not as its HTML", async ()
   // A response that is not JSON did not come from the API. Putting its body on
   // the screen is how a console ends up rendering somebody else's markup at an
   // operator, and it says nothing they can act on either way.
-  await expect(cp.operators()).rejects.toThrow("request failed with 502");
+  //
+  // Nor as "request failed with 502": a screen that prints `err.message` puts
+  // that in front of an operator. The fallback is a sentence in the page's
+  // language, and the status rides along for lib/errorMessage.ts to read.
+  const failure = await cp.operators().catch((err: unknown) => err);
+  expect(failure).toMatchObject({ status: 502 });
+  expect((failure as Error).message).not.toMatch(/<html|request failed/i);
+  expect((failure as Error).message).toBe(fallbackErrorText(502));
 });
 
 test("an empty success is an empty object, not a parse error", async () => {

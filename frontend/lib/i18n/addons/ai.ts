@@ -41,4 +41,8 @@ export const ai = {
   "ai.message.processing": { mn: "AI боловсруулж байна…", en: "The assistant is working…" },
   "ai.message.prompt_saved": { mn: "AI заавар хадгалагдлаа", en: "The prompt was saved" },
   "ai.message.knowledge_added": { mn: "Мэдлэг нэмэгдлээ", en: "The knowledge entry was added" },
+  "ai.message.request_failed": { mn: "AI туслах хариулж чадсангүй. Дахин оролдоно уу.", en: "The assistant could not answer. Please try again." },
+  "ai.action.record": { mn: "Дуут мессеж бичих", en: "Record a voice message" },
+  "ai.action.send": { mn: "Илгээх", en: "Send" },
+  "ai.field.message": { mn: "Мессеж", en: "Message" },
 } as const;

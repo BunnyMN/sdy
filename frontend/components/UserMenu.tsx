@@ -173,9 +173,11 @@ export default function UserMenu({
               role="menuitem"
               aria-label={t("web.action.logout")}
               title={t("web.action.logout")}
-              className="shrink-0 grid place-items-center w-8 h-8 rounded-lg text-muted transition hover:bg-red-50 hover:text-red-600"
+              // 44px to press; the negative margin keeps the header row the
+              // height its two lines of text make it.
+              className="-my-1.5 -mr-2 shrink-0 grid place-items-center w-11 h-11 rounded-lg text-muted transition hover:bg-danger-soft hover:text-danger"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut aria-hidden="true" className="w-4 h-4" />
             </button>
           </div>
 
@@ -184,7 +186,7 @@ export default function UserMenu({
               nothing the header does not already show. */}
           {showTenants && tenants && tenants.length > 1 && (
             <div className="py-1.5 border-b border-line">
-              <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <p className="px-4 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted">
                 {t("web.view.tenants")}
               </p>
               <TenantChoices
@@ -218,7 +220,7 @@ export default function UserMenu({
           )}
 
           <div className="px-4 py-3 space-y-3 border-b border-line">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-muted">
               {t("web.menu.preferences")}
             </p>
 
@@ -232,7 +234,7 @@ export default function UserMenu({
                     onClick={() => setLocale(option.code)}
                     aria-pressed={locale === option.code}
                     title={option.label}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase transition ${
+                    className={`min-h-11 min-w-11 px-2.5 rounded-md text-xs font-semibold uppercase transition ${
                       locale === option.code ? "bg-surface text-accent shadow-sm" : "text-muted hover:text-foreground"
                     }`}
                   >
@@ -251,12 +253,13 @@ export default function UserMenu({
                     type="button"
                     onClick={() => theme.updateTheme({ mode: value })}
                     aria-pressed={theme.mode === value}
+                    aria-label={t(labelKey)}
                     title={t(labelKey)}
-                    className={`grid place-items-center w-8 h-7 rounded-md transition ${
+                    className={`grid place-items-center w-11 h-11 rounded-md transition ${
                       theme.mode === value ? "bg-surface text-accent shadow-sm" : "text-muted hover:text-foreground"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon aria-hidden="true" className="w-4 h-4" />
                   </button>
                 ))}
               </div>
@@ -269,10 +272,10 @@ export default function UserMenu({
               setOpen(false);
               onLogout();
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="w-full min-h-11 flex items-center gap-3 px-4 py-3 text-sm font-medium text-danger hover:bg-danger-soft"
             role="menuitem"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut aria-hidden="true" className="w-4 h-4" />
             {t("web.action.logout")}
           </button>
         </div>

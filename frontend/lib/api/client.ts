@@ -14,6 +14,7 @@
 // check-api-boundaries.mjs is what says so now.
 
 import { apiBase } from "@/lib/apiBase";
+import { ApiError, fallbackErrorText } from "@/lib/errorMessage";
 
 export { apiBase };
 
@@ -32,14 +33,28 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     "Accept-Language": locale,
     ...(options.headers as Record<string, string>),
   };
-  const res = await fetch(`${apiBase()}${url}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase()}${url}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  } catch (cause) {
+    // A caller that aborted asked for this; it is not a failure to explain.
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    // Nothing came back. fetch says so in the browser's own English ("Failed
+    // to fetch", "Load failed"), which is what screens used to print; status 0
+    // and code "network" let lib/errorMessage.ts say it in the reader's words.
+    throw new ApiError(fallbackErrorText(0, locale), 0, "network", { cause });
+  }
 
   if (!res.ok) {
-    let errMessage = "Request failed";
+    // Not "Request failed": a screen that still prints `err.message` shows
+    // this to a person, so it is a sentence in their language, chosen by
+    // status. errorText() does better with the status and code below.
+    let errMessage = fallbackErrorText(res.status, locale);
+    let code: string | undefined;
     try {
       const errData = await res.json();
       // The platform answers {"error": …}. Not everything behind this client
@@ -49,14 +64,13 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
       // generic "Request failed" — the reason was on the wire and thrown away
       // one line before it could be read.
       errMessage = errData.error || errData.message || errMessage;
+      if (typeof errData.code === "string") code = errData.code;
     } catch {
       // ignore
     }
     // The status rides along so a caller can tell a transient failure from an
     // answer: a polling loop should retry a dropped connection and stop on a 409.
-    const failure = new Error(errMessage) as Error & { status?: number };
-    failure.status = res.status;
-    throw failure;
+    throw new ApiError(errMessage, res.status, code);
   }
 
   // 204 carries no body by definition, so parsing one would throw on success.

@@ -12,6 +12,17 @@
        цагаан бичиг цагаан дээр бичигдэж, товч уншигдахаа болдог байв. */
     --gerege-on-blue: #ffffff;
     --gerege-blue-soft: #eef6ff;
+    /* Accent-ийн ханасан дүүргэлт — дээр нь ҮРГЭЛЖ цагаан бичиг бичигдэнэ
+       (original дизайны толгойн зурвас). `--gerege-blue` нь харанхуй горимд
+       уншигдахын тулд цайвар болдог тул тэр зурвасыг будаж чадахгүй: цайвар
+       цэнхэр дээрх цагаан бичиг 3:1 хүрэхгүй. Энэ нь горимоос үл хамааран
+       гэрэл горимын accent хэвээр үлдэнэ. */
+    --gerege-accent-strong: #0064e1;
+    /* Хажуугийн цэсний мөрийн бичиг ба дүрс. Өмнө нь #475467 / #7d838c гэж
+       хатуу бичигдсэн тул харанхуй горимд бараан дээр бараан болж 2.6:1
+       хүрдэггүй байв. Гэрэлд: бичиг цагаан дээр 7.69:1, дүрс 4.78:1. */
+    --gerege-nav-fg: #475467;
+    --gerege-nav-icon: #6d737c;
     /* Chrome-profile style tonal surfaces derived from the selected accent.
        The page background matches sso.gerege.mn (--bg: #f9fafc) so the two
        products read as one platform when a user moves between them. */
@@ -109,6 +120,17 @@
     /* Бараан гадаргуун дээрх хяналтын хил: --gerege-surface (#12161c) дээр
        3.96:1, --gerege-surface-2 (#1b1f27) дээр 3.61:1, хуудсан дээр 4.25:1. */
     --gerege-border-input: #70767f;
+    /* Харанхуй горимын accent. Гэрэл горимын #0064e1 нь #12161c дээр 3.38:1 —
+       `text-accent` холбоос, идэвхтэй цэс уншигдахгүй. Цайвар хувилбар нь
+       гадаргуу дээр 6.66:1, surface-2 дээр 6.06:1, blue-soft дээр 5.05:1.
+       Дүүргэлт цайвар болсон тул дээрх бичиг нь бараан: 6.88:1. */
+    --gerege-blue: #5b9dff;
+    --gerege-blue-hover: #7db1ff;
+    --gerege-on-blue: #0b1220;
+    /* Цэсний мөр: chrome дээр 7.59:1, surface-2 дээр 6.91:1 (accent бүрийн
+       бараан chrome дээр ≥5.65:1). Дүрс нь --gerege-muted — 5.29:1. */
+    --gerege-nav-fg: #a3a8b0;
+    --gerege-nav-icon: #8e929a;
 
     --gerege-surface-hover: #1b1f27;
     --gerege-fg-subtle: #7c828b;
@@ -124,26 +146,40 @@
     --gerege-neutral-soft: #1b1f27; --gerege-neutral-border: #333a45; --gerege-neutral-fg: #c3c8d0;
   }
 
-  html[data-accent="teal"] {
+  html[data-accent="teal"], [data-accent-preview="teal"] {
+    --gerege-accent-strong: #008b99;
     --gerege-blue: #008b99; --gerege-blue-hover: #007582; --gerege-blue-soft: #e5f6f7;
     --gerege-bg: #f1f8f8; --gerege-chrome: #e8f5f5; --gerege-surface-2: #edf7f7; --gerege-border: #d7e9e9;
   }
-  html[data-accent="neutral"] {
+  html[data-accent="neutral"], [data-accent-preview="neutral"] {
+    --gerege-accent-strong: #475569;
     --gerege-blue: #475569; --gerege-blue-hover: #334155; --gerege-blue-soft: #f1f5f9;
     --gerege-bg: #f8fafc; --gerege-chrome: #ffffff; --gerege-surface-2: #f1f5f9; --gerege-border: #e2e8f0;
   }
-  html[data-accent="violet"] {
+  html[data-accent="violet"], [data-accent-preview="violet"] {
+    --gerege-accent-strong: #7656d6;
     --gerege-blue: #7656d6; --gerege-blue-hover: #6343bf; --gerege-blue-soft: #f0ebff;
     --gerege-bg: #f6f3fb; --gerege-chrome: #f0ecfa; --gerege-surface-2: #f3effa; --gerege-border: #e3dcf1;
   }
-  html[data-accent="emerald"] {
+  html[data-accent="emerald"], [data-accent-preview="emerald"] {
+    --gerege-accent-strong: #16845b;
     --gerege-blue: #16845b; --gerege-blue-hover: #0f6f4b; --gerege-blue-soft: #e8f6ef;
     --gerege-bg: #f1f8f5; --gerege-chrome: #e9f5ef; --gerege-surface-2: #eef7f2; --gerege-border: #d8e9df;
   }
-  html.dark[data-accent="teal"] { --gerege-blue-soft: #12383d; --gerege-bg: #0f1c20; --gerege-chrome: #14282d; --gerege-surface-2: #193238; --gerege-border: #29454a; }
-  html.dark[data-accent="neutral"] { --gerege-blue: #cbd5e1; --gerege-blue-hover: #e2e8f0; --gerege-on-blue: #0b1220; --gerege-blue-soft: #273244; --gerege-bg: #111827; --gerege-chrome: #18212f; --gerege-surface-2: #222d3d; --gerege-border: #334155; }
-  html.dark[data-accent="violet"] { --gerege-blue-soft: #2b2348; --gerege-bg: #171421; --gerege-chrome: #211b30; --gerege-surface-2: #292239; --gerege-border: #3b3250; }
-  html.dark[data-accent="emerald"] { --gerege-blue-soft: #173a2d; --gerege-bg: #101c18; --gerege-chrome: #162820; --gerege-surface-2: #1c3229; --gerege-border: #2d473d; }
+  /* Тохиргооны дэлгэцийн өнгөний дээж (`data-accent-preview`) нь дээрх
+     дүрмүүдийг хуваалцана — дээжинд hex бичихгүй, яг энэ утгыг харуулна.
+     Cobalt нь html дээр тусгай дүрэмгүй (анхдагч) тул дээжинд нь энд
+     тодорхой бичнэ. */
+  [data-accent-preview="cobalt"] { --gerege-blue: #0064e1; --gerege-accent-strong: #0064e1; }
+  html.dark [data-accent-preview="cobalt"] { --gerege-blue: #5b9dff; }
+
+  /* Бараан горимын accent бүр өөрийн chrome, surface-2, blue-soft гурав дээр
+     ≥4.5:1: teal 6.39 / 5.63 / 5.28, violet 6.36 / 5.81 / 5.59, emerald
+     6.97 / 6.16 / 5.64. Дүүргэлт дээрх бараан бичиг 7.16:1-ээс дээш. */
+  html.dark[data-accent="teal"], html.dark [data-accent-preview="teal"] { --gerege-blue: #2bb8c4; --gerege-blue-hover: #4fcbd5; --gerege-blue-soft: #12383d; --gerege-bg: #0f1c20; --gerege-chrome: #14282d; --gerege-surface-2: #193238; --gerege-border: #29454a; }
+  html.dark[data-accent="neutral"], html.dark [data-accent-preview="neutral"] { --gerege-blue: #cbd5e1; --gerege-blue-hover: #e2e8f0; --gerege-on-blue: #0b1220; --gerege-blue-soft: #273244; --gerege-bg: #111827; --gerege-chrome: #18212f; --gerege-surface-2: #222d3d; --gerege-border: #334155; }
+  html.dark[data-accent="violet"], html.dark [data-accent-preview="violet"] { --gerege-blue: #a891f5; --gerege-blue-hover: #bba8f8; --gerege-blue-soft: #2b2348; --gerege-bg: #171421; --gerege-chrome: #211b30; --gerege-surface-2: #292239; --gerege-border: #3b3250; }
+  html.dark[data-accent="emerald"], html.dark [data-accent-preview="emerald"] { --gerege-blue: #3cc48c; --gerege-blue-hover: #5fd3a2; --gerege-blue-soft: #173a2d; --gerege-bg: #101c18; --gerege-chrome: #162820; --gerege-surface-2: #1c3229; --gerege-border: #2d473d; }
 
   body {
     background-color: var(--gerege-bg);
@@ -177,14 +213,14 @@
   .gerege-shell { background: var(--gerege-bg); color: var(--gerege-fg); }
   .gerege-topbar { background: var(--gerege-chrome); border-color: var(--gerege-border); }
   .gerege-sidebar { background: var(--gerege-chrome); border-color: var(--gerege-border); }
-  .gerege-nav-link { color: #475467; border-radius: var(--gerege-radius-control); }
+  .gerege-nav-link { color: var(--gerege-nav-fg); border-radius: var(--gerege-radius-control); }
   .gerege-nav-link:hover { background: var(--gerege-surface-2); color: var(--gerege-fg); }
   .gerege-nav-link-active {
     color: var(--gerege-blue);
     background: var(--gerege-blue-soft);
     box-shadow: inset 3px 0 0 var(--gerege-blue);
   }
-  .gerege-nav-icon { color: #7d838c; }
+  .gerege-nav-icon { color: var(--gerege-nav-icon); }
   .gerege-nav-link-active .gerege-nav-icon { color: var(--gerege-blue); }
   /* The open/closed halves of a menu group.
 
@@ -274,7 +310,14 @@ html[data-density="compact"] .gerege-topbar { height: 56px; }
 html[data-density="compact"] main { padding-top: 1rem; padding-bottom: 1rem; }
 
 /* Original Theme preserves the repository's original Odoo-inspired shell. */
-html[data-design="original"] .gerege-topbar { background: #0064e1; border-color: #0054c2; color: white; }
+/* Суулгацын брэндийн өнгө байвал түүгээр, үгүй бол сонгосон accent-ын ханасан
+   дүүргэлтээр. `--gerege-blue` биш: тэр нь харанхуй горимд цайвар болж, дээрх
+   цагаан бичгийг уншигдахгүй болгоно. */
+html[data-design="original"] .gerege-topbar {
+  background: var(--brand-primary, var(--gerege-accent-strong));
+  border-color: color-mix(in srgb, var(--brand-primary, var(--gerege-accent-strong)) 85%, #000);
+  color: white;
+}
 
 /* The brand cell and the open app-context block use the same translucent white
    border as the search field, so every separator on the blue bar has one tone. */
@@ -327,6 +370,15 @@ html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .hover\:bg-su
   background-color: var(--gerege-surface-2) !important;
 }
 html[data-design="original"] .original-brand-mark { color: white; background: rgb(255 255 255 / 12%); }
+/* AI туслахын товч token-оор зурагддаг (цагаан зурвас дээр харагдахын тулд);
+   ханасан өнгөтэй зурвас дээр л цагаан тунгалаг хэлбэрт буцна. */
+html[data-design="original"] .gerege-topbar .gerege-copilot-trigger {
+  color: white; border-color: rgb(255 255 255 / 25%); background: rgb(255 255 255 / 10%);
+}
+html[data-design="original"] .gerege-topbar .gerege-copilot-trigger:hover { background: rgb(255 255 255 / 20%); }
+html[data-design="original"] .gerege-topbar .gerege-copilot-trigger.is-open {
+  border-color: rgb(255 255 255 / 40%); background: rgb(255 255 255 / 25%);
+}
 html[data-design="original"] .gerege-nav-link-active {
   color: var(--gerege-blue);
   background: var(--gerege-blue-soft);
@@ -374,7 +426,14 @@ html.dark :where(input, textarea)::placeholder { color: var(--gerege-muted); }
 
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  /* Хөдөлгөөн бүхэлдээ: шилжилт, гүйлгэлт, мөн animate-spin / animate-pulse
+     мэт давтагддаг animation. Сүүлийнх нь өмнө нь үлддэг байв. */
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* Scrollbar-ийн зай үргэлж нөөцлөгдөнө. Үгүй бол modal нээхэд (body-гийн
@@ -794,7 +853,11 @@ html.dark .profile{
     width: min(82vw, 18rem); height: auto; z-index: var(--z-modal);
     background: var(--gerege-chrome); border-right: 1px solid var(--gerege-border);
     box-shadow: 8px 0 28px rgb(0 0 0 / 16%);
-    transform: translateX(-100%); transition: transform 0.24s ease;
+    /* Parked off-screen is not the same as gone: without `visibility` a
+       keyboard user tabbed into the shut drawer and lost focus off the left
+       edge. Visibility waits for the slide to finish before it hides. */
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform 0.24s ease, visibility 0s linear 0.24s;
   }
   /* Open, and it has to say so twice.
      
@@ -819,7 +882,8 @@ html.dark .profile{
      nothing there knows the window is narrow. */
   .gerege-sidebar.is-mobile-open:not(.gerege-workarea .gerege-sidebar),
   .gerege-sidebar.is-mobile-open.is-desktop-open:not(.gerege-workarea .gerege-sidebar) {
-    transform: translateX(0);
+    transform: translateX(0); visibility: visible;
+    transition: transform 0.24s ease, visibility 0s;
   }
   .gerege-sidebar:not(.gerege-workarea .gerege-sidebar) > nav { display: none; }
   .gerege-menu-panel:not(.gerege-workarea .gerege-menu-panel),
@@ -918,72 +982,85 @@ html.dark .profile{
   .gerege-copilot-drawer { transition: visibility 0s; }
 }
 
-/* Native Shell workarea sidebar rules — must come AFTER @media (max-width: 900px) */
+/* Native Shell workarea sidebar rules — must come AFTER @media (max-width: 900px)
+
+   `!important` энд өмнө нь мөр бүрт байсан. Ихэнх нь шаардлагагүй: 900px-ийн
+   drawer-ын дүрмүүд `:not(.gerege-workarea …)`-ээр ажлын мужийг аль хэдийн
+   хасдаг тул энд өрсөлдөх зүйл нь зөвхөн `.gerege-sidebar` /
+   `.is-desktop-open` (0,2,0) ба элемент дээрх Tailwind утилитууд (0,1,0) —
+   доорх сонгуур бүр (0,2,0)-аас доошгүй бөгөөд файлын ДООР бичигдсэн тул
+   эх дарааллаар хожно. Цорын ганц үлдсэн нь `.gerege-main`-ийн доод зай:
+   `html[data-shell] .gerege-workarea main` (0,2,2) түүнийг 1.25rem болгох
+   тул тэр мөр л хүчээр үлдэнэ. */
 .gerege-workarea .gerege-sidebar,
 .gerege-workarea .gerege-sidebar.is-desktop-open,
 html[data-shell] .gerege-workarea .gerege-sidebar,
 html[data-shell] .gerege-workarea .gerege-sidebar.is-desktop-open,
 html[data-shell] .gerege-sidebar,
 html[data-shell] .gerege-sidebar.is-desktop-open {
-  position: static !important;
-  top: auto !important;
-  bottom: auto !important;
-  left: auto !important;
-  transform: none !important;
-  width: 18rem !important;
+  position: static;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  width: 18rem;
   /* Өндөр нь эцгийн эгнээнээс ирнэ. `min-height: 100dvh` тавибал ribbon ба
      footer-ийн эзэлсэн ~4.25rem-ээр доод тал нь тасарч, олон цэстэй tenant-д
      сүүлийн бичлэгүүд хүрэхгүй болно. */
-  height: auto !important;
-  box-shadow: none !important;
-  background: var(--gerege-chrome) !important;
-  z-index: var(--z-modal) !important;
+  height: auto;
+  box-shadow: none;
+  background: var(--gerege-chrome);
+  z-index: var(--z-modal);
 }
 
 .gerege-workarea .gerege-sidebar > nav,
 html[data-shell] .gerege-sidebar > nav {
-  display: flex !important;
-  width: 4rem !important;
-  min-width: 4rem !important;
-  flex-shrink: 0 !important;
+  display: flex;
+  width: 4rem;
+  min-width: 4rem;
+  flex-shrink: 0;
 }
 
 .gerege-workarea .gerege-menu-panel,
 .gerege-workarea .gerege-sidebar.is-desktop-open .gerege-menu-panel,
 html[data-shell] .gerege-menu-panel,
 html[data-shell] .gerege-sidebar.is-desktop-open .gerege-menu-panel {
-  display: block !important;
-  width: 14rem !important;
-  height: auto !important;
-  overflow-y: auto !important;
-  border-right: 1px solid var(--gerege-border) !important;
+  display: block;
+  width: 14rem;
+  height: auto;
+  overflow-y: auto;
+  border-right: 1px solid var(--gerege-border);
 }
 
 .gerege-workarea .gerege-main,
 html[data-shell] .gerege-main {
-  margin-left: 0 !important;
+  margin-left: 0;
   padding-bottom: 1.5rem !important;
 }
 
 /* Ribbon Bar & Footer rules for desktop shell workarea.
    Өндөр нь JSX-ийн `h-10` / `h-7`-тэй таарах ёстой: зөрвөл дотоод контент
-   голдоо тогтохгүй, sidebar-ын тооцоо ч зөрнө. */
+   голдоо тогтохгүй, sidebar-ын тооцоо ч зөрнө.
+   `!important`-гүй: элемент дээрх утилитууд яг эдгээр утгыг аль хэдийн
+   өгдөг, харин хүчээр бичсэн `display: flex` нь хэвлэх үеийн
+   `display: none !important`-ийг (файлд ӨМНӨ нь бичигдсэн тул) дарж,
+   цаасан дээр ribbon, footer хоёр гардаг байв. */
 .gerege-ribbon {
-  display: flex !important;
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
-  background: var(--gerege-chrome) !important;
-  border-bottom: 1px solid var(--gerege-border) !important;
-  z-index: var(--z-sticky) !important;
+  display: flex;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  background: var(--gerege-chrome);
+  border-bottom: 1px solid var(--gerege-border);
+  z-index: var(--z-sticky);
 }
 
 .gerege-footer {
-  display: flex !important;
-  height: 1.75rem !important;
-  min-height: 1.75rem !important;
-  background: var(--gerege-chrome) !important;
-  border-top: 1px solid var(--gerege-border) !important;
-  z-index: var(--z-sticky) !important;
+  display: flex;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  background: var(--gerege-chrome);
+  border-top: 1px solid var(--gerege-border);
+  z-index: var(--z-sticky);
 }
 
 /* ── Шугамын нүүр дэлгэц ─────────────────────────────────────────────────

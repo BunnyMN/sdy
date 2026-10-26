@@ -43,8 +43,13 @@ const config: Config = {
 
         // The one accent, plus what may be written on it.
         accent: "var(--gerege-blue)",
+        "accent-hover": "var(--gerege-blue-hover)",
         "accent-soft": "var(--gerege-blue-soft)",
         "on-accent": "var(--gerege-on-blue)",
+        // The saturated fill that always carries white text, in both modes —
+        // `accent` lightens in dark mode so it can be read as text, which makes
+        // it the wrong colour to put white text on.
+        "accent-strong": "var(--gerege-accent-strong)",
 
         // Borders. `line` is decoration; `input` is the interactive-control
         // border WCAG 1.4.11 holds to 3:1 on every surface it sits on.
@@ -72,6 +77,13 @@ const config: Config = {
         neutral: "var(--gerege-neutral-fg)",
         "neutral-soft": "var(--gerege-neutral-soft)",
         "neutral-border": "var(--gerege-neutral-border)",
+      },
+      // One step below `text-xs`, for captions, eyebrows and table meta.
+      // Screens wrote `text-[11px]` and `text-[10px]` by hand before this —
+      // two arbitrary values for one role, and neither of them scaled with
+      // the compact density's smaller root size.
+      fontSize: {
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
       borderRadius: {
         sm: "var(--gerege-radius-sm)",
