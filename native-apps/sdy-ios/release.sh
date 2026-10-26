@@ -3,6 +3,7 @@
 #
 # Шаардлага:
 #   Config/Signing.xcconfig  (SDY_TEAM_ID = XXXXXXXXXX)
+#   Xcode → Settings → Accounts дээр нэвтэрсэн Apple ID хангалттай. Эсвэл
 #   App Store Connect API key (Users and Access → Integrations → App Store Connect API):
 #     export ASC_KEY_ID=XXXXXXXXXX
 #     export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -13,10 +14,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-: "${ASC_KEY_ID:?ASC_KEY_ID тохируулна уу}"
-: "${ASC_ISSUER_ID:?ASC_ISSUER_ID тохируулна уу}"
-: "${ASC_KEY_PATH:?ASC_KEY_PATH тохируулна уу (.p8 файлын зам)}"
-[ -f "$ASC_KEY_PATH" ] || { echo "API key олдсонгүй: $ASC_KEY_PATH" >&2; exit 1; }
 [ -f Config/Signing.xcconfig ] || { echo "Config/Signing.xcconfig алга. Signing.example.xcconfig-оос хуулж Team ID бичнэ үү." >&2; exit 1; }
 grep -Eq '^SDY_TEAM_ID *= *[A-Z0-9]{10}' Config/Signing.xcconfig || { echo "Config/Signing.xcconfig дотор SDY_TEAM_ID буруу." >&2; exit 1; }
 
@@ -31,10 +28,14 @@ xcodegen generate --quiet
 
 ARCHIVE="build/SDYMember-$NEXT.xcarchive"
 EXPORT="build/export-$NEXT"
-AUTH=(-allowProvisioningUpdates
-      -authenticationKeyPath "$ASC_KEY_PATH"
-      -authenticationKeyID "$ASC_KEY_ID"
-      -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+AUTH=(-allowProvisioningUpdates)
+# API key өгөгдөөгүй бол Xcode-д нэвтэрсэн бүртгэлийг ашиглана.
+if [ -n "${ASC_KEY_ID:-}" ]; then
+  [ -f "${ASC_KEY_PATH:-}" ] || { echo "API key олдсонгүй: ${ASC_KEY_PATH:-}" >&2; exit 1; }
+  AUTH+=(-authenticationKeyPath "$ASC_KEY_PATH"
+         -authenticationKeyID "$ASC_KEY_ID"
+         -authenticationKeyIssuerID "${ASC_ISSUER_ID:?ASC_ISSUER_ID тохируулна уу}")
+fi
 
 xcodebuild -project SDYMember.xcodeproj -scheme SDYMember -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
