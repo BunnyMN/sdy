@@ -1,0 +1,4 @@
+{"motions":[
+ {"id":"m1","event_id":"7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","title":"Салбарын 2027 оны үйл ажиллагааны төлөвлөгөө","body":"Төлөвлөгөөний төслийг батлах эсэх.","proposer_id":"u-9","proposer_name":"Ганбат Д.","status":"voting","content_hash":"ab12","opened_at":"@D(0,19:00)","closed_at":null,"result":"","yes":9,"no":2,"abstain":1,"note":"","created_at":"@D(-2,10:00)","my_vote":null},
+ {"id":"m2","event_id":"7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","title":"Гишүүнчлэлийн хураамжийг 2027 онд өөрчлөхгүй байх","body":"","proposer_id":"u-5","proposer_name":"Сарангэрэл Б.","status":"decided","content_hash":"cd34","opened_at":"@D(0,18:45)","closed_at":"@D(0,18:58)","result":"approved","yes":15,"no":1,"abstain":0,"note":"","created_at":"@D(-3,10:00)","my_vote":{"choice":"yes","status":"signed"}}
+],"eligible":17,"can_vote":true,"signing_ready":true,"vote_points":5,"can_manage":false,"event_status":"planned","me":"u-1"}

@@ -1,0 +1,8 @@
+// SDY Гишүүн — бүх тохиргооны суурь.
+//
+// Team ID-г энд БИЧИХГҮЙ. Config/Signing.xcconfig (gitignored) дотор
+// `SDY_TEAM_ID = XXXXXXXXXX` гэж бичнэ; Signing.example.xcconfig-оос хуулна.
+// Файл байхгүй үед `#include?` чимээгүй алгасаж, симулятор дээр барих нь
+// гарын үсэггүйгээр (CODE_SIGNING_ALLOWED=NO) ажилласаар байна.
+SDY_TEAM_ID =
+#include? "Signing.xcconfig"

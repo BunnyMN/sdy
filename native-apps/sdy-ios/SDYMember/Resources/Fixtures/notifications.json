@@ -1,0 +1,5 @@
+{"items":[
+ {"id":"n1","kind":"event","title":"Шинэ арга хэмжээ: Залуучуудын форум","body":"Бүртгэл нээгдлээ. Суудал хязгаартай.","path":"/module/events/3f6c2a10-8b1e-4c55-9a8e-1d2f3a4b5c61","created_at":"@D(0,09:15)","read_at":null},
+ {"id":"n2","kind":"dues","title":"10-р сарын хураамж ногдлоо","body":"Төлөх хугацаа 10-р сарын 20.","path":"/member/dues","created_at":"@D(-6,10:00)","read_at":null},
+ {"id":"n3","kind":"vote","title":"Санал хураалт нээгдлээ","body":"«Салбарын 2027 оны төлөвлөгөө» асуудлаар санал өгнө үү.","path":"/module/events/7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","created_at":"@D(-1,19:05)","read_at":"@D(-1,20:00)"}
+],"unread":2,"has_more":false,"next_offset":3}

@@ -1,0 +1,2 @@
+{"charges":[{"id":"c3","tenant_id":"t-1","branch":"СДЯ Дархан-Уул салбар","period":"2026-10","amount":10000,"paid":0,"balance":10000,"waived":false}],
+ "payments":[{"id":"pay1","branch":"СДЯ Дархан-Уул салбар","amount":10000,"status":"approved","reference":"УБ90010112 2026-08","review_note":"","created_at":"@D(-60,09:00)"}],"has_more":false,"next_offset":1}
