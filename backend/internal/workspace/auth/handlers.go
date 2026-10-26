@@ -141,13 +141,13 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		ReportSessionFailure(w, err)
 		return
 	}
-	SetSessionCookie(w, token, expiresAt)
+	bodyToken := DeliverSession(w, r, token, expiresAt)
 
 	audit.Record(r.Context(), tenantID, userID, "auth.login_success", "user", map[string]any{"email": req.Email})
 	telemetry.RecordLogin(telemetry.LoginPassword, true)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(WithSessionToken(map[string]any{
 		"expires_at": expiresAt,
 		"user": map[string]any{
 			"id":        userID,
@@ -156,7 +156,7 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			"email":     req.Email,
 			"is_admin":  isAdmin,
 		},
-	})
+	}, bodyToken))
 }
 
 // loginFailureStatement counts one failed sign-in and locks the account once
@@ -350,16 +350,18 @@ func (h *Handlers) HandleSwitchTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SetSessionCookie(w, token, expiresAt)
+	// The old token stops working here, so a native client that holds it in
+	// the Keychain has to be handed the new one — see DeliverSession.
+	bodyToken := DeliverSession(w, r, token, expiresAt)
 	// Recorded against the tenant being left, because that is the trail an
 	// administrator of it reads: this person stopped acting here, and when.
 	audit.Record(r.Context(), claims.WorkspaceID, claims.UserID, "auth.tenant_switched", "session",
 		map[string]any{"from": claims.WorkspaceID, "to": req.TenantID})
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	httpx.JSON(w, http.StatusOK, WithSessionToken(map[string]any{
 		"tenant_id":  req.TenantID,
 		"switched":   true,
 		"expires_at": expiresAt,
-	})
+	}, bodyToken))
 }
 
 // HandleLogoutEverywhere ends every session the caller holds.

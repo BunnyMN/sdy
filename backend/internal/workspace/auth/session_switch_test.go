@@ -2,12 +2,16 @@ package auth_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/memo"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/auth"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -183,5 +187,151 @@ func TestSavedWorkspaceSelectionLosesUnavailableMemberships(t *testing.T) {
 		if err != nil || len(allowed) != 1 || allowed[0] != current {
 			t.Fatalf("unavailable organisation could be selected again: %v err=%v", allowed, err)
 		}
+	}
+}
+
+// A browser never sends X-Session-Transport, and its answer must not change:
+// the token stays in the HttpOnly cookie and never appears in the body.
+func TestABrowserKeepsItsSessionInTheCookie(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	recorder := httptest.NewRecorder()
+
+	bodyToken := auth.DeliverSession(recorder, request, "browser-token", time.Now().Add(time.Hour))
+	if bodyToken != "" {
+		t.Fatalf("a browser was handed its token in the body: %q", bodyToken)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != auth.SessionCookieName || cookies[0].Value != "browser-token" || !cookies[0].HttpOnly {
+		t.Fatalf("cookies=%v, want one HttpOnly %s", cookies, auth.SessionCookieName)
+	}
+	body := auth.WithSessionToken(map[string]any{"expires_at": "x"}, bodyToken)
+	if _, present := body["session_token"]; present {
+		t.Fatal("session_token is in a browser's answer")
+	}
+}
+
+// The native app opts in, and gets the token in the body and no cookie — a
+// cookie it stored and replayed would make every write a CSRF-checked one.
+func TestANativeClientThatAsksGetsABearerToken(t *testing.T) {
+	for _, value := range []string{"bearer", "Bearer", " BEARER "} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/eid/poll", nil)
+		request.Header.Set(auth.SessionTransportHeader, value)
+		recorder := httptest.NewRecorder()
+
+		bodyToken := auth.DeliverSession(recorder, request, "app-token", time.Now().Add(time.Hour))
+		if bodyToken != "app-token" {
+			t.Fatalf("%q: body token=%q, want app-token", value, bodyToken)
+		}
+		if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+			t.Fatalf("%q: a bearer client was also given a cookie: %v", value, cookies)
+		}
+		if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("%q: Cache-Control=%q, want no-store", value, got)
+		}
+		body := auth.WithSessionToken(map[string]any{}, bodyToken)
+		if body["session_token"] != "app-token" {
+			t.Fatalf("%q: body=%v", value, body)
+		}
+	}
+
+	// Anything else is a browser.
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	request.Header.Set(auth.SessionTransportHeader, "cookie")
+	if auth.WantsBearerSession(request) {
+		t.Fatal("a transport other than bearer was read as bearer")
+	}
+}
+
+// End to end through the password sign-in: the token in the body is a working
+// session and is accepted back as Authorization: Bearer.
+func TestPasswordSignInHandsANativeClientItsToken(t *testing.T) {
+	pool := openPool(t)
+	userID, _ := seedMember(t, pool)
+	ctx := context.Background()
+	hash, err := auth.HashPassword("Password123!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var email string
+	if err := pool.QueryRow(ctx,
+		`UPDATE registry.users SET password_hash=$2 WHERE id=$1 RETURNING email`, userID, hash).Scan(&email); err != nil {
+		t.Fatal(err)
+	}
+	store := auth.NewSessionStore(pool, time.Hour)
+	h := auth.New(auth.Deps{DB: pool, Sessions: store, Suspended: memo.New[bool](auth.SuspendedTTL)})
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
+		strings.NewReader(`{"email":"`+email+`","password":"Password123!"}`))
+	request.Header.Set(auth.SessionTransportHeader, "bearer")
+	recorder := httptest.NewRecorder()
+	h.HandleLogin(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("sign-in: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("a bearer sign-in also set cookies: %v", cookies)
+	}
+	var answer struct {
+		SessionToken string `json:"session_token"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.SessionToken == "" {
+		t.Fatalf("no session_token in %s", recorder.Body.String())
+	}
+
+	bearer := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	bearer.Header.Set("Authorization", "Bearer "+answer.SessionToken)
+	claims, err := store.Resolve(ctx, auth.TokenFromRequest(bearer))
+	if err != nil || claims.UserID != userID {
+		t.Fatalf("the body token does not resolve to the account: %v %+v", err, claims)
+	}
+}
+
+// Switching rotates the token, so a native client has to be handed the new one
+// or it is signed out by its own tap.
+func TestSwitchingTenantHandsANativeClientTheRotatedToken(t *testing.T) {
+	pool := openPool(t)
+	userID, first := seedMember(t, pool)
+	second := seedTenant(t, pool, userID, true)
+	ctx := context.Background()
+	store := auth.NewSessionStore(pool, time.Hour)
+	h := auth.New(auth.Deps{DB: pool, Sessions: store, Suspended: memo.New[bool](auth.SuspendedTTL)})
+
+	token, _, err := store.Create(ctx, userID, first, "eid-app", "test", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := store.Resolve(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/switch-tenant",
+		strings.NewReader(`{"tenant_id":"`+second+`"}`))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set(auth.SessionTransportHeader, "bearer")
+	request = request.WithContext(auth.WithUserContext(request.Context(), claims))
+	recorder := httptest.NewRecorder()
+	h.HandleSwitchTenant(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("switch: %d %s", recorder.Code, recorder.Body.String())
+	}
+	var answer struct {
+		SessionToken string `json:"session_token"`
+		TenantID     string `json:"tenant_id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.SessionToken == "" || answer.SessionToken == token {
+		t.Fatalf("session_token=%q, want the rotated token", answer.SessionToken)
+	}
+	next, err := store.Resolve(ctx, answer.SessionToken)
+	if err != nil || next.WorkspaceID != second {
+		t.Fatalf("rotated token: %v %+v", err, next)
+	}
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("a bearer switch also set cookies: %v", cookies)
 	}
 }

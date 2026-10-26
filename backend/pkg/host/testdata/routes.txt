@@ -86,6 +86,7 @@ GET /api/v1/menus
 GET /api/v1/oauth2/client-info
 GET /api/v1/oauth2/consent
 GET /api/v1/profile
+GET /api/v1/profile/deletion-request
 GET /api/v1/profile/preferences
 GET /api/v1/setup/status
 GET /api/v1/store/apps
@@ -188,6 +189,7 @@ POST /api/v1/membership/join-requests/{id}
 POST /api/v1/membership/members/{userID}/status
 POST /api/v1/membership/transfers/{id}
 POST /api/v1/oauth2/consent
+POST /api/v1/profile/deletion-request
 POST /api/v1/profile/identities/eid
 POST /api/v1/profile/identities/unlink
 POST /api/v1/push-tokens

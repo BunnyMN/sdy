@@ -299,13 +299,13 @@ func (h *Handlers) HandleBindingEIDPoll(w http.ResponseWriter, r *http.Request) 
 		auth.ReportSessionFailure(w, err)
 		return
 	}
-	auth.SetSessionCookie(w, token, expiresAt)
+	bodyToken := auth.DeliverSession(w, r, token, expiresAt)
 	audit.Record(r.Context(), tenantID, userID, "auth.identity_bound", "identity", map[string]any{
 		"issuer": binding.Issuer, "email": binding.Email, "verified_by": "eid",
 	})
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	httpx.JSON(w, http.StatusOK, auth.WithSessionToken(map[string]any{
 		"state": result.State, "expires_at": expiresAt, "bound": true,
-	})
+	}, bodyToken))
 }
 
 // SweepExpiredBindings clears abandoned attempts. Nothing depends on a dead

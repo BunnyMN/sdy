@@ -523,6 +523,9 @@ func (s *Service) StartBackgroundJobs(ctx context.Context) {
 	s.reportScheduler.Start(ctx)
 	// Every sign-in writes a session row and nothing else ever removes one.
 	s.sessions.StartHousekeeping(ctx)
+	// Accounts whose owners asked for deletion and did not come back within
+	// the grace period lose their personal details — see profile/deletion.go.
+	s.profile.StartDeletionHousekeeping(ctx)
 	// An impersonation whose session has expired is over; the row that says so
 	// is what both the console and the organisation read.
 	async.Go("impersonation-sweep", func() {
@@ -819,6 +822,12 @@ func (s *Service) Routes(r chi.Router) {
 			// group and answering only for the caller — see profile_handlers.go.
 			pr.Get("/profile", s.profile.HandleProfile)
 			pr.Post("/profile/identities/unlink", s.identity.HandleUnlinkIdentity)
+			// Asking for this account to be deleted, and where that request
+			// stands. The caller's own account only — there is no id in the
+			// route — and the request revokes the session that made it. See
+			// profile/deletion.go and migration 00115.
+			pr.Post("/profile/deletion-request", s.profile.HandleRequestDeletion)
+			pr.Get("/profile/deletion-request", s.profile.HandleDeletionStatus)
 			// Linking an eID to the account already signed in. The start half
 			// stays on the public /auth/eid/start — starting a session proves
 			// nothing — and only the finish needs to know who is asking.

@@ -579,6 +579,56 @@ func SetSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) 
 	})
 }
 
+// SessionTransportHeader is how a native client asks for its session in the
+// answer rather than in a cookie.
+//
+// The iOS member app keeps its token in the Keychain and sends it back as
+// `Authorization: Bearer`, which TokenFromRequest already accepts. What it
+// could not do was learn the token: every sign-in put it only in an HttpOnly
+// cookie, which is the right place for a browser and the wrong one for an app —
+// a cookie that URLSession stores and replays makes every write a cookie-bearing
+// write, and those are what security.CSRFMiddleware refuses without an Origin
+// a phone does not send.
+//
+// So the app says `X-Session-Transport: bearer` and gets `session_token` in the
+// JSON body, and no cookie. Browsers never send the header: it is not on the
+// CORS allow-list (pkg/host/server.go), so a cross-origin page cannot ask, and
+// a same-origin script that could ask could already act with the cookie.
+const SessionTransportHeader = "X-Session-Transport"
+
+// WantsBearerSession reports whether the caller opted into SessionTransportHeader.
+func WantsBearerSession(r *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get(SessionTransportHeader)), "bearer")
+}
+
+// DeliverSession hands a freshly issued (or rotated) session to the client:
+// as the cookie for a browser, or — for a caller that sent
+// `X-Session-Transport: bearer` — as a value the handler puts in its JSON body
+// under "session_token". It returns that value, empty for a browser.
+//
+// Every handler that issues a session in a JSON answer goes through this
+// rather than SetSessionCookie, so the two transports cannot drift apart.
+// Redirect-based sign-ins (SSO, Google) keep the cookie: they end in a
+// browser, never in the app.
+func DeliverSession(w http.ResponseWriter, r *http.Request, token string, expiresAt time.Time) string {
+	if WantsBearerSession(r) {
+		w.Header().Add("Vary", SessionTransportHeader)
+		w.Header().Set("Cache-Control", "no-store")
+		return token
+	}
+	SetSessionCookie(w, token, expiresAt)
+	return ""
+}
+
+// WithSessionToken adds "session_token" to an answer when DeliverSession
+// returned one, and leaves a browser's answer exactly as it was.
+func WithSessionToken(body map[string]any, bodyToken string) map[string]any {
+	if bodyToken != "" {
+		body["session_token"] = bodyToken
+	}
+	return body
+}
+
 // ClearSessionCookie expires the session cookie on the client. Its attributes
 // have to match the ones it was set with, or the browser treats it as a
 // different cookie and leaves the original in place.
