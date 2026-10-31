@@ -188,6 +188,7 @@ POST /api/v1/me/notifications/{id}/read
 POST /api/v1/me/transfers
 POST /api/v1/me/transfers/{id}/cancel
 POST /api/v1/membership/join-requests/{id}
+POST /api/v1/membership/members/{userID}/position
 POST /api/v1/membership/members/{userID}/status
 POST /api/v1/membership/transfers/{id}
 POST /api/v1/oauth2/consent
