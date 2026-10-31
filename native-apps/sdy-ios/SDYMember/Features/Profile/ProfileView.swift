@@ -7,69 +7,59 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                Section {
-                    HStack(spacing: 14) {
-                        Text(initials)
-                            .font(.title2.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 56, height: 56)
-                            .background(Theme.accent, in: Circle())
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.me?.name ?? "—").font(.title3.bold())
-                            if let email = app.me?.email, !email.isEmpty {
-                                Text(email).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            if let branch = app.record?.approvedBranch {
-                                Label(branch.name, systemImage: "building.2").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .accessibilityElement(children: .combine)
-                }
-
-                Section("Гишүүнчлэл") {
-                    link(.record, "Миний гишүүнчлэл", "person.text.rectangle")
-                    link(.transfers, "Харьяалал шилжүүлэх", "arrow.left.arrow.right")
-                    link(.notifications, "Мэдэгдэл", "bell", badge: app.unreadCount)
-                }
-
+            HeroScaffold(heroHeight: 420) {
+                header
+            } content: {
                 if app.hasApprovedBranch {
-                    Section("Оролцоо") {
-                        link(.participation, "Ирц ба оноо", "star.circle")
-                        link(.leaderboard, "Тэргүүлэгчид", "trophy")
-                        link(.history, "Миний оролцоо, төлөлтийн түүх", "clock.arrow.circlepath")
+                    HStack(spacing: 12) {
+                        tile(.participation, "Ирц ба оноо", "star.fill")
+                        tile(.leaderboard, "Тэргүүлэгчид", "trophy.fill")
                     }
+                    .rise(0)
                 }
 
-                Section("Тусламж ба нууцлал") {
+                RowGroup {
+                    row(.record, "Миний гишүүнчлэл", "person.text.rectangle.fill")
+                    RowDivider()
+                    row(.transfers, "Харьяалал шилжүүлэх", "arrow.left.arrow.right")
+                    RowDivider()
+                    row(.notifications, "Мэдэгдэл", "bell.fill", trailing: app.unreadCount > 0 ? "\(app.unreadCount)" : nil)
+                    if app.hasApprovedBranch {
+                        RowDivider()
+                        row(.history, "Миний оролцоо, төлөлтийн түүх", "clock.arrow.circlepath")
+                    }
+                }
+                .rise(1)
+
+                RowGroup {
                     Link(destination: AppConfig.privacyURL) {
-                        Label("Нууцлалын бодлого", systemImage: "hand.raised")
+                        IconRow(title: "Нууцлалын бодлого", systemImage: "hand.raised.fill")
                     }
-                    .frame(minHeight: Theme.minTap)
+                    .buttonStyle(PressableStyle(scale: 0.98))
+                    RowDivider()
                     Link(destination: AppConfig.supportURL) {
-                        Label("Тусламж, холбоо барих", systemImage: "questionmark.circle")
+                        IconRow(title: "Тусламж, холбоо барих", systemImage: "questionmark")
                     }
-                    .frame(minHeight: Theme.minTap)
-                    link(.about, "Апп-ын тухай", "info.circle")
+                    .buttonStyle(PressableStyle(scale: 0.98))
+                    RowDivider()
+                    row(.about, "Апп-ын тухай", "info")
                 }
+                .rise(2)
 
-                Section {
+                RowGroup {
                     Button { confirmLogout = true } label: {
-                        Label("Гарах", systemImage: "rectangle.portrait.and.arrow.right")
-                            .frame(minHeight: Theme.minTap)
+                        IconRow(title: "Гарах", systemImage: "rectangle.portrait.and.arrow.right", chevron: false)
                     }
+                    .buttonStyle(PressableStyle(scale: 0.98))
+                    RowDivider()
                     NavigationLink(value: HomeRoute.deleteAccount) {
-                        Label("Бүртгэл устгах", systemImage: "trash")
-                            .foregroundStyle(.red)
-                            .frame(minHeight: Theme.minTap)
+                        IconRow(title: "Бүртгэл устгах", systemImage: "trash.fill", tint: .white, tile: .red)
                     }
+                    .buttonStyle(PressableStyle(scale: 0.98))
                 }
+                .rise(3)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Профайл")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeRoute.self) { $0.destination }
             .offlineBanner()
             .confirmationDialog("Гарах уу?", isPresented: $confirmLogout, titleVisibility: .visible) {
@@ -86,16 +76,86 @@ struct ProfileView: View {
         }
     }
 
+    private var header: some View {
+        VStack(spacing: 0) {
+            HStack {
+                GlassCircleButton(systemImage: "bell.fill", label: "Мэдэгдэл", dot: app.unreadCount > 0) {
+                    path.append(.notifications)
+                }
+                Spacer()
+                GlassCircleButton(systemImage: "power", label: "Гарах") { confirmLogout = true }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 70)
+
+            Spacer(minLength: 0)
+
+            Text(initials)
+                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 128, height: 128)
+                .background(
+                    Circle().fill(LinearGradient(colors: [Theme.brandRed, Color(white: 0.12)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                )
+                .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 2))
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
+                .accessibilityHidden(true)
+
+            Text(cardName)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.top, 18)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if let branch = app.record?.approvedBranch {
+                Label(branch.name, systemImage: "building.2.fill")
+                    .font(.subheadline).foregroundStyle(.white.opacity(0.7))
+                    .padding(.top, 6)
+            } else if let email = app.me?.email, !email.isEmpty {
+                Text(email).font(.subheadline).foregroundStyle(.white.opacity(0.7)).padding(.top, 6)
+            }
+            Spacer(minLength: 0).frame(height: 56)
+        }
+        .padding(.horizontal, 20)
+        .accessibilityElement(children: .contain)
+    }
+
     private var initials: String {
         let parts = (app.me?.name ?? "").split(separator: " ")
         return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined()
     }
 
-    private func link(_ route: HomeRoute, _ title: String, _ icon: String, badge: Int = 0) -> some View {
+    /// "Батболд Ганзориг" → "Б. ГАНЗОРИГ".
+    private var cardName: String {
+        let parts = (app.me?.name ?? "").split(separator: " ").map(String.init)
+        guard parts.count >= 2, let initial = parts[0].first else { return (app.me?.name ?? "—").uppercased() }
+        return "\(initial). \(parts[1])".uppercased()
+    }
+
+    private func tile(_ route: HomeRoute, _ title: String, _ icon: String) -> some View {
         NavigationLink(value: route) {
-            Label(title, systemImage: icon).frame(minHeight: Theme.minTap)
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(LinearGradient(colors: [Theme.brandRed, Theme.brandRed.opacity(0.7)],
+                                               startPoint: .top, endPoint: .bottom),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(.white)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.06), lineWidth: 1))
         }
-        .badge(badge)
+        .buttonStyle(PressableStyle())
+    }
+
+    private func row(_ route: HomeRoute, _ title: String, _ icon: String, trailing: String? = nil) -> some View {
+        NavigationLink(value: route) {
+            IconRow(title: title, systemImage: icon, trailing: trailing)
+        }
+        .buttonStyle(PressableStyle(scale: 0.98))
     }
 }
 

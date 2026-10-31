@@ -94,6 +94,7 @@ struct CheckInTabView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .silkListBackground()
             .navigationTitle("Ирц")
             .navigationDestination(for: HomeRoute.self) { $0.destination }
             .refreshable { await loader.load() }

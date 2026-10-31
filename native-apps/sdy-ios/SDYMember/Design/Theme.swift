@@ -10,6 +10,13 @@ enum Theme {
     static let cardBackground = Color(.secondarySystemGroupedBackground)
     static let groupedBackground = Color(.systemGroupedBackground)
     static let minTap: CGFloat = 44
+
+    // The dark design: a black canvas, graphite cards, white type.
+    static let canvas = Color.black
+    static let card = Color(white: 0.11)
+    static let cardRaised = Color(white: 0.17)
+    static let secondaryText = Color(white: 0.62)
+    static let tertiaryText = Color(white: 0.42)
 }
 
 /// A short coloured label that never relies on colour alone: it always has text

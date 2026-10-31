@@ -109,6 +109,7 @@ struct EventDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .silkListBackground()
         .refreshable {
             await loader.load()
             await discussion.load()

@@ -6,6 +6,7 @@ enum AppConfig {
     static let host = "e-sdy.mn"
     static let webOrigin = URL(string: "https://e-sdy.mn")!
     static let apiBase = URL(string: "https://e-sdy.mn/api/v1")!
+    static let websiteURL = URL(string: "https://e-sdy.mn")!
     static let privacyURL = URL(string: "https://e-sdy.mn/privacy")!
     static let supportURL = URL(string: "https://e-sdy.mn/support")!
     static let eidAppStoreURL = URL(string: "https://apps.apple.com/mn/search?term=eID%20Mongolia")!

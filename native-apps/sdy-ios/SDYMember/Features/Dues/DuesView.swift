@@ -100,6 +100,7 @@ struct DuesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .silkListBackground()
         .refreshable { await load() }
     }
 
