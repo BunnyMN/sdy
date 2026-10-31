@@ -70,11 +70,11 @@ struct LoginView: View {
             }
             .padding(.top, 24)
 
-            EmblemArt()
-                .frame(height: 320)
+            MemberCardArt()
+                .frame(height: 300)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 30)
         }
         .padding(.horizontal, 20)
     }
@@ -345,61 +345,64 @@ private struct QuickLink: View {
     }
 }
 
-/// The sign-in screen's centrepiece: the SDY mark on a red glow, with rings
-/// that ripple outwards like a voice carrying, and a slowly turning light
-/// around it. Holds still when Reduce Motion is on.
-struct EmblemArt: View {
+/// The SDY member card drawn in code, tilted and slowly swaying as if it
+/// were lying on the silk — the sign-in screen's centrepiece.
+struct MemberCardArt: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breathe = false
+    @State private var sway = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                // The glow behind the mark.
-                Circle()
-                    .fill(RadialGradient(colors: [Theme.brandRed.opacity(0.75), Theme.brandRed.opacity(0.18), .clear],
-                                         center: .center, startRadius: 10, endRadius: 170))
-                    .frame(width: 340, height: 340)
-                    .scaleEffect(breathe ? 1.06 : 0.94)
-
-                // Ripples: each ring grows and fades, one after another.
-                ForEach(0..<3, id: \.self) { i in
-                    let phase = (t / 3.2 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                    Circle()
-                        .strokeBorder(.white.opacity(0.28 * (1 - phase)), lineWidth: 1.5)
-                        .frame(width: 150 + 190 * phase, height: 150 + 190 * phase)
-                }
-
-                // A turning ring of light.
-                Circle()
-                    .strokeBorder(AngularGradient(colors: [.clear, .white.opacity(0.75), Theme.brandRed, .clear],
-                                                  center: .center), lineWidth: 2.5)
-                    .frame(width: 186, height: 186)
-                    .rotationEffect(.degrees(t * 40))
-
-                Circle()
-                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
-                    .frame(width: 186, height: 186)
-
-                // The mark.
-                Image("Logo")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 128, height: 128)
-                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous)
-                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.05)],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2))
-                    .shadow(color: Theme.brandRed.opacity(0.6), radius: 24, y: 8)
-                    .shadow(color: .black.opacity(0.5), radius: 12, y: 10)
-                    .offset(y: breathe ? -4 : 4)
-            }
+        ZStack {
+            card
+                .rotationEffect(.degrees(-14))
+                .rotation3DEffect(.degrees(sway ? 10 : -6), axis: (x: 0.4, y: 1, z: 0), perspective: 0.5)
+                .offset(y: sway ? -6 : 6)
+                .shadow(color: .black.opacity(0.6), radius: 30, x: 0, y: 24)
         }
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { sway = true }
         }
         .accessibilityHidden(true)
+    }
+
+    private var card: some View {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(LinearGradient(colors: [Color(red: 0.42, green: 0.06, blue: 0.09), Color(red: 0.14, green: 0.02, blue: 0.04), .black],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(
+                ZStack {
+                    ForEach(0..<5, id: \.self) { i in
+                        Circle()
+                            .strokeBorder(.white.opacity(0.07 - Double(i) * 0.01), lineWidth: 1.2)
+                            .frame(width: 180 + CGFloat(i) * 70)
+                            .offset(x: -70, y: -40)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            )
+            .overlay(alignment: .topLeading) {
+                Image("Logo").resizable().scaledToFill().frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(22)
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ГИШҮҮНИЙ КАРТ").font(.caption.weight(.bold)).tracking(2).foregroundStyle(.white.opacity(0.6))
+                    Text("E-SDY").font(.system(size: 30, weight: .heavy)).foregroundStyle(.white)
+                }
+                .padding(22)
+            }
+            .overlay(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(red: 0.95, green: 0.82, blue: 0.55), Color(red: 0.7, green: 0.55, blue: 0.3)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 50, height: 38)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.2), lineWidth: 1))
+                    .padding(24)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(LinearGradient(colors: [.white.opacity(0.45), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2))
+            .frame(width: 320, height: 200)
     }
 }
