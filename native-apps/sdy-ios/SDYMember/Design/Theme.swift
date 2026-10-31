@@ -151,6 +151,20 @@ enum Labels {
         }
     }
 
+    /// Албан тушаал. Shown only — positions grant no permission.
+    static func position(_ code: String?) -> String? {
+        switch code {
+        case "chair": return "Тэргүүн"
+        case "vice_chair": return "Дэд тэргүүн"
+        case "secretary": return "Нарийн бичиг"
+        case "auditor": return "Хяналтын хороо"
+        case "board": return "Тэргүүлэгч"
+        case "finance": return "Санхүүч"
+        case "member": return "Энгийн гишүүн"
+        default: return nil
+        }
+    }
+
     static func taskStatus(_ status: String) -> String {
         switch status {
         case "offered": return "Санал болгосон"

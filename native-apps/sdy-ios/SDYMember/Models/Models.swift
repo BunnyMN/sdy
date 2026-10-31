@@ -101,6 +101,8 @@ struct Affiliation: Decodable, Hashable, Identifiable {
     @DefaultText var status: String
     var memberSince: String?
     @DefaultFalse var hasAccess: Bool
+    /// Албан тушаал (chair, board…); older servers send none.
+    var position: String?
 }
 
 struct MemberProfile: Decodable, Hashable {

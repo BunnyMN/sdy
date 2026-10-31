@@ -98,9 +98,19 @@ struct ProfileView: View {
                 .padding(.top, 18)
                 .lineLimit(1).minimumScaleFactor(0.7)
             if let branch = app.record?.approvedBranch {
+                if let position = Labels.position(branch.position) {
+                    Label(position, systemImage: "star.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                        .padding(.top, 10)
+                        .accessibilityLabel("Албан тушаал: \(position)")
+                }
                 Label(branch.name, systemImage: "building.2.fill")
                     .font(.subheadline).foregroundStyle(.white.opacity(0.7))
-                    .padding(.top, 6)
+                    .padding(.top, 8)
             } else if let email = app.me?.email, !email.isEmpty {
                 Text(email).font(.subheadline).foregroundStyle(.white.opacity(0.7)).padding(.top, 6)
             }
@@ -193,6 +203,9 @@ struct MemberRecordView: View {
                         Text(m.name).font(.headline)
                         Text("\(m.isPrimary ? "Үндсэн харьяалал" : "Бусад харьяалал / ажиллах эрх") · \(Labels.membershipStatus(m.status))")
                             .font(.subheadline)
+                        if let position = Labels.position(m.position) {
+                            Text("Албан тушаал: \(position)").font(.subheadline.weight(.semibold))
+                        }
                         if let since = m.memberSince {
                             Text("Гишүүнчлэл эхэлсэн: \(Formatters.day(since))").font(.caption).foregroundStyle(.secondary)
                         }
