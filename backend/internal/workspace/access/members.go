@@ -31,6 +31,7 @@ func (h *Handlers) HandleMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.db.Query(r.Context(), `SELECT jsonb_build_object('user_id',m.user_id,'name',u.name,'email',u.email,
 		'is_primary',m.is_primary,'status',m.member_status,'member_since',m.member_since,'has_access',m.active,
+		'position',m.position,
 		'roles',COALESCE((SELECT jsonb_agg(r.code ORDER BY r.code) FROM workspace.membership_roles mr
 		JOIN workspace.roles r ON r.id=mr.role_id AND r.tenant_id=m.tenant_id AND r.active WHERE mr.membership_id=m.id),'[]'::jsonb))
 		FROM workspace.memberships m JOIN registry.users u ON u.id=m.user_id
@@ -94,6 +95,43 @@ func (h *Handlers) HandleMemberStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.forgetGrants(c.WorkspaceID)
+	httpx.JSON(w, 200, map[string]bool{"ok": true})
+}
+
+// HandleMemberPosition is POST /api/v1/membership/members/{userID}/position.
+// The position (Тэргүүн, Тэргүүлэгч…) is shown, not enforced: it grants and
+// removes no permission. registry.set_member_position checks the caller is
+// the branch's membership administrator and records the change (00117).
+func (h *Handlers) HandleMemberPosition(w http.ResponseWriter, r *http.Request) {
+	c, err := auth.UserFromContext(r.Context())
+	if err != nil {
+		httpx.Error(w, 401, "unauthorized")
+		return
+	}
+	user := chi.URLParam(r, "userID")
+	if _, err := uuid.Parse(user); err != nil {
+		httpx.Error(w, 400, "invalid member")
+		return
+	}
+	var input struct {
+		Position string `json:"position"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+		httpx.Error(w, 400, "invalid position")
+		return
+	}
+	if _, err := h.db.Exec(r.Context(), `SELECT registry.set_member_position($1,$2,$3)`, c.WorkspaceID, user, input.Position); err != nil {
+		var pg *pgconn.PgError
+		if errors.As(err, &pg) {
+			codes := map[string]int{"22023": 400, "42501": 403, "P0002": 404}
+			if status, ok := codes[pg.Code]; ok {
+				httpx.Error(w, status, pg.Message)
+				return
+			}
+		}
+		httpx.Error(w, 500, "could not change the position")
+		return
+	}
 	httpx.JSON(w, 200, map[string]bool{"ok": true})
 }
 

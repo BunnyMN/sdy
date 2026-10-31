@@ -900,6 +900,8 @@ func (s *Service) Routes(r chi.Router) {
 				mr.Post("/join-requests/{id}", s.access.HandleDecideJoinRequest)
 				mr.Get("/members", s.access.HandleMembers)
 				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/status", s.access.HandleMemberStatus)
+				// Албан тушаал — shown, not enforced (migration 00117).
+				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/position", s.access.HandleMemberPosition)
 				mr.Get("/summary", s.access.HandleMemberSummary)
 			})
 

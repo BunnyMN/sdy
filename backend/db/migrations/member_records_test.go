@@ -184,3 +184,34 @@ func TestReadmissionDoesNotRestoreInactiveStaffPrivileges(t *testing.T) {
 		})
 	}
 }
+
+// A position is set only by the branch's membership administrator, only to
+// one of the seven, and the member reads it in their own record (00117).
+func TestAMemberPositionIsSetByTheBranchAdminAndReadByTheMember(t *testing.T) {
+	f := newTransferFixture(t)
+	if _, err := f.call(t.Context(), f.source, f.admin,
+		`SELECT registry.set_member_position($1,$2,'board')::text`, f.source, f.member); err != nil {
+		t.Fatalf("admin could not set a position: %v", err)
+	}
+	got, err := f.call(t.Context(), "", f.member,
+		`SELECT coalesce((SELECT string_agg(x->>'position', ',') FROM jsonb_array_elements(registry.my_member_record()->'memberships') x
+		  WHERE x->>'tenant_id' = $1), '')`, f.source)
+	if err != nil || got != "board" {
+		t.Fatalf("member record position = %q, err=%v", got, err)
+	}
+	for name, c := range map[string]struct{ user, position, code string }{
+		"member sets own": {f.member, "chair", "42501"},
+		"not a position":  {f.admin, "king", "22023"},
+	} {
+		_, err := f.call(t.Context(), f.source, c.user, `SELECT registry.set_member_position($1,$2,$3)::text`, f.source, f.member, c.position)
+		var pg *pgconn.PgError
+		if !errors.As(err, &pg) || pg.Code != c.code {
+			t.Errorf("%s: err=%v, want %s", name, err, c.code)
+		}
+	}
+	_, err = f.call(t.Context(), f.source, f.admin, `UPDATE workspace.memberships SET position='chair' WHERE user_id=$1 RETURNING id::text`, f.member)
+	var pg *pgconn.PgError
+	if !errors.As(err, &pg) || pg.Code != "42501" {
+		t.Fatalf("the tenant role wrote a position directly: %v", err)
+	}
+}

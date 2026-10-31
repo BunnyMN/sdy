@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { memberApi, type ManagedMember, type MemberStatus } from "@/lib/api/member";
+import { MEMBER_POSITIONS, memberApi, type ManagedMember, type MemberPosition, type MemberStatus } from "@/lib/api/member";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
 import { Banner, fieldClass, LoadingBlock, Modal } from "@/components/ui";
@@ -12,6 +12,7 @@ export default function MembersPage() {
   const { t } = useI18n();
   const { allowed, loading, isAdmin } = useAccess("membership.manage");
   const statusError = useErrorMessage({ codes: { branch_transfer_required: "membership.branch_transfer_required" }, fallback: "membership.record.status_failed" });
+  const positionError = useErrorMessage({ fallback: "membership.position.failed" });
   const [data, setData] = useState<Awaited<ReturnType<typeof memberApi.members>> | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -33,6 +34,12 @@ export default function MembersPage() {
     catch (err) { setError(statusError(err)); }
     finally { setBusy(false); }
   }
+  async function setPosition(member: ManagedMember, position: MemberPosition) {
+    setBusy(true); setError(""); setNotice("");
+    try { await memberApi.position(member.user_id, position); setNotice(t("membership.position.saved")); await load(); }
+    catch (err) { setError(positionError(err)); }
+    finally { setBusy(false); }
+  }
   async function more() {
     if (!data) return; setBusy(true);
     try { const next = await memberApi.members(query, data.next_offset); setData({ ...next, members: [...data.members, ...next.members] }); }
@@ -52,6 +59,13 @@ export default function MembersPage() {
       <div><h2 className="font-medium">{m.name}</h2><p className="break-all text-sm text-muted">{m.email}</p></div>
       <p className="text-sm">{t(`membership.record.status.${m.status}`)}{m.is_primary && ` · ${t("membership.record.primary")}`}</p>
       {m.member_since && <p className="text-sm text-muted">{t("membership.record.joined")}: {memberDate(m.member_since)}</p>}
+      {isAdmin
+        ? <label className="flex flex-wrap items-center gap-2 text-sm"><span>{t("membership.position.label")}:</span>
+            <select value={m.position ?? "member"} disabled={busy} onChange={e => void setPosition(m, e.target.value as MemberPosition)} className={`${fieldClass} min-h-11`}>
+              {MEMBER_POSITIONS.map(p => <option key={p} value={p}>{t(`membership.position.${p}`)}</option>)}
+            </select>
+            <span className="text-muted">{t("membership.position.hint")}</span></label>
+        : <p className="text-sm">{t("membership.position.label")}: {t(`membership.position.${m.position ?? "member"}`)}</p>}
       <p className="text-sm text-muted">{t("membership.record.work_roles")}: {m.roles.join(", ") || "—"}</p>
       {isAdmin && <button onClick={() => { setEditing(m); setStatus(m.status === "none" ? "active" : m.status); setReason(""); setError(""); }} className="min-h-11 rounded-md border border-input px-4">{m.status === "none" ? t("membership.record.confirm_primary") : t("membership.record.change_status")}</button>}
     </article>)}
