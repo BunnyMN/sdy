@@ -13,7 +13,8 @@ struct EventsListView: View {
 
     var body: some View {
         NavigationStack(path: $app.eventsPath) {
-            HeroScaffold(heroHeight: 230, onRefresh: { await loader.load() }) {
+            HeroScaffold(heroHeight: 230, onRefresh: { await loader.load() },
+                         compact: AnyView(Text("Арга хэмжээ").font(.headline).foregroundStyle(.white))) {
                 HeroTitle(title: "Арга хэмжээ", subtitle: app.me?.tenantName)
             } content: {
                 if let events = loader.value {

@@ -1,27 +1,38 @@
 import SwiftUI
 
-/// The dark, slowly moving "silk" behind every screen's header: three soft
-/// ribbons of graphite light with a breath of SDY red, drawn in code so the app
-/// carries no borrowed imagery. Holds still when Reduce Motion is on.
+/// The dark, slowly moving background behind every screen's header, in the
+/// theme the member chose (Профайл → Өнгө төрх): silk ribbons in red, silver
+/// or gold, or a starfield. All drawn in code, so the app carries no borrowed
+/// imagery. Holds still when Reduce Motion is on.
 struct SilkBackground: View {
     var redTint: Double = 0.35
+    /// Shows a given theme instead of the chosen one (the theme previews).
+    var forcedTheme: AppTheme?
+    @AppStorage(AppTheme.storageKey) private var chosen = AppTheme.silk.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var theme: AppTheme { forcedTheme ?? AppTheme(rawValue: chosen) ?? .silk }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.canvas))
-                ribbon(&ctx, size, t: t, phase: 0, y: 0.30, depth: 0.22,
-                       colors: [Color(white: 0.10), Color(white: 0.34), Color(white: 0.12)])
-                ribbon(&ctx, size, t: t * 0.8, phase: 2.1, y: 0.48, depth: 0.18,
-                       colors: [Color(white: 0.06), Theme.brandRed.opacity(redTint), Color(white: 0.20)])
-                ribbon(&ctx, size, t: t * 0.6, phase: 4.2, y: 0.66, depth: 0.14,
-                       colors: [Color(white: 0.14), Color(white: 0.42), Color(white: 0.08)])
+                if theme == .space {
+                    Starfield.draw(&ctx, size, t: t)
+                } else if theme == .glass {
+                    Aurora.draw(&ctx, size, t: t)
+                } else {
+                    let r = theme.ribbons(redTint: redTint)
+                    ribbon(&ctx, size, t: t, phase: 0, y: 0.30, depth: 0.22, colors: r.0)
+                    ribbon(&ctx, size, t: t * 0.8, phase: 2.1, y: 0.48, depth: 0.18, colors: r.1)
+                    ribbon(&ctx, size, t: t * 0.6, phase: 4.2, y: 0.66, depth: 0.14, colors: r.2)
+                }
             }
         }
         .overlay(LinearGradient(colors: [.black.opacity(0.55), .clear, .black.opacity(0.35)],
                                 startPoint: .top, endPoint: .bottom))
+        .animation(.easeInOut(duration: 0.5), value: chosen)
         .accessibilityHidden(true)
     }
 
@@ -58,13 +69,36 @@ struct HeroScaffold<Header: View, Content: View>: View {
     var heroHeight: CGFloat = 320
     var overlap: CGFloat = 32
     var onRefresh: (() async -> Void)?
-    @ViewBuilder var header: () -> Header
-    @ViewBuilder var content: () -> Content
+    /// What stays pinned at the top once the header has collapsed — a name,
+    /// a small avatar. Nil keeps no bar.
+    var compact: AnyView?
+    /// The header's top row (greeting, round buttons): held still at the top
+    /// of the screen — pulling down moves everything under it, not it — and
+    /// faded out as the page scrolls up. The header leaves room for it.
+    var pinned: AnyView?
+    /// How much the header grows per point pulled down (0 = stays its size).
+    var pullZoom: CGFloat = 0
+    var header: () -> Header
+    var content: () -> Content
+    @State private var offset: CGFloat = 0
+
+    init(heroHeight: CGFloat = 320, overlap: CGFloat = 32, onRefresh: (() async -> Void)? = nil,
+         compact: AnyView? = nil, pinned: AnyView? = nil, pullZoom: CGFloat = 0,
+         @ViewBuilder header: @escaping () -> Header, @ViewBuilder content: @escaping () -> Content) {
+        self.heroHeight = heroHeight
+        self.overlap = overlap
+        self.onRefresh = onRefresh
+        self.compact = compact
+        self.pinned = pinned
+        self.pullZoom = pullZoom
+        self.header = header
+        self.content = content
+    }
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(spacing: 0) {
-                StretchyHero(height: heroHeight, overlap: overlap, header: header)
+                StretchyHero(height: heroHeight, overlap: overlap, pullZoom: pullZoom, header: header)
                 sheet
             }
         }
@@ -72,6 +106,46 @@ struct HeroScaffold<Header: View, Content: View>: View {
         .background(Theme.canvas.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
         .refreshable { await onRefresh?() }
+        .onPreferenceChange(HeroOffsetKey.self) { offset = $0 }
+        .overlay(alignment: .top) { pinnedRow }
+        .overlay(alignment: .top) { compactBar }
+    }
+
+    @ViewBuilder
+    private var pinnedRow: some View {
+        if let pinned {
+            let fade = offset < 0 ? max(0, 1 + Double(offset / 140)) : 1
+            pinned
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+                .opacity(fade)
+                .allowsHitTesting(fade > 0.5)
+        }
+    }
+
+    /// The pinned bar fades in over the last stretch before the sheet reaches
+    /// the top, as the header shrinks away underneath it.
+    @ViewBuilder
+    private var compactBar: some View {
+        if let compact {
+            let start = heroHeight - 190
+            let progress = min(max((-offset - start) / 70, 0), 1)
+            compact
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .frame(height: 52)
+                .background {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Color.black.opacity(0.35))
+                        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.08)).frame(height: 0.5) }
+                        .ignoresSafeArea(edges: .top)
+                }
+                .offset(y: (1 - progress) * -8)
+                .opacity(progress)
+                .allowsHitTesting(progress > 0.5)
+                .animation(.easeOut(duration: 0.15), value: progress > 0.5)
+        }
     }
 
     private var sheet: some View {
@@ -95,25 +169,38 @@ struct HeroScaffold<Header: View, Content: View>: View {
 private struct StretchyHero<Header: View>: View {
     let height: CGFloat
     let overlap: CGFloat
+    var pullZoom: CGFloat = 0
     let header: () -> Header
 
     var body: some View {
         GeometryReader { geo in
             let y: CGFloat = geo.frame(in: .scrollView).minY
             let pull: CGFloat = max(0, y)
-            let fade: Double = y < 0 ? max(0, 1 + Double(y / (height * 0.7))) : 1
+            let fade: Double = y < 0 ? max(0, 1 + Double(y / (height * 0.6))) : 1
+            // Scrolling up shrinks the header towards the top as it fades;
+            // pulling down zooms the silk, and the header too if asked.
+            let scale: CGFloat = y < 0 ? max(0.8, 1 + y / (height * 1.6)) : 1 + min(pull * pullZoom, 0.35)
             ZStack(alignment: .top) {
                 SilkBackground()
                     .frame(height: height + pull + overlap)
+                    .scaleEffect(1 + pull / 500, anchor: .bottom)
                     .offset(y: y > 0 ? -y : -y * 0.5)
                 header()
                     .frame(height: height, alignment: .top)
-                    .offset(y: y < 0 ? -y * 0.35 : 0)
+                    .scaleEffect(scale, anchor: y < 0 ? .top : .center)
+                    .offset(y: y < 0 ? -y * 0.45 : 0)
                     .opacity(fade)
             }
+            .preference(key: HeroOffsetKey.self, value: y)
         }
         .frame(height: height)
     }
+}
+
+/// How far the hero has scrolled (negative going up), read by HeroScaffold.
+private struct HeroOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// The header of a list screen (Events, Dues): a large title on the silk.

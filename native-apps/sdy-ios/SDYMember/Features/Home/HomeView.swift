@@ -28,7 +28,7 @@ struct HomeView: View {
                 } else if let error = loader.error {
                     ErrorStateView(error: error) { Task { await loader.load() } }
                 } else {
-                    HeroScaffold(header: { heroHeader(nil) }) { SkeletonCards() }
+                    HeroScaffold(heroHeight: 416, pinned: AnyView(topRow(nil)), header: { heroHeader(nil) }) { SkeletonCards() }
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -42,7 +42,8 @@ struct HomeView: View {
     }
 
     private func content(_ data: HomeData) -> some View {
-        HeroScaffold(heroHeight: 400, onRefresh: { await loader.load(); await app.refreshUnread() }) {
+        HeroScaffold(heroHeight: 416, onRefresh: { await loader.load(); await app.refreshUnread() },
+                     compact: AnyView(compactBar(data)), pinned: AnyView(topRow(data))) {
             heroHeader(data)
         } content: {
             if app.hasApprovedBranch {
@@ -69,33 +70,8 @@ struct HomeView: View {
 
     private func heroHeader(_ data: HomeData?) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                Button { app.tab = .profile } label: { AvatarView(size: 50) }
-                    .buttonStyle(PressableStyle(scale: 0.9))
-                    .accessibilityLabel("Профайл")
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(greeting).font(.subheadline).foregroundStyle(.white.opacity(0.65))
-                    Text(displayName(data?.profile.name ?? app.me?.name ?? ""))
-                        .font(.title2.weight(.bold)).foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-                Spacer()
-                HStack(spacing: 12) {
-                    if app.hasApprovedBranch {
-                        GlassCircleButton(systemImage: pointsHidden ? "eye.slash.fill" : "eye.fill",
-                                          label: pointsHidden ? "Оноог харуулах" : "Оноог нуух") {
-                            withAnimation(.snappy) { pointsHidden.toggle() }
-                        }
-                    }
-                    GlassCircleButton(systemImage: "bell.fill",
-                                      label: app.unreadCount > 0 ? "Мэдэгдэл, \(app.unreadCount) уншаагүй" : "Мэдэгдэл",
-                                      dot: app.unreadCount > 0) {
-                        app.homePath.append(HomeRoute.notifications)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 70)
+            // Room for the pinned top row (topRow), which HeroScaffold draws.
+            Color.clear.frame(height: 124)
 
             Spacer(minLength: 12)
 
@@ -146,6 +122,48 @@ struct HomeView: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 52)
+        }
+    }
+
+    /// The greeting and the round buttons: held in place by HeroScaffold.
+    private func topRow(_ data: HomeData?) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button { app.tab = .profile } label: { AvatarView(size: 50) }
+                .buttonStyle(PressableStyle(scale: 0.9))
+                .accessibilityLabel("Профайл")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greeting).font(.subheadline).foregroundStyle(.white.opacity(0.65))
+                Text(displayName(data?.profile.name ?? app.me?.name ?? ""))
+                    .font(.title2.weight(.bold)).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Spacer()
+            HStack(spacing: 12) {
+                if app.hasApprovedBranch {
+                    GlassCircleButton(systemImage: pointsHidden ? "eye.slash.fill" : "eye.fill",
+                                      label: pointsHidden ? "Оноог харуулах" : "Оноог нуух") {
+                        withAnimation(.snappy) { pointsHidden.toggle() }
+                    }
+                }
+                GlassCircleButton(systemImage: "bell.fill",
+                                  label: app.unreadCount > 0 ? "Мэдэгдэл, \(app.unreadCount) уншаагүй" : "Мэдэгдэл",
+                                  dot: app.unreadCount > 0) {
+                    app.homePath.append(HomeRoute.notifications)
+                }
+            }
+        }
+    }
+
+    /// Pinned at the top once the header has scrolled away.
+    private func compactBar(_ data: HomeData) -> some View {
+        HStack(spacing: 10) {
+            AvatarView(size: 32)
+            Text(displayName(data.profile.name)).font(.headline).foregroundStyle(.white).lineLimit(1)
+            Spacer()
+            if app.hasApprovedBranch {
+                Text(pointsHidden ? "•••• оноо" : "\(data.points ?? 0) оноо")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.8))
+            }
         }
     }
 
@@ -404,6 +422,7 @@ extension HomeRoute {
         case .about: AboutView()
         case .deleteAccount: DeleteAccountView()
         case .joinRequest: JoinRequestView()
+        case .appearance: ThemePickerView()
         }
     }
 }

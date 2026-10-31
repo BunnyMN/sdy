@@ -7,7 +7,12 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            HeroScaffold(heroHeight: 420) {
+            HeroScaffold(heroHeight: 420, compact: AnyView(
+                HStack(spacing: 10) {
+                    AvatarView(size: 32)
+                    Text(cardName).font(.headline).foregroundStyle(.white).lineLimit(1)
+                }
+            ), pinned: AnyView(topRow), pullZoom: 1 / 450) {
                 header
             } content: {
                 if app.hasApprovedBranch {
@@ -41,6 +46,8 @@ struct ProfileView: View {
                         IconRow(title: "Тусламж, холбоо барих", systemImage: "questionmark")
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
+                    RowDivider()
+                    row(.appearance, "Өнгө төрх", "paintbrush.fill")
                     RowDivider()
                     row(.about, "Апп-ын тухай", "info")
                 }
@@ -78,15 +85,8 @@ struct ProfileView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            HStack {
-                GlassCircleButton(systemImage: "bell.fill", label: "Мэдэгдэл", dot: app.unreadCount > 0) {
-                    path.append(.notifications)
-                }
-                Spacer()
-                GlassCircleButton(systemImage: "power", label: "Гарах") { confirmLogout = true }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 70)
+            // Room for the pinned round buttons (topRow), drawn by HeroScaffold.
+            Color.clear.frame(height: 120)
 
             Spacer(minLength: 0)
 
@@ -108,6 +108,17 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 20)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The round buttons: held in place by HeroScaffold.
+    private var topRow: some View {
+        HStack {
+            GlassCircleButton(systemImage: "bell.fill", label: "Мэдэгдэл", dot: app.unreadCount > 0) {
+                path.append(.notifications)
+            }
+            Spacer()
+            GlassCircleButton(systemImage: "power", label: "Гарах") { confirmLogout = true }
+        }
     }
 
     /// "Батболд Ганзориг" → "Б. ГАНЗОРИГ".

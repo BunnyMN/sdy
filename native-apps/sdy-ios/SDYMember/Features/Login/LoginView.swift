@@ -1,4 +1,3 @@
-import CoreMotion
 import SwiftUI
 
 struct LoginView: View {
@@ -71,10 +70,9 @@ struct LoginView: View {
             }
             .padding(.top, 24)
 
-            WordmarkArt()
-                .frame(height: 230)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 34)
+            PosterStage(reel: reel)
+                .frame(height: 440)
+                .padding(.top, 14)
 
             PosterCaption(reel: reel)
                 .padding(.top, 8)
@@ -346,88 +344,5 @@ private struct QuickLink: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(PressableStyle(scale: 0.9))
-    }
-}
-
-/// The SDY Darkhan-Uul wordmark in silver on the silk: a sweep of light runs
-/// across the letters every few seconds, and the mark tilts a little as the
-/// phone does, so the metal seems to catch the room's light. Still when
-/// Reduce Motion is on.
-struct WordmarkArt: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @StateObject private var tilt = DeviceTilt()
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            // One sweep every 4 s: it crosses in the first 1.4 s, then rests.
-            let cycle = t.truncatingRemainder(dividingBy: 4) / 1.4
-            let sweep = min(cycle, 1.2)
-            ZStack {
-                Ellipse()
-                    .fill(RadialGradient(colors: [Theme.brandRed.opacity(0.55), .clear],
-                                         center: .center, startRadius: 10, endRadius: 190))
-                    .frame(width: 380, height: 240)
-                    .blur(radius: 10)
-
-                mark
-                    .overlay {
-                        LinearGradient(stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .white.opacity(0.85), location: 0.5),
-                            .init(color: .clear, location: 1),
-                        ], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: 110)
-                        .rotationEffect(.degrees(18))
-                        .offset(x: -260 + 520 * sweep)
-                        .blendMode(.plusLighter)
-                        .mask(mark)
-                        .allowsHitTesting(false)
-                    }
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 12)
-                    .shadow(color: Theme.brandRed.opacity(0.35), radius: 30, y: 6)
-                    .rotation3DEffect(.degrees(tilt.pitch * 10), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
-                    .rotation3DEffect(.degrees(tilt.roll * 14), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
-            }
-        }
-        .onAppear { if !reduceMotion { tilt.start() } }
-        .onDisappear { tilt.stop() }
-        .accessibilityHidden(true)
-    }
-
-    private var mark: some View {
-        Image("Wordmark")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 300)
-    }
-}
-
-/// How far the phone leans from where it was when the screen opened, in
-/// units of roughly a quarter turn, smoothed and clamped. Device motion needs
-/// no permission.
-@MainActor
-final class DeviceTilt: ObservableObject {
-    @Published var pitch: Double = 0
-    @Published var roll: Double = 0
-    private let manager = CMMotionManager()
-    private var reference: CMAttitude?
-
-    func start() {
-        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
-        manager.deviceMotionUpdateInterval = 1 / 30
-        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self, let attitude = motion?.attitude else { return }
-            if self.reference == nil { self.reference = attitude.copy() as? CMAttitude }
-            if let reference = self.reference { attitude.multiply(byInverseOf: reference) }
-            let clamp: (Double) -> Double = { max(-1, min(1, $0 / (.pi / 4))) }
-            self.pitch += (clamp(attitude.pitch) - self.pitch) * 0.15
-            self.roll += (clamp(attitude.roll) - self.roll) * 0.15
-        }
-    }
-
-    func stop() {
-        manager.stopDeviceMotionUpdates()
-        reference = nil
     }
 }
