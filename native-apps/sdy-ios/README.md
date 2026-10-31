@@ -149,7 +149,8 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
 ## Үлдсэн гар ажил
 
 1. `Config/Signing.xcconfig`-д Team ID бичих.
-2. e-sdy.mn дээр AASA файл байршуулах (дээрх JSON, Team ID-тэй).
+2. AASA: `frontend/app/.well-known/apple-app-site-association/route.ts` үүнийг `APPLE_TEAM_ID`-аас үүсгэнэ;
+   GitHub variable `APPLE_TEAM_ID=T65Z28HF29` → `deploy.yml` хостын `.env`-д бичнэ. `curl -i https://e-sdy.mn/.well-known/apple-app-site-association` → 200 JSON.
 3. 1024×1024 AppIcon мастер зураг.
 4. App Store Connect-д апп үүсгэх, API key, `./release.sh`.
 5. Демо бүртгэл (нууц үгтэй, туршилтын салбарт батлагдсан гишүүн) үүсгэж Review notes-д бичих.

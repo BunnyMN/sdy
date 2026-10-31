@@ -209,6 +209,9 @@ provider-ийг өгнө. Гишүүний бүртгэл, салбарын үй
 **Хостын `.env` нь CI-гаас ирнэ.** Хост дээр гараар нэмсэн мөр дараагийн
 rollout дээр арчигдана; шинэ тохиргоо нь `deploy.yml`-ийн heredoc-т, утга нь
 GitHub secret/variable-д орно ([Ажиллагаа](OPERATIONS.md)).
+Жишээ нь esdy iOS аппын universal link-д хэрэгтэй `APPLE_TEAM_ID`
+(`T65Z28HF29`) нь GitHub variable → `deploy.yml` → хостын `.env` →
+frontend-ийн `/.well-known/apple-app-site-association` гэж дамжина; хоосон бол 404.
 
 **Хост дээр гараар хийгдсэн, CI хүрдэггүй зүйлс:**
 
