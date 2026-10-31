@@ -68,7 +68,7 @@ targets:
           - geregesmartid
         UILaunchScreen:
           UIColorName: LaunchBackground
-          UIImageName: LaunchLogo
+          UIImageName: LaunchMark
           UIImageRespectsSafeAreaInsets: true
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

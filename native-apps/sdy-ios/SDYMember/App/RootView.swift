@@ -21,20 +21,80 @@ struct RootView: View {
                 }
             }
         }
-        .animation(.default, value: app.phase)
+        .animation(.easeInOut(duration: 0.4), value: app.phase)
     }
 }
 
+/// Shown while the session is checked. It begins exactly where the system
+/// launch screen ends — the silver wordmark, centred, on black — then lets
+/// the silk fade in, sweeps light across the letters and runs a slim loader,
+/// so the hand-over to Home is black to black with nothing jumping.
 struct LaunchView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var silk = false
+
     var body: some View {
         ZStack {
-            Color("LaunchBackground").ignoresSafeArea()
-            VStack(spacing: 24) {
-                Image("LaunchLogo").resizable().scaledToFit().frame(maxWidth: 240)
-                    .accessibilityLabel("SDY")
-                ProgressView().tint(.white)
+            Theme.canvas.ignoresSafeArea()
+            SilkBackground()
+                .ignoresSafeArea()
+                .opacity(silk ? 1 : 0)
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+                let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+                // Centred like the launch screen's image; the loader hangs below
+                // without moving it.
+                ShimmerWordmark(width: 213, sweep: min((t.truncatingRemainder(dividingBy: 2.6)) / 1.2, 1.2))
+                    .overlay(alignment: .bottom) { LoaderBar(phase: t).offset(y: 48) }
             }
         }
+        .onAppear { withAnimation(.easeOut(duration: 0.9)) { silk = true } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("SDY. Ачаалж байна")
+    }
+}
+
+/// The wordmark with a band of light crossing it; `sweep` runs 0 → 1 across.
+struct ShimmerWordmark: View {
+    var width: CGFloat
+    var sweep: Double
+
+    var body: some View {
+        mark
+            .overlay {
+                LinearGradient(stops: [.init(color: .clear, location: 0),
+                                       .init(color: .white.opacity(0.85), location: 0.5),
+                                       .init(color: .clear, location: 1)],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(width: width * 0.35)
+                    .rotationEffect(.degrees(18))
+                    .offset(x: -width * 0.85 + width * 1.7 * sweep)
+                    .blendMode(.plusLighter)
+                    .mask(mark)
+            }
+            .shadow(color: .black.opacity(0.6), radius: 12, y: 10)
+    }
+
+    private var mark: some View {
+        Image("Wordmark").resizable().scaledToFit().frame(width: width)
+    }
+}
+
+/// A slim track with a light that glides back and forth.
+struct LoaderBar: View {
+    var phase: Double
+
+    var body: some View {
+        let x = (sin(phase * 2.4) + 1) / 2
+        Capsule()
+            .fill(.white.opacity(0.12))
+            .frame(width: 120, height: 3)
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(LinearGradient(colors: [Theme.brandRed.opacity(0), Theme.brandRed, .white],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: 44, height: 3)
+                    .offset(x: CGFloat(x) * (120 - 44))
+            }
     }
 }
 

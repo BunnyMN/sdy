@@ -1,8 +1,10 @@
+import CoreMotion
 import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var app: AppModel
     @StateObject private var model = EIDLoginModel()
+    @StateObject private var reel = PosterReel()
     @State private var showPassword = false
     @FocusState private var regFocused: Bool
 
@@ -36,19 +38,21 @@ struct LoginView: View {
         .scrollDismissesKeyboard(.interactively)
         .scrollIndicators(.hidden)
         .background(alignment: .top) {
-            SilkBackground(redTint: 0.5).frame(height: 620).ignoresSafeArea()
+            PosterBackdrop(reel: reel, height: 640).ignoresSafeArea()
         }
         .background(Color(red: 0.05, green: 0.055, blue: 0.075).ignoresSafeArea())
         .sheet(isPresented: $showPassword) {
             PasswordLoginSheet { await app.signedIn() }
         }
         .onAppear {
+            reel.start()
             let appRef = app
             model.onSignedIn = { [weak appRef] in await appRef?.signedIn() }
             // A cold launch from eID's link can bump resumeTick before this view exists.
             model.resume(sessionFromLink: app.takeEIDReturnSession())
         }
         .onChange(of: app.resumeTick) { _, _ in model.resume(sessionFromLink: app.takeEIDReturnSession()) }
+        .onDisappear { reel.stop() }
     }
 
     private var header: some View {
@@ -60,20 +64,20 @@ struct LoginView: View {
                     .frame(width: 44, height: 44)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .accessibilityLabel("SDY лого")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("E-sdy").font(.title2.weight(.heavy)).foregroundStyle(.white)
-                    Text("Монголын залуучуудын тэргүүлэгч дэвшилтэт дуу хоолой")
-                        .font(.caption.italic())
-                        .foregroundStyle(.white.opacity(0.75))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Монголын залуучуудын тэргүүлэгч дэвшилтэт дуу хоолой")
+                    .font(.subheadline.weight(.medium).italic())
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 24)
 
-            MemberCardArt()
-                .frame(height: 300)
+            WordmarkArt()
+                .frame(height: 230)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 18)
+                .padding(.top, 34)
+
+            PosterCaption(reel: reel)
+                .padding(.top, 8)
                 .padding(.bottom, 30)
         }
         .padding(.horizontal, 20)
@@ -345,64 +349,85 @@ private struct QuickLink: View {
     }
 }
 
-/// The SDY member card drawn in code, tilted and slowly swaying as if it
-/// were lying on the silk — the sign-in screen's centrepiece.
-struct MemberCardArt: View {
+/// The SDY Darkhan-Uul wordmark in silver on the silk: a sweep of light runs
+/// across the letters every few seconds, and the mark tilts a little as the
+/// phone does, so the metal seems to catch the room's light. Still when
+/// Reduce Motion is on.
+struct WordmarkArt: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var sway = false
+    @StateObject private var tilt = DeviceTilt()
 
     var body: some View {
-        ZStack {
-            card
-                .rotationEffect(.degrees(-14))
-                .rotation3DEffect(.degrees(sway ? 10 : -6), axis: (x: 0.4, y: 1, z: 0), perspective: 0.5)
-                .offset(y: sway ? -6 : 6)
-                .shadow(color: .black.opacity(0.6), radius: 30, x: 0, y: 24)
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            // One sweep every 4 s: it crosses in the first 1.4 s, then rests.
+            let cycle = t.truncatingRemainder(dividingBy: 4) / 1.4
+            let sweep = min(cycle, 1.2)
+            ZStack {
+                Ellipse()
+                    .fill(RadialGradient(colors: [Theme.brandRed.opacity(0.55), .clear],
+                                         center: .center, startRadius: 10, endRadius: 190))
+                    .frame(width: 380, height: 240)
+                    .blur(radius: 10)
+
+                mark
+                    .overlay {
+                        LinearGradient(stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .white.opacity(0.85), location: 0.5),
+                            .init(color: .clear, location: 1),
+                        ], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 110)
+                        .rotationEffect(.degrees(18))
+                        .offset(x: -260 + 520 * sweep)
+                        .blendMode(.plusLighter)
+                        .mask(mark)
+                        .allowsHitTesting(false)
+                    }
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 12)
+                    .shadow(color: Theme.brandRed.opacity(0.35), radius: 30, y: 6)
+                    .rotation3DEffect(.degrees(tilt.pitch * 10), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
+                    .rotation3DEffect(.degrees(tilt.roll * 14), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+            }
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { sway = true }
-        }
+        .onAppear { if !reduceMotion { tilt.start() } }
+        .onDisappear { tilt.stop() }
         .accessibilityHidden(true)
     }
 
-    private var card: some View {
-        RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .fill(LinearGradient(colors: [Color(red: 0.42, green: 0.06, blue: 0.09), Color(red: 0.14, green: 0.02, blue: 0.04), .black],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .overlay(
-                ZStack {
-                    ForEach(0..<5, id: \.self) { i in
-                        Circle()
-                            .strokeBorder(.white.opacity(0.07 - Double(i) * 0.01), lineWidth: 1.2)
-                            .frame(width: 180 + CGFloat(i) * 70)
-                            .offset(x: -70, y: -40)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            )
-            .overlay(alignment: .topLeading) {
-                Image("Logo").resizable().scaledToFill().frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(22)
-            }
-            .overlay(alignment: .bottomLeading) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("ГИШҮҮНИЙ КАРТ").font(.caption.weight(.bold)).tracking(2).foregroundStyle(.white.opacity(0.6))
-                    Text("E-SDY").font(.system(size: 30, weight: .heavy)).foregroundStyle(.white)
-                }
-                .padding(22)
-            }
-            .overlay(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(red: 0.95, green: 0.82, blue: 0.55), Color(red: 0.7, green: 0.55, blue: 0.3)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 50, height: 38)
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.2), lineWidth: 1))
-                    .padding(24)
-            }
-            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(LinearGradient(colors: [.white.opacity(0.45), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2))
-            .frame(width: 320, height: 200)
+    private var mark: some View {
+        Image("Wordmark")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 300)
+    }
+}
+
+/// How far the phone leans from where it was when the screen opened, in
+/// units of roughly a quarter turn, smoothed and clamped. Device motion needs
+/// no permission.
+@MainActor
+final class DeviceTilt: ObservableObject {
+    @Published var pitch: Double = 0
+    @Published var roll: Double = 0
+    private let manager = CMMotionManager()
+    private var reference: CMAttitude?
+
+    func start() {
+        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
+        manager.deviceMotionUpdateInterval = 1 / 30
+        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+            guard let self, let attitude = motion?.attitude else { return }
+            if self.reference == nil { self.reference = attitude.copy() as? CMAttitude }
+            if let reference = self.reference { attitude.multiply(byInverseOf: reference) }
+            let clamp: (Double) -> Double = { max(-1, min(1, $0 / (.pi / 4))) }
+            self.pitch += (clamp(attitude.pitch) - self.pitch) * 0.15
+            self.roll += (clamp(attitude.roll) - self.roll) * 0.15
+        }
+    }
+
+    func stop() {
+        manager.stopDeviceMotionUpdates()
+        reference = nil
     }
 }

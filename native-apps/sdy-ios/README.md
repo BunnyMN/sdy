@@ -52,6 +52,18 @@ Scheme → Run → Arguments дээр `-SDYFixtures` нэмбэл `Resources/Fix
 `-SDYEvent <uuid>`, `-SDYHomeRoute notifications`, `-SDYProfileRoute leaderboard|record|deleteAccount`,
 `-SDYCheckin 1`, `-SDYFixtureVariant nobranch`. Release build-д fixture файлууд ордоггүй.
 
+## Дизайн
+
+Бүхэлдээ харанхуй (`.preferredColorScheme(.dark)`). Суурь нь `Design/Hero.swift` (кодоор зурсан хөдөлгөөнт
+«торго», sheet бүхий `HeroScaffold`, жагсаалтын `silkListBackground`) ба `Design/Glass.swift` (шилэн товч, карт,
+`IconRow`, пүрштэй дарах хөдөлгөөн, ар араасаа гарах `rise`). Reduce Motion асаалттай бол хөдөлгөөн зогсоно.
+
+- Эхлүүлэх дэлгэц: хар дэвсгэр дээр мөнгөлөг wordmark (`LaunchMark`); `LaunchView` яг тэр байрлалаас үргэлжилж
+  гэрлийн туяа, нарийн loader-оор хар→хар шилжинэ.
+- Нэвтрэх: `Wordmark` (SDY Darkhan-Uul) дээгүүр гэрлийн туяа, утас хазайхад parallax (CoreMotion, зөвшөөрөлгүй);
+  ард нь `Resources/EventPosters/*.webp` (вэбийн `frontend/public/sdy/events/`-ийн 960px хувилбар) Ken Burns-аар
+  солигдоно. Шинэ poster нэмэхдээ файлыг энд хуулж `EventPoster.all`-д нэмнэ.
+
 ## Профайлын зураг
 
 Профайл → avatar дээр дарж системийн зураг сонгогчоор (PhotosPicker — зургийн санд хандах зөвшөөрөл шаардахгүй)
