@@ -47,7 +47,7 @@ struct LoginView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                 .accessibilityLabel("SDY лого")
-            Text("esdy")
+            Text("E-sdy")
                 .font(.largeTitle.bold())
             Text("Ирц, арга хэмжээ, хураамжаа нэг дороос.\neID Mongolia-аар аюулгүй нэвтэрнэ үү.")
                 .font(.subheadline)

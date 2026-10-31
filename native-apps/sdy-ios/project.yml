@@ -1,4 +1,4 @@
-# esdy — SDY-ийн гишүүдэд зориулсан native iOS апп.
+# E-sdy — SDY-ийн гишүүдэд зориулсан native iOS апп.
 #
 # project.yml нь эх сурвалж; SDYMember.xcodeproj нь артефакт (.gitignore).
 # Барихын өмнө `xcodegen generate` (build.sh үүнийг өөрөө хийнэ).
@@ -22,7 +22,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "4"
     DEVELOPMENT_TEAM: "$(SDY_TEAM_ID)"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -55,7 +55,7 @@ targets:
     info:
       path: SDYMember/Resources/Info.plist
       properties:
-        CFBundleDisplayName: esdy
+        CFBundleDisplayName: E-sdy
         CFBundleDevelopmentRegion: mn
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

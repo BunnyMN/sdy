@@ -1,9 +1,9 @@
-# esdy — iOS апп
+# E-sdy — iOS апп
 
 SDY-ийн гишүүдэд зориулсан native SwiftUI апп (WebView ашиглахгүй). Вэб PWA-тай
 (`frontend/`) ижил backend: `https://e-sdy.mn/api/v1`.
 
-- Bundle ID: `mn.esdy.member` · Нэр: **esdy** · iOS 17+ · зөвхөн iPhone, босоо
+- Bundle ID: `mn.esdy.member` · Нэр: **E-sdy** · iOS 17+ · зөвхөн iPhone, босоо
 - Таб: Нүүр · Арга хэмжээ · Ирц · Хураамж · Профайл (салбар батлагдаагүй гишүүнд зөвхөн Нүүр, Профайл)
 - Нэвтрэлт: eID Mongolia (регистрийн дугаараар push, эсвэл энэ утсан дээрх eID апп), нэмэлтээр имэйл/нууц үг (App Review-д)
 - Session: bearer token (`Authorization: Bearer`, `X-Session-Transport: bearer`), Keychain-д хадгална; cookie хэрэглэхгүй
@@ -77,7 +77,7 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
 
 ## App Store руу гаргах
 
-1. App Store Connect → Apps → «+» → New App: iOS, нэр «esdy», Bundle ID `mn.esdy.member`
+1. App Store Connect → Apps → «+» → New App: iOS, нэр «E-sdy», Bundle ID `mn.esdy.member`
    (Xcode automatic signing эсвэл developer.apple.com → Identifiers дээр Associated Domains-тай үүсгэнэ), SKU `sdy-member-ios`.
 2. App Store Connect API key үүсгэнэ (Users and Access → Integrations → Team key, App Manager эрх), `.p8`-ийг татна.
 3. ```sh
@@ -112,13 +112,13 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
 
 ## App Store Connect мета өгөгдөл (ноорог)
 
-- **Нэр:** esdy
+- **Нэр:** E-sdy
 - **Subtitle:** Ирц, арга хэмжээ, хураамж
 - **Ангилал:** Social Networking (нэмэлт: Lifestyle)
 - **Keywords:** SDY,гишүүн,ирц,арга хэмжээ,хураамж,eID,санал хураалт,залуучууд,QR,оноо
 - **Тайлбар:**
 
-  > esdy — SDY-ийн гишүүдийн албан ёсны апп.
+  > E-sdy — SDY-ийн гишүүдийн албан ёсны апп.
   >
   > • Арга хэмжээ: салбарын арга хэмжээг харж, бүртгүүлж, суудлын тоог шууд хянана.
   > • Ирц: зохион байгуулагчийн QR-ийг уншуулж ирцээ нэг товшилтоор батлан, оноо цуглуулна.

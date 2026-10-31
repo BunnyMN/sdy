@@ -10,7 +10,7 @@ struct AboutView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading) {
-                        Text("esdy").font(.title3.bold())
+                        Text("E-sdy").font(.title3.bold())
                         Text("Хувилбар \(AppConfig.appVersion)").font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
