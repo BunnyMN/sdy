@@ -95,7 +95,15 @@ final class AppModel: ObservableObject {
         eventsPath = []
         homePath = []
         unreadCount = 0
+        eidReturnSession = nil
         phase = .signedOut
+    }
+
+    /// The eID session a universal link brought back, handed out once: a
+    /// session left here would be polled again by the next login screen.
+    func takeEIDReturnSession() -> String? {
+        defer { eidReturnSession = nil }
+        return eidReturnSession
     }
 
     private func sessionEnded() {

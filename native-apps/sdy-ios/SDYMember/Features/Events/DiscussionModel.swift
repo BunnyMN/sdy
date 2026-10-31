@@ -62,6 +62,9 @@ final class DiscussionModel: ObservableObject {
 
     func vote(_ motion: Motion, choice: String) {
         actionError = nil
+        // This vote is followed here; a later load must not reopen it as one
+        // left behind (resumePendingVote), e.g. after the member cancels.
+        resumedOnce = true
         signing = Signing(motion: motion, choice: choice, phase: .starting)
         watchTask?.cancel()
         watchTask = Task { [weak self] in
