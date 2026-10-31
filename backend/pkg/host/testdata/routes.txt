@@ -12,6 +12,7 @@ DELETE /api/platform/v1/tenants/{id}/deletion
 DELETE /api/v1/admin/access/roles/{id}
 DELETE /api/v1/core/me/preferences
 DELETE /api/v1/core/organisation
+DELETE /api/v1/profile/photo
 DELETE /api/v1/tenant/services/{id}
 DELETE /cp/api
 DELETE /cp/api/*
@@ -87,6 +88,7 @@ GET /api/v1/oauth2/client-info
 GET /api/v1/oauth2/consent
 GET /api/v1/profile
 GET /api/v1/profile/deletion-request
+GET /api/v1/profile/photo
 GET /api/v1/profile/preferences
 GET /api/v1/setup/status
 GET /api/v1/store/apps
@@ -226,6 +228,7 @@ PUT /api/v1/admin/devices/status
 PUT /api/v1/core/me/preferences
 PUT /api/v1/core/organisation
 PUT /api/v1/me/member-record
+PUT /api/v1/profile/photo
 PUT /api/v1/profile/preferences
 PUT /api/v1/tenant/profile
 PUT /cp/api
