@@ -34,8 +34,10 @@ export default function EIDCallback() {
     const params = new URLSearchParams(location.search);
     // A signature (a discussion vote) returns here too, carrying where it
     // started. That page picks the signature up; there is no login to finish.
-    const back = params.get("return") || "";
-    if (back.startsWith("/") && !back.startsWith("//") && !back.startsWith("/\\")) { location.replace(back); return; }
+    // safeReturnPath, not a prefix check: the URL parser drops tabs and
+    // newlines, so "/\t/evil.example" would become "//evil.example".
+    const back = safeReturnPath(params.get("return"), "");
+    if (back) { location.replace(back); return; }
     const sid = params.get("sessionId") || params.get("session_id");
     if (!sid) { setError("auth.callback.missing"); return; }
     let stopped = false, running = false;
