@@ -159,7 +159,12 @@ func TestTheUsageExportIsOneRowPerDay(t *testing.T) {
 	tenantID, _ := optest.Tenant(t, pool)
 	ctx := context.Background()
 
-	for _, day := range []string{"2026-08-01", "2026-08-02"} {
+	// Days inside the chart's window (usageWindow), relative to today: fixed
+	// dates fall out of the window as the calendar moves on.
+	today := time.Now().UTC()
+	first := today.AddDate(0, 0, -2).Format("2006-01-02")
+	second := today.AddDate(0, 0, -1).Format("2006-01-02")
+	for _, day := range []string{first, second} {
 		if _, err := pool.Exec(ctx,
 			`INSERT INTO registry.usage_events (tenant_id, day, metric, value)
 			 VALUES ($1::uuid, $2::date, 'actions', 7)
@@ -180,7 +185,7 @@ func TestTheUsageExportIsOneRowPerDay(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "day,") {
 		t.Fatalf("the header is %q", lines[0])
 	}
-	if !strings.HasPrefix(lines[1], "2026-08-01") || !strings.HasPrefix(lines[2], "2026-08-02") {
+	if !strings.HasPrefix(lines[1], first) || !strings.HasPrefix(lines[2], second) {
 		t.Fatalf("the days are out of order: %q", out.String())
 	}
 }

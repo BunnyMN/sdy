@@ -215,7 +215,9 @@ test("an operator is added, and the handover is shown exactly once", async ({ pa
   await page.getByRole("dialog").locator("form button[type=submit]").click();
 
   // Closed, and not offered again: the new account is in the list, unable to
-  // sign in until its enrolment is confirmed.
+  // sign in until its enrolment is confirmed. Closing waits for the
+  // acknowledgement that the one-time values were stored (base.secret.saved_ack).
+  await page.getByRole("dialog").getByLabel("Би үүнийг аюулгүй газар хадгалсан").check();
   await page.getByRole("dialog").getByRole("button").last().click();
   await expect(page.getByText(CREATED.password)).toHaveCount(0);
   await expect(page.getByText(CREATED.email)).toBeVisible();
