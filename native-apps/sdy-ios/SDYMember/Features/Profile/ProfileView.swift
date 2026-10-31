@@ -90,17 +90,7 @@ struct ProfileView: View {
 
             Spacer(minLength: 0)
 
-            Text(initials)
-                .font(.system(size: 44, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 128, height: 128)
-                .background(
-                    Circle().fill(LinearGradient(colors: [Theme.brandRed, Color(white: 0.12)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                )
-                .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 2))
-                .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
-                .accessibilityHidden(true)
+            EditableAvatar()
 
             Text(cardName)
                 .font(.title2.weight(.bold))
@@ -118,11 +108,6 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 20)
         .accessibilityElement(children: .contain)
-    }
-
-    private var initials: String {
-        let parts = (app.me?.name ?? "").split(separator: " ")
-        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined()
     }
 
     /// "Батболд Ганзориг" → "Б. ГАНЗОРИГ".

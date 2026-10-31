@@ -23,6 +23,8 @@ final class AppModel: ObservableObject {
     /// so a waiting eID poll can restart at once.
     @Published var resumeTick = 0
     @Published var eidReturnSession: String?
+    /// The signed-in person's profile photo, shown on Home and Profile.
+    @Published var photo: UIImage?
 
     let api: APIClient
 
@@ -48,6 +50,7 @@ final class AppModel: ObservableObject {
             try await loadIdentity()
             phase = .signedIn
             applyLaunchArguments()
+            Task { await loadPhoto() }
             await refreshUnread()
         } catch let error as APIError where error.kind == .unauthorized {
             clearLocal()
@@ -96,6 +99,7 @@ final class AppModel: ObservableObject {
         homePath = []
         unreadCount = 0
         eidReturnSession = nil
+        photo = nil
         phase = .signedOut
     }
 
@@ -124,6 +128,59 @@ final class AppModel: ObservableObject {
         homePath = []
         epoch += 1
         await refreshUnread()
+    }
+
+    // MARK: - Profile photo
+
+    private static let photoCachePath = "profile_photo"
+
+    /// Shows the last photo at once from the device, then asks the server.
+    func loadPhoto() async {
+        if photo == nil, let cached = api.cache.load(scope: "me", path: Self.photoCachePath) { photo = UIImage(data: cached) }
+        do {
+            if let data = try await api.profilePhoto() {
+                photo = UIImage(data: data)
+                api.cache.save(data, scope: "me", path: Self.photoCachePath)
+            } else {
+                photo = nil
+                api.cache.save(Data(), scope: "me", path: Self.photoCachePath)
+            }
+        } catch {
+            // Offline or a server hiccup: keep what the device had.
+        }
+    }
+
+    /// Crops to the centre square, scales to 512 px and uploads it.
+    func setPhoto(_ image: UIImage) async throws {
+        guard let jpeg = Self.squareJPEG(image) else { throw APIError.decoding }
+        try await api.uploadProfilePhoto(jpeg)
+        photo = UIImage(data: jpeg)
+        api.cache.save(jpeg, scope: "me", path: Self.photoCachePath)
+        Haptics.success()
+    }
+
+    func removePhoto() async throws {
+        try await api.deleteProfilePhoto()
+        photo = nil
+        api.cache.save(Data(), scope: "me", path: Self.photoCachePath)
+    }
+
+    /// A new 512×512 JPEG drawn from the image's pixels — orientation applied,
+    /// and none of the original file's metadata (location, camera) carried over.
+    static func squareJPEG(_ image: UIImage, side: CGFloat = 512) -> Data? {
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let edge = min(size.width, size.height)
+        let scale = side / edge
+        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let origin = CGPoint(x: (side - drawSize.width) / 2, y: (side - drawSize.height) / 2)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            image.draw(in: CGRect(origin: origin, size: drawSize))
+        }
+        return rendered.jpegData(compressionQuality: 0.85)
     }
 
     func reloadRecord() async {

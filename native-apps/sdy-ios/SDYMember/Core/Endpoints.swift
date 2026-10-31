@@ -50,6 +50,14 @@ extension APIClient {
     func duesHistory(offset: Int = 0) async throws -> PersonalDuesHistory {
         try await get("/me/dues-history?offset=\(offset)", cached: offset == 0)
     }
+    /// The signed-in person's profile photo (JPEG), or nil when they have none.
+    func profilePhoto() async throws -> Data? {
+        do { return try await raw(.get, "/profile/photo") } catch let error as APIError where error.status == 404 { return nil }
+    }
+    func uploadProfilePhoto(_ jpeg: Data) async throws {
+        _ = try await raw(.put, "/profile/photo", upload: (jpeg, "image/jpeg"), timeout: 60)
+    }
+    func deleteProfilePhoto() async throws { _ = try await raw(.delete, "/profile/photo") }
     func deletionStatus() async throws -> DeletionStatus { try await get("/profile/deletion-request", cached: false) }
     func requestDeletion(reason: String) async throws {
         try await perform(.post, "/profile/deletion-request", body: reason.isEmpty ? [:] : ["reason": reason])

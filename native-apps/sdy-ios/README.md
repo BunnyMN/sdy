@@ -52,6 +52,13 @@ Scheme → Run → Arguments дээр `-SDYFixtures` нэмбэл `Resources/Fix
 `-SDYEvent <uuid>`, `-SDYHomeRoute notifications`, `-SDYProfileRoute leaderboard|record|deleteAccount`,
 `-SDYCheckin 1`, `-SDYFixtureVariant nobranch`. Release build-д fixture файлууд ордоггүй.
 
+## Профайлын зураг
+
+Профайл → avatar дээр дарж системийн зураг сонгогчоор (PhotosPicker — зургийн санд хандах зөвшөөрөл шаардахгүй)
+сонгоно. Апп төвөөс нь дөрвөлжин тайрч 512×512 JPEG болгоод `PUT /api/v1/profile/photo` руу илгээнэ; сервер дахин
+кодолж EXIF/GPS-ийг арилгана (`backend/internal/workspace/profile/photo.go`, migration 00116). Солих, устгах нь мөн тэнд.
+Зураг төхөөрөмж дээр офлайн кэшэд хадгалагдаж, гарахад устана. Бүртгэл устгагдахад серверээс зураг устана.
+
 ## Universal links (заавал)
 
 Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/.well-known/apple-app-site-association`
@@ -144,7 +151,8 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
   - Financial Info: Other Financial Info (хураамжийн төлбөрийн мэдэгдэл, гүйлгээний утга)
   - User Content: Other User Content (хурлын асуудал, санал)
   - Other Data: регистрийн дугаар (eID-ээр нэвтрэхэд илгээгддэг, backend-д хадгалагдана)
-- Цуглуулдаггүй: байршил, эрүүл мэнд, хайлтын түүх, оношилгоо, худалдан авалт, контакт, зураг
+  - Photos or Videos: профайлын зураг (хэрэглэгч өөрөө сонгоно; сервер 512 px болгож EXIF/GPS-ийг арилгана) — 1.0.1-ээс
+- Цуглуулдаггүй: байршил, эрүүл мэнд, хайлтын түүх, оношилгоо, худалдан авалт, контакт
 - Аппын `PrivacyInfo.xcprivacy` дээрхтэй тохирно (UserDefaults reason CA92.1).
 
 ## Үлдсэн гар ажил

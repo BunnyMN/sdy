@@ -69,7 +69,10 @@ struct HomeView: View {
 
     private func heroHeader(_ data: HomeData?) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top) {
+            HStack(alignment: .center, spacing: 12) {
+                Button { app.tab = .profile } label: { AvatarView(size: 50) }
+                    .buttonStyle(PressableStyle(scale: 0.9))
+                    .accessibilityLabel("Профайл")
                 VStack(alignment: .leading, spacing: 4) {
                     Text(greeting).font(.subheadline).foregroundStyle(.white.opacity(0.65))
                     Text(displayName(data?.profile.name ?? app.me?.name ?? ""))
