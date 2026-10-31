@@ -9,15 +9,20 @@ import { useErrorMessage } from "@/lib/useErrorMessage";
 import { formatCountdown, formatMoment } from "@/lib/datetime";
 import { ErrorNote, useDialogFocus } from "@/components/ui";
 
-/** A new code is fetched this long before the old one runs out, so a queue at the door never meets a dead QR. */
-const RENEW_BEFORE = 30_000;
+/**
+ * A new code is fetched in the old one's last seconds. Not earlier: the server
+ * keeps one code per event (events_events.checkin_hash), so issuing replaces
+ * it, and a member who scanned the old code and is still signing in would be
+ * told it is invalid while it had minutes left.
+ */
+const RENEW_BEFORE = 2_000; // two ticks of the 1 s clock, so one always lands in it
 
 type Code = { url: string; expires: number };
 
 /**
  * The organiser's check-in QR.
  *
- * It renews itself half a minute before it expires while the screen is open,
+ * It renews itself as it expires while the screen is open,
  * and can be blown up to fill the screen for a room to scan from a distance.
  * If a renewal fails the code is let run out and the screen says so plainly,
  * with the button to try again, rather than showing a QR that no longer works.

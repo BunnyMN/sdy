@@ -21,6 +21,9 @@ test("authentication rejects external and malformed return paths", () => {
     "/safe\\..\\attacker.example",
     " /profile",
     "/profile\nLocation: https://attacker.example",
+    // The URL parser drops tabs and newlines: "/\t/x" navigates to "//x".
+    "/\t/attacker.example",
+    "/\n/attacker.example",
     "",
     null,
     undefined,

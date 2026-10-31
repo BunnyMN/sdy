@@ -200,3 +200,34 @@ final class ErrorTextTests: XCTestCase {
         }
     }
 }
+
+final class PendingEIDSessionTests: XCTestCase {
+    override func tearDown() { PendingEIDSession.forget() }
+
+    func testOnlyTheSessionStartedHereIsResumed() {
+        XCTAssertFalse(PendingEIDSession.matches("someone-else"))
+        PendingEIDSession.remember("mine")
+        XCTAssertTrue(PendingEIDSession.matches("mine"))
+        XCTAssertFalse(PendingEIDSession.matches("someone-else"))
+        XCTAssertFalse(PendingEIDSession.matches(""))
+    }
+
+    func testForgottenAfterUse() {
+        PendingEIDSession.remember("mine")
+        PendingEIDSession.forget()
+        XCTAssertFalse(PendingEIDSession.matches("mine"))
+    }
+}
+
+@MainActor
+final class EIDReturnSessionTests: XCTestCase {
+    func testHandedOutOnceAndClearedOnSignOut() {
+        let app = AppModel()
+        app.eidReturnSession = "s1"
+        XCTAssertEqual(app.takeEIDReturnSession(), "s1")
+        XCTAssertNil(app.takeEIDReturnSession())
+        app.eidReturnSession = "s2"
+        app.clearLocal()
+        XCTAssertNil(app.eidReturnSession)
+    }
+}

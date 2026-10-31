@@ -143,6 +143,7 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
   - Identifiers: User ID
   - Financial Info: Other Financial Info (хураамжийн төлбөрийн мэдэгдэл, гүйлгээний утга)
   - User Content: Other User Content (хурлын асуудал, санал)
+  - Other Data: регистрийн дугаар (eID-ээр нэвтрэхэд илгээгддэг, backend-д хадгалагдана)
 - Цуглуулдаггүй: байршил, эрүүл мэнд, хайлтын түүх, оношилгоо, худалдан авалт, контакт, зураг
 - Аппын `PrivacyInfo.xcprivacy` дээрхтэй тохирно (UserDefaults reason CA92.1).
 

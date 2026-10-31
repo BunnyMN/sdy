@@ -9,6 +9,7 @@ import { duesApi, type MyDuesPage } from "@/lib/api/dues";
 import { eventsApi, participationApi, type EventRecord } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { useErrorMessage } from "@/lib/useErrorMessage";
+import { ApiError } from "@/lib/errorMessage";
 import { dayOf, formatMoment } from "@/lib/datetime";
 import { isOverdue, reportable } from "@/lib/duesProgress";
 import { memberMoney } from "@/lib/memberFormat";
@@ -31,6 +32,13 @@ const JOIN_CODES = { branch_transfer_required: "membership.branch_transfer_requi
 
 const settled = <T,>(result: PromiseSettledResult<T>): Part<T> =>
   result.status === "fulfilled" ? { data: result.value } : { failed: true };
+
+// Dues and events sit behind an installed app and a permission. A branch
+// without the app, or a role without the permission, is answered 403/404:
+// that row does not apply here, it has not failed to load.
+const optional = <T,>(result: PromiseSettledResult<T>): Part<T> =>
+  result.status === "rejected" && result.reason instanceof ApiError && (result.reason.status === 403 || result.reason.status === 404)
+    ? {} : settled(result);
 
 /** The member's next registered event, and what in it is waiting on them. */
 async function nextEvent(): Promise<NextEvent> {
@@ -74,7 +82,7 @@ export default function MemberHome() {
       return;
     }
     const [dues, event, unread] = await Promise.allSettled([duesApi.mine(), nextEvent(), memberApi.notifications().then(n => n.unread ?? 0)]);
-    setTodo({ dues: settled(dues), event: settled(event), unread: settled(unread) });
+    setTodo({ dues: optional(dues), event: optional(event), unread: settled(unread) });
   }, []);
 
   const load = useCallback(() => {

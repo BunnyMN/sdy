@@ -83,6 +83,7 @@ final class EIDLoginModel: ObservableObject {
                     : try await api.eidStartSamePhone()
                 guard !Task.isCancelled else { return }
                 self.begin(started)
+                PendingEIDSession.remember(started.sessionId)
                 if method == .samePhone, let link = started.appLink, let url = URL(string: link) {
                     await UIApplication.shared.open(url)
                 }
@@ -112,8 +113,11 @@ final class EIDLoginModel: ObservableObject {
         if case .waiting(let started) = phase {
             pollTask?.cancel()
             pollTask = Task { [weak self] in await self?.pollLoop(started) }
-        } else if let session = sessionFromLink, phase == .idle || phase == .starting {
-            // The app was relaunched by eID's universal link: pick the session up.
+        } else if let session = sessionFromLink, phase == .idle || phase == .starting,
+                  PendingEIDSession.matches(session) {
+            // The app was relaunched by eID's universal link: pick the session up —
+            // only one this phone started, so a link from someone else cannot sign
+            // the member into another account.
             let started = EIDStart(resumingSession: session)
             begin(started)
             pollTask?.cancel()
@@ -160,6 +164,7 @@ final class EIDLoginModel: ObservableObject {
     }
 
     private func finish(_ phase: Phase) {
+        PendingEIDSession.forget()
         countdown?.invalidate()
         countdown = nil
         self.phase = phase
@@ -169,6 +174,7 @@ final class EIDLoginModel: ObservableObject {
 
     func cancel() {
         stop()
+        PendingEIDSession.forget()
         phase = .idle
     }
 
@@ -211,5 +217,31 @@ final class EIDLoginModel: ObservableObject {
         case 403: return "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
         default: return error.message
         }
+    }
+}
+
+/// The "this phone" eID session in flight, kept across a relaunch: iOS may end
+/// the app while the member is in the eID app, and the universal link that
+/// brings them back must match a session started here.
+enum PendingEIDSession {
+    private static let idKey = "eid.pendingSession"
+    private static let atKey = "eid.pendingSessionAt"
+    /// Longer than any eID session lives (EIDLoginModel's backstop).
+    private static let lifetime: TimeInterval = 15 * 60
+
+    static func remember(_ id: String) {
+        UserDefaults.standard.set(id, forKey: idKey)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: atKey)
+    }
+
+    static func matches(_ id: String) -> Bool {
+        guard !id.isEmpty, UserDefaults.standard.string(forKey: idKey) == id else { return false }
+        let at = UserDefaults.standard.double(forKey: atKey)
+        return Date().timeIntervalSince1970 - at < lifetime
+    }
+
+    static func forget() {
+        UserDefaults.standard.removeObject(forKey: idKey)
+        UserDefaults.standard.removeObject(forKey: atKey)
     }
 }

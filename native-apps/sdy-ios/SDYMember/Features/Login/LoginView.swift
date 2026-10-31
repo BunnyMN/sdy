@@ -32,8 +32,10 @@ struct LoginView: View {
         .onAppear {
             let appRef = app
             model.onSignedIn = { [weak appRef] in await appRef?.signedIn() }
+            // A cold launch from eID's link can bump resumeTick before this view exists.
+            model.resume(sessionFromLink: app.takeEIDReturnSession())
         }
-        .onChange(of: app.resumeTick) { _, _ in model.resume(sessionFromLink: app.eidReturnSession) }
+        .onChange(of: app.resumeTick) { _, _ in model.resume(sessionFromLink: app.takeEIDReturnSession()) }
     }
 
     private var header: some View {
