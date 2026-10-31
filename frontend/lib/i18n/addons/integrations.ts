@@ -44,6 +44,9 @@ export const integrations = {
   "integrations.action.disconnect": { mn: "Салгах", en: "Disconnect" },
 
   "integrations.state.unavailable": { mn: "боломжгүй", en: "unavailable" },
+  "integrations.state.active": { mn: "Идэвхтэй", en: "Active" },
+  "integrations.state.failing": { mn: "Алдаатай", en: "Failing" },
+  "integrations.state.off": { mn: "Унтраалттай", en: "Off" },
 
   "integrations.message.empty": { mn: "Одоогоор интеграц бүртгээгүй байна.", en: "No integrations registered yet." },
   "integrations.message.not_connected": { mn: "Бүртгэл холбогдоогүй байна", en: "No account connected yet" },

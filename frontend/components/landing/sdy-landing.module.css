@@ -43,17 +43,24 @@
 .primary:hover { background: var(--lp-accent-hover); border-color: var(--lp-accent-hover); }
 .iconButton { width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 6px; color: var(--lp-muted); }
 .mobileMenu { display: none; }
-/* Events carousel — above the hero. */
+.loginShort { display: none; }
+/* The theme switch moves into the menu on a phone, to leave the header room for «Нэвтрэх». */
+.menuTheme { display: none; align-items: center; gap: 12px; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; color: var(--lp-fg); cursor: pointer; text-align: start; }
+/* Events carousel — below the hero. */
 .events { padding-top: 40px; }
+.hero + .events { padding-top: 0; padding-bottom: 24px; }
 .eventsHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .eventsHead h2 { margin-top: 8px; font-size: 28px; line-height: 1.25; letter-spacing: -.02em; }
 .eventsControls { display: flex; gap: 8px; }
 .eventsControls .iconButton { border: 1px solid var(--lp-border); background: var(--lp-panel); color: var(--lp-fg); }
 .eventsTrack { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; border: 1px solid var(--lp-border); border-radius: 16px; background: var(--lp-panel); }
 .eventsTrack::-webkit-scrollbar { display: none; }
+.eventsTrack:focus-visible { outline: 2px solid var(--lp-ring); outline-offset: 4px; }
 .eventSlide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; display: grid; grid-template-columns: minmax(0,1.45fr) minmax(0,1fr); }
 .eventPoster { position: relative; overflow: hidden; aspect-ratio: 16 / 10; background: #111; border-radius: 15px 0 0 15px; }
-.eventBackdrop { position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px); object-fit: cover; filter: blur(24px) saturate(1.2) brightness(.7); transform: scale(1.05); }
+/* A 24px copy of the poster, stretched: the upscaling is the blur, so the
+   browser does not have to blur a full-size image on every frame. */
+.eventBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(1.2) brightness(.7); }
 .eventImage { position: relative; width: 100%; height: 100%; object-fit: contain; }
 .eventDetails { display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 32px; min-width: 0; }
 .eventKicker { align-self: flex-start; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--lp-on-accent); background: var(--lp-accent); }
@@ -66,7 +73,6 @@
 .eventDots button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: none; cursor: pointer; }
 .eventDots span { width: 8px; height: 8px; border-radius: 999px; background: var(--lp-control); transition: width 200ms ease-out, background-color 200ms ease-out; }
 .eventDots [aria-current="true"] span { width: 24px; background: var(--lp-accent); }
-.events + .hero { padding-top: 56px; }
 .hero { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); align-items: center; gap: 64px; padding-block: 80px; min-height: 624px; }
 .eyebrow { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--lp-muted); }
 .eyebrow > span { width: 8px; height: 8px; border-radius: 50%; background: var(--lp-accent); }
@@ -144,6 +150,11 @@
 .feedbackField { display: grid; gap: 8px; font-size: 14px; font-weight: 500; min-width: 0; }
 .feedbackField small { font-weight: 400; color: var(--lp-muted); }
 .feedbackField > small { justify-self: end; font-size: 12px; font-variant-numeric: tabular-nums; }
+.feedbackField > small[data-near] { color: var(--lp-accent); font-weight: 600; }
+.feedbackField :is(input,textarea)[aria-invalid="true"] { border-color: var(--lp-accent); }
+.feedbackPrivacy { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--lp-muted); }
+.feedbackPrivacy svg { width: 16px; height: 16px; margin-top: 2px; color: var(--lp-accent); }
+.feedbackDone:focus { outline: none; }
 .feedbackField em { font-style: normal; color: var(--lp-accent); }
 .feedbackField :is(input,textarea) { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--lp-control); border-radius: 6px; font: inherit; font-weight: 400; color: var(--lp-fg); background: var(--lp-bg); }
 .feedbackField textarea { resize: vertical; min-height: 128px; line-height: 1.5; }
@@ -178,6 +189,7 @@
 .footerMain { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; font-size: 14px; }
 .footerMain > span { max-width: 360px; font-weight: 500; }
 .footerMain nav { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.footerMain nav + nav { margin-left: auto; }
 .footer a { min-height: 44px; display: flex; align-items: center; color: var(--lp-muted); }
 .footerBottom { margin-top: 24px; border-top: 1px solid var(--lp-border); padding-top: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--lp-muted); }
 @media (max-width: 1024px) {
@@ -209,10 +221,13 @@
   .eventPoster { aspect-ratio: 4 / 3; }
   .eventDetails { padding: 20px; }
   .eventDetails h3 { font-size: 20px; }
-  .events + .hero { padding-top: 40px; }
-  .headerInner { min-height: 64px; gap: 8px; }
+    .headerInner { min-height: 64px; gap: 8px; }
   .headerActions { gap: 4px; }
-  .headerLogin { display: none; }
+  .headerTheme { display: none; }
+  .menuTheme { display: flex; }
+  .headerLogin { padding-inline: 12px; }
+  .loginLong { display: none; }
+  .loginShort { display: inline; }
   .mobileMenu nav { padding-inline: 16px; }
   .hero { grid-template-columns: 1fr; padding-block: 48px; gap: 40px; }
   .hero h1 { font-size: clamp(32px,7vw,44px); }
@@ -235,6 +250,10 @@
   .finalCta { padding-block: 48px; align-items: flex-start; flex-direction: column; gap: 24px; }
   .footerMain { flex-direction: column; gap: 16px; }
   .footerMain nav { flex-direction: column; gap: 4px; }
+  .footerMain nav + nav { margin-left: 0; }
+}
+@media (max-width: 420px) {
+  .brand small { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .page *,.page *::before,.page *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }

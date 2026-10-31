@@ -631,4 +631,61 @@ export const cp = {
 
   "cp.group.platform": { mn: "Платформ", en: "Platform" },
   "cp.group.investigation": { mn: "Мөрдлөг", en: "Investigation" },
+
+  // ── Tenants and people screens ──
+  "cp.sort.by": { mn: "{column}-р эрэмбэлэх", en: "Sort by {column}" },
+  "cp.sort.ascending": { mn: "{column}: өсөхөөр эрэмбэлсэн", en: "{column}, sorted ascending" },
+  "cp.sort.descending": { mn: "{column}: буурахаар эрэмбэлсэн", en: "{column}, sorted descending" },
+  "cp.filter.all_states": { mn: "Бүх төлөв", en: "All states" },
+  "cp.filter.by_state": { mn: "Төлөвөөр шүүх", en: "Filter by state" },
+  "cp.filter.people": { mn: "Хэрэглэгчийг шүүх", en: "Filter people" },
+  "cp.tab.tenant": { mn: "Байгууллагын мэдээлэл", en: "Organisation details" },
+  "cp.message.no_apps": { mn: "Апп суулгаагүй байна.", en: "No apps are installed." },
+  "cp.message.no_members": { mn: "Энэ байгууллагад хэн ч алга.", en: "Nobody belongs to this organisation." },
+  "cp.message.no_impersonations": {
+    mn: "Энэ байгууллагад хэн нэгний нэрээр оператор ороогүй байна.",
+    en: "No operator has looked inside this organisation as somebody.",
+  },
+  "cp.message.no_operator_actions": {
+    mn: "Оператор энэ байгууллага дээр үйлдэл хийгээгүй байна.",
+    en: "No operator has acted on this organisation.",
+  },
+  "cp.message.deletion_scheduled": {
+    mn: "{date}-нд бүрмөсөн устна — {days} хоног үлдлээ.",
+    en: "Removed for good on {date} — {days} days left.",
+  },
+  "cp.message.deletion_due": {
+    mn: "{date}-нд устах хугацаа нь болсон; дараагийн цэвэрлэгээгээр устна.",
+    en: "Due for removal since {date}; the next sweep removes it.",
+  },
+  "cp.message.deletion_when": {
+    mn: "Зөвшөөрөгдсөнөөс хойш 30 хоногийн дараа бүрмөсөн устна — хамгийн эрт {date}.",
+    en: "Once approved, it is removed for good thirty days later — {date} at the earliest.",
+  },
+  "cp.action.view_all": { mn: "Бүгдийг харах", en: "View all" },
+  "cp.action.show_fewer": { mn: "Цөөнийг харуулах", en: "Show fewer" },
+
+  // ── Console screens ──
+  "cp.message.no_jobs": { mn: "Арын ажил бүртгэгдээгүй байна.", en: "No background jobs are registered." },
+  "cp.support.no_memberships": { mn: "Энэ хүн аль ч байгууллагад харьяалагдаагүй.", en: "This person belongs to no organisation." },
+  "cp.feedback.moved": { mn: "Төлөвийг «{status}» болголоо.", en: "Marked as “{status}”." },
+  "cp.feedback.search": { mn: "Санал, илгээгчээр хайх", en: "Search messages and senders" },
+  "cp.feedback.field.category": { mn: "Ангилал", en: "Category" },
+  "cp.feedback.all_categories": { mn: "Бүх ангилал", en: "All categories" },
+  "cp.audit.capped": { mn: "Хамгийн сүүлийн {count} мөрийг харуулж байна. Өмнөхийг харахын тулд шүүлтүүрээр нарийсгана уу.", en: "Showing the newest {count} entries. Narrow the filters to reach older ones." },
+  "cp.message.no_prompts": { mn: "Системийн заавар алга.", en: "No system prompts." },
+  "cp.message.no_knowledge": { mn: "Мэдлэгийн сан хоосон байна.", en: "The knowledge base is empty." },
+  "cp.message.prompt_changed_elsewhere": { mn: "Энэ зааврыг өөр хэн нэгэн өөрчилсөн байна. Таны засвар хадгалагдаагүй хэвээр — хадгалбал тэдний хувилбарыг дарна.", en: "Somebody else has changed this prompt. Your edit is still here, unsaved — saving it replaces their version." },
+  "cp.action.load_latest": { mn: "Шинэ хувилбарыг ачаалах", en: "Load the latest version" },
+  "cp.message.no_settings": { mn: "Тохиргоо алга.", en: "No settings." },
+  "cp.message.no_history": { mn: "Энэ тохиргоо өөрчлөгдөж байгаагүй.", en: "This setting has never been changed." },
+  "cp.action.edit_flag": { mn: "Flag засах", en: "Edit flag" },
+  "cp.message.rollout_range": { mn: "0-ээс 100 хүртэлх бүхэл тоо.", en: "A whole number from 0 to 100." },
+  "cp.hint.ub_date": { mn: "УБ цаг: тухайн өдрийн төгсгөлд (Улаанбаатарын цагаар) дуусна.", en: "UB time: lapses at the end of that day in Ulaanbaatar." },
+  "cp.hint.ub_time": { mn: "УБ цаг (Улаанбаатар, UTC+8)", en: "UB time (Ulaanbaatar, UTC+8)" },
+  "cp.value.true": { mn: "Тийм (true)", en: "Yes (true)" },
+  "cp.value.false": { mn: "Үгүй (false)", en: "No (false)" },
+  "cp.message.no_operators": { mn: "Оператор бүртгэгдээгүй байна.", en: "No operators are registered." },
+  "cp.message.password_changed": { mn: "Нууц үг солигдлоо.", en: "Your password has been changed." },
+  "cp.audit.enrolled": { mn: "{email} бүртгэлийг баталгаажуулсан", en: "Enrolled {email}" },
 };

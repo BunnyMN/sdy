@@ -88,9 +88,12 @@ test("гишүүн бүртгүүлж цуцлах бөгөөд хаагдсан
   await page.getByRole("link", { name: /Салбарын уулзалт/ }).click();
   await page.getByRole("button", { name: "Бүртгүүлэх", exact: true }).click();
   await expect(page.getByRole("button", { name: "Бүртгэлээ цуцлах" })).toBeVisible();
+  // A member's participant list is folded below the discussion and tasks.
+  await page.locator("summary", { hasText: "Оролцогчид" }).click();
   await expect(page.getByText(member.name, { exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "Ирсэн", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Бүртгэлээ цуцлах" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Бүртгэлээ цуцлах" }).click();
   await expect(page.getByRole("button", { name: "Бүртгүүлэх", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Бүртгүүлэх", exact: true }).click();
   await expect(page.getByRole("button", { name: "Бүртгэлээ цуцлах" })).toBeVisible();
@@ -110,7 +113,7 @@ test("менежер арга хэмжээ үүсгэж, оролцогч нэм
   await page.getByRole("button", { name: "Арга хэмжээ нэмэх" }).click();
   let dialog = page.getByRole("dialog");
   await dialog.getByLabel("Нэр", { exact: true }).fill("Шинэ уулзалт");
-  await dialog.getByLabel("Эхлэх", { exact: true }).fill("2027-10-01T10:00");
+  await dialog.getByLabel(/^Эхлэх/).fill("2027-10-01T10:00");
   await dialog.getByLabel(/Хүний дээд тоо/).fill("2");
   await dialog.getByRole("button", { name: "Хадгалах" }).click();
   await page.getByRole("link", { name: /Шинэ уулзалт/ }).click();
@@ -143,7 +146,8 @@ test("сүүлийн суудал дүүрсэн алдаа гишүүнийг �
   state.rejectRegistration = true;
   await page.goto(`${origin(baseURL!)}/module/events/event-1`);
   await page.getByRole("button", { name: "Бүртгүүлэх", exact: true }).click();
-  await expect(page.getByText("this event is full", { exact: true })).toBeVisible();
+  // The API's English sentence is shown in the member's language (lib/errorMessage.ts).
+  await expect(page.getByText("Энэ арга хэмжээний суудал дүүрсэн байна.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Бүртгэлээ цуцлах" })).toHaveCount(0);
   expect(state.people).toHaveLength(0);
 });

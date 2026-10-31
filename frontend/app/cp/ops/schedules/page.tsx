@@ -16,11 +16,13 @@ import Link from "next/link";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type ReportSchedule } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote } from "@/components/ui";
 
 export default function Schedules() {
   const { t } = useI18n();
   const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -32,6 +34,7 @@ export default function Schedules() {
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
+      setLoading(false);
     }
   }, []);
 
@@ -63,14 +66,12 @@ export default function Schedules() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       {(failing > 0 || never > 0) && (
-        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
+        <Banner tone="warning">
           {t("cp.message.schedules_trouble", { failing: String(failing), never: String(never) })}
-        </p>
+        </Banner>
       )}
 
       <Card title={t("cp.section.schedules")}>
@@ -111,6 +112,7 @@ export default function Schedules() {
                     : schedule.last_status}
             </Badge>,
           ])}
+          loading={loading}
           empty={t("cp.message.no_schedules")}
         />
       </Card>

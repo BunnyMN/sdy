@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Play, ImageOff, FileQuestion, X, ExternalLink } from "lucide-react";
+import { Modal } from "@/components/ui";
 
 const IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "svg"];
 const VIDEO_EXT = ["mp4", "webm", "mov", "m4v", "ogv", "ogg"];
@@ -37,7 +38,7 @@ export function MediaCell({ url, name, onOpen }: { url: string; name?: string; o
 
   if (kind === "image" && !broken) {
     return (
-      <button onClick={onOpen} className={`${frame} bg-surface-2 hover:border-indigo-400`} title={name || url}>
+      <button onClick={onOpen} className={`${frame} bg-surface-2 hover:border-accent`} title={name || url}>
         {/* Plain img, not next/image: these are arbitrary CDN paths and some of
             them 404, which the optimizer turns into a server-side error. */}
         <img
@@ -57,7 +58,7 @@ export function MediaCell({ url, name, onOpen }: { url: string; name?: string; o
     return (
       <button
         onClick={onOpen}
-        className={`${frame} bg-slate-900 text-white hover:ring-2 hover:ring-indigo-400`}
+        className={`${frame} bg-foreground text-background hover:ring-2 hover:ring-accent`}
         title={name || url}
         aria-label={t("kiosk.action.play")}
       >
@@ -67,7 +68,7 @@ export function MediaCell({ url, name, onOpen }: { url: string; name?: string; o
   }
 
   return (
-    <button onClick={onOpen} className={`${frame} bg-surface-2 text-muted hover:border-indigo-400`} title={name || url}>
+    <button onClick={onOpen} className={`${frame} bg-surface-2 text-muted hover:border-accent`} title={name || url}>
       {broken ? <ImageOff className="w-4 h-4" /> : <FileQuestion className="w-4 h-4" />}
     </button>
   );
@@ -80,59 +81,56 @@ export function MediaViewer({ url, name, onClose }: { url: string; name?: string
   const kind = mediaKind(url);
 
   return (
-    <div
-      className="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-modal p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className="bg-surface rounded-xl max-w-4xl w-full shadow-lg border border-line max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4 p-4 border-b border-line">
-          <h2 className="font-semibold text-foreground truncate" title={name || url}>{name || url}</h2>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="p-1.5 rounded-lg text-muted hover:bg-surface-hover"
-              aria-label={t("kiosk.action.open_original")}
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
-            <button onClick={onClose} aria-label={t("kiosk.action.cancel")}>
-              <X className="w-5 h-5 text-muted hover:text-foreground" />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 overflow-auto grid place-items-center bg-surface-2 min-h-[240px]">
-          {failed || kind === "unknown" ? (
-            // Roughly one row in ten carries a malformed URL — a doubled CDN
-            // prefix, or a name with no file behind it. Saying so beats a
-            // silently empty box.
-            <div className="text-center py-10">
-              <ImageOff className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-muted text-sm">{t("kiosk.message.media_unavailable")}</p>
-              <a href={url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline break-all mt-2 inline-block">
-                {url}
-              </a>
-            </div>
-          ) : kind === "image" ? (
-            <img src={url} alt={name || ""} className="max-h-[70vh] max-w-full object-contain" onError={() => setFailed(true)} />
-          ) : (
-            <video
-              src={url}
-              controls
-              autoPlay
-              className="max-h-[70vh] max-w-full"
-              onError={() => setFailed(true)}
-            />
-          )}
+    // The shared Modal: Escape and the backdrop close it, focus is held inside
+    // and handed back to the thumbnail that opened it.
+    <Modal label={name || url} onClose={onClose} className="!max-w-4xl !p-0 max-h-[90vh] flex flex-col">
+      <div className="flex items-center justify-between gap-4 p-4 border-b border-line">
+        <h2 className="font-semibold text-foreground truncate" title={name || url}>{name || url}</h2>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="p-1.5 rounded-lg text-muted hover:bg-surface-hover"
+            aria-label={t("kiosk.action.open_original")}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("base.action.close")}
+            className="grid h-9 w-9 place-items-center rounded-md text-muted hover:text-foreground hover:bg-surface-hover"
+          >
+            <X aria-hidden="true" className="w-5 h-5" />
+          </button>
         </div>
       </div>
-    </div>
+
+      <div className="p-4 overflow-auto grid place-items-center bg-surface-2 min-h-[240px]">
+        {failed || kind === "unknown" ? (
+          // Roughly one row in ten carries a malformed URL — a doubled CDN
+          // prefix, or a name with no file behind it. Saying so beats a
+          // silently empty box.
+          <div className="text-center py-10">
+            <ImageOff aria-hidden="true" className="w-10 h-10 text-muted mx-auto mb-3" />
+            <p className="text-muted text-sm">{t("kiosk.message.media_unavailable")}</p>
+            <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline break-all mt-2 inline-block">
+              {url}
+            </a>
+          </div>
+        ) : kind === "image" ? (
+          <img src={url} alt={name || ""} className="max-h-[70vh] max-w-full object-contain" onError={() => setFailed(true)} />
+        ) : (
+          <video
+            src={url}
+            controls
+            autoPlay
+            className="max-h-[70vh] max-w-full"
+            onError={() => setFailed(true)}
+          />
+        )}
+      </div>
+    </Modal>
   );
 }

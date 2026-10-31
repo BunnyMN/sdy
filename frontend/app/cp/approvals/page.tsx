@@ -17,12 +17,14 @@ import { useAction } from "@/components/cp/Action";
 import { Card, formatMoment } from "@/components/cp/ui";
 import { cp, type Approval } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote, LoadingBlock } from "@/components/ui";
 
 export default function Approvals() {
   const { t } = useI18n();
   const action = useAction();
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -30,6 +32,8 @@ export default function Approvals() {
       setFailure("");
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -44,13 +48,14 @@ export default function Approvals() {
         <p className="mt-1 text-sm text-muted">{t("cp.message.deletion_requested")}</p>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
-      {approvals.length === 0 && (
-        <p className="text-center text-muted py-10">{t("cp.message.no_approvals")}</p>
-      )}
+      {approvals.length === 0 &&
+        (loading ? (
+          <LoadingBlock rows={3} />
+        ) : (
+          !failure && <p className="text-center text-muted py-10">{t("cp.message.no_approvals")}</p>
+        ))}
 
       {approvals.map((approval) => (
         <Card key={approval.id} title={approval.action}>
@@ -94,7 +99,7 @@ export default function Approvals() {
                     onDone: load,
                   })
                 }
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-danger-solid px-3 py-2 text-sm font-medium text-white hover:brightness-110"
               >
                 <Check className="w-4 h-4" />
                 {t("cp.action.approve")}

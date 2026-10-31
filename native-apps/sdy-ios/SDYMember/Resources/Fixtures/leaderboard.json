@@ -1,0 +1,7 @@
+{"period":"month","standings":[
+ {"rank":1,"user_id":"u-5","name":"Сарангэрэл Б.","points":120,"attended":6,"tasks":3,"votes":4},
+ {"rank":2,"user_id":"u-6","name":"Тэмүүлэн Д.","points":95,"attended":5,"tasks":2,"votes":3},
+ {"rank":3,"user_id":"u-7","name":"Номин Э.","points":80,"attended":4,"tasks":2,"votes":2},
+ {"rank":4,"user_id":"u-1","name":"Батболд Ганзориг","points":45,"attended":2,"tasks":1,"votes":1},
+ {"rank":5,"user_id":"u-8","name":"Анхбаяр Ц.","points":30,"attended":2,"tasks":0,"votes":1}],
+ "me":{"rank":4,"user_id":"u-1","name":"Батболд Ганзориг","points":45,"attended":2,"tasks":1,"votes":1}}

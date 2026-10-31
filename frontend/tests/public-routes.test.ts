@@ -48,6 +48,13 @@ test("the front door and its menu are public", () => {
   }
 });
 
+test("the privacy policy and support page are public", () => {
+  // Linked from the App Store listing and read before anybody has an account;
+  // Apple's reviewer opens them signed out.
+  expect(isPublicPath("/privacy")).toBe(true);
+  expect(isPublicPath("/support")).toBe(true);
+});
+
 test("the console is drawn without the tenant shell, and holds its own session", () => {
   // Not public — it authenticates against its own API. It is here so the shell
   // does not ask /api/v1/me for an operator who holds no tenant session and

@@ -27,24 +27,27 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   const { t } = useI18n();
+  // A <div>, not a <main>: the shell around this boundary already rendered the
+  // page's one <main id="main">, and a second one nested inside it leaves a
+  // screen reader's landmark list with two "main" entries.
   return (
-    <main
+    <div
       role="alert"
       className="mx-auto flex max-w-[46rem] flex-col items-start gap-4 py-16"
     >
-      <AlertTriangle className="h-8 w-8 text-red-600" aria-hidden="true" />
+      <AlertTriangle className="h-8 w-8 text-danger" aria-hidden="true" />
       <h1 className="text-2xl font-semibold text-foreground">{t("base.error.crash_title")}</h1>
       <p className="text-sm text-muted">{t("base.error.crash_body")}</p>
       <button
         type="button"
         onClick={reset}
-        className="mt-2 inline-flex items-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105"
+        className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
       >
         {t("base.action.retry")}
       </button>
       {error.digest && (
         <p className="font-mono text-xs text-muted">{error.digest}</p>
       )}
-    </main>
+    </div>
   );
 }

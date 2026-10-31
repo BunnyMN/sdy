@@ -5,8 +5,10 @@ import Link from "next/link";
 import { duesApi, type Charge, type DuesSettings, type MyDuesPage, type Payment } from "@/lib/api/dues";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass, Loading } from "@/components/ui";
-import { chargeProgress, instalments, partAmount, partChoices, reportable, totalProgress, type Progress } from "@/lib/duesProgress";
+import { Badge, Banner, CopyButton, fieldClass, LoadingBlock } from "@/components/ui";
+import { chargeProgress, instalments, isOverdue, partAmount, partChoices, reportable, totalProgress, type Progress } from "@/lib/duesProgress";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { dayOf } from "@/lib/datetime";
 
 import { memberMoney as money, memberDate } from "@/lib/memberFormat";
 
@@ -35,8 +37,10 @@ type Report = { charge: Charge; parts: number; amount: number; reference: string
 export default function MemberDues() {
   const { t } = useI18n();
   const { allowed: finance } = useAccess("membership.finance");
+  const errorMessage = useErrorMessage();
   const [data, setData] = useState<MyDuesPage | null>(null);
   const [settings, setSettings] = useState<DuesSettings | null>(null);
+  const [loadFailed, setLoadFailed] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,20 +49,24 @@ export default function MemberDues() {
     const [next, config] = await Promise.all([duesApi.mine(), duesApi.settings()]);
     setData(next); setSettings(config);
   }, []);
-  useEffect(() => { void load().catch(err => setError(err instanceof Error ? err.message : "—")); }, [load]);
+  const firstLoad = useCallback(() => {
+    setLoadFailed("");
+    load().catch(err => setLoadFailed(errorMessage(err)));
+  }, [load, errorMessage]);
+  useEffect(() => { firstLoad(); }, [firstLoad]);
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (!report) return;
     setBusy(true); setError(""); setNotice("");
     try {
       await duesApi.report({ charge_id: report.charge.id, amount: report.amount, reference: report.reference.trim(), request_key: report.key });
       setReport(null); setNotice(t("dues.sent")); await load();
-    } catch (err) { setError(err instanceof Error ? err.message : "—"); }
+    } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   async function more() {
     if (!data) return; setBusy(true); setError("");
     try { const next = await duesApi.mine(data.next_offset); setData({ ...next, charges: [...data.charges, ...next.charges], payments: [...data.payments, ...next.payments] }); }
-    catch (err) { setError(err instanceof Error ? err.message : "—"); }
+    catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   const open = (charge: Charge) => {
@@ -67,11 +75,13 @@ export default function MemberDues() {
   };
   const split = (parts: number) => report && setReport({ ...report, parts, amount: partAmount(reportable(report.charge), parts) });
   const total = data?.totals && data.totals.charged > 0 ? totalProgress(data.totals) : null;
+  const today = dayOf();
 
   return <div className="mx-auto max-w-[720px] space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-semibold">{t("dues.title")}</h1>{finance && <Link className="min-h-11 rounded-lg border border-line px-4 py-3 text-sm" href="/member/finance">{t("dues.finance")}</Link>}</header>
-    {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="rounded-xl bg-success-soft p-4 text-success">{notice}</p>}
-    {!data && !error && <Loading />}
+    {error && <Banner tone="error" message={error} onDismiss={() => setError("")} />}{notice && <Banner tone="success" message={notice} onDismiss={() => setNotice("")} />}
+    {loadFailed && <><Banner tone="error" message={loadFailed} /><button type="button" onClick={firstLoad} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button></>}
+    {!data && !loadFailed && <LoadingBlock />}
 
     {total && <section aria-labelledby="dues-summary" className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -94,18 +104,22 @@ export default function MemberDues() {
 
     {settings && (settings.enabled ? <section className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <p className="text-sm text-muted">{t("dues.hint")}</p>
-      <dl className="space-y-2">{[["bank", settings.bank_name], ["account", settings.account_number], ["holder", settings.account_holder]].map(([key, value]) => <div key={key}><dt className="text-xs text-muted">{t(`dues.${key}`)}</dt><dd className="break-all font-medium">{value}</dd></div>)}</dl>
+      <dl className="space-y-2">{[["bank", settings.bank_name, false], ["account", settings.account_number, true], ["holder", settings.account_holder, true]].map(([key, value, copy]) => <div key={key as string}>
+        <dt className="text-xs text-muted">{t(`dues.${key}`)}</dt>
+        <dd className="flex items-center justify-between gap-2"><span className={`break-all font-medium${key === "account" ? " tabular-nums" : ""}`}>{value}</span>{copy && value ? <CopyButton value={value as string} label={t("base.action.copy")} /> : null}</dd>
+      </div>)}</dl>
       {settings.instructions && <p className="whitespace-pre-wrap text-sm">{settings.instructions}</p>}
     </section> : <p className="rounded-xl border border-line p-4 text-muted">{t("dues.unconfigured")}</p>)}
     {data?.charges.length === 0 && <p className="text-muted">{t("dues.empty")}</p>}
 
     {data?.charges.map(charge => {
       const progress = chargeProgress(charge);
+      const overdue = isOverdue(charge, today);
       const parts = instalments(data.payments, charge.id);
       const counted = parts.filter(part => part.status === "approved").length;
       const left = progress.left;
       return <article key={charge.id} className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
-        <div className="flex justify-between gap-3"><h2 className="font-semibold">{charge.period}</h2><strong className="tabular-nums">{money(charge.amount)}</strong></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-semibold">{charge.period}{overdue && <Badge tone="danger">{t("dues.overdue")}</Badge>}</h2><strong className="tabular-nums">{money(charge.amount)}</strong></div>
         <ProgressBar progress={progress} label={`${charge.period} — ${t("dues.paid_pct", { pct: progress.paidPct })}`} />
         <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
           <span className="font-semibold tabular-nums text-accent">{t("dues.paid_pct", { pct: progress.paidPct })}</span>
@@ -114,7 +128,7 @@ export default function MemberDues() {
           {progress.pending > 0 && <span className="tabular-nums text-muted">{t("dues.total_pending")}: {money(progress.pending)}</span>}
           <span className="tabular-nums text-muted">{t("dues.balance")}: {money(charge.balance)}</span>
         </p>
-        <p className="text-sm text-muted">{t("dues.due_date")}: {charge.due_date}</p>
+        <p className={`text-sm tabular-nums ${overdue ? "font-medium text-danger" : "text-muted"}`}>{t("dues.due_date")}: {charge.due_date.slice(0, 10)}</p>
         {charge.waived && <p className="text-sm">{t("dues.waived")}: {charge.waiver_reason}</p>}
 
         {parts.length > 0 && <ol className="divide-y divide-line rounded-md border border-line">
@@ -133,7 +147,7 @@ export default function MemberDues() {
               {parts === 1 ? t("dues.split_one") : t("dues.split_n", { n: parts })}
             </button>)}</div>
           </fieldset>
-          <label className="block space-y-1"><span className="text-sm">{t("dues.amount")}</span><input required type="number" min={1} max={left} step={1} value={report.amount} onChange={e => setReport({ ...report, amount: Number(e.target.value) })} className={`${fieldClass} w-full min-h-11 tabular-nums`} /></label>
+          <label className="block space-y-1"><span className="text-sm">{t("dues.amount")}</span><input required type="number" inputMode="numeric" min={1} max={left} step={1} value={report.amount} onChange={e => setReport({ ...report, amount: Number(e.target.value) })} className={`${fieldClass} w-full min-h-11 tabular-nums`} /></label>
           <p className="flex flex-wrap justify-between gap-2 rounded-md bg-surface-2 p-3 text-sm tabular-nums">
             <span>{t("dues.this_part")}: <strong>{money(Math.max(0, Math.min(report.amount || 0, left)))}</strong></span>
             <span className="text-muted">{t("dues.after_part")}: {money(Math.max(0, left - (report.amount || 0)))}</span>

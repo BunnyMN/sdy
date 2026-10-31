@@ -364,4 +364,70 @@ export const esign = {
 
   "esign.message.policy_saved": { mn: "Бодлогыг хадгаллаа.", en: "The policy was saved." },
 
+
+  // ─── Signature pad ─────────────────────────────────────────────────────────
+  "esign.action.undo": { mn: "Буцаах", en: "Undo" },
+  "esign.action.preview_document": { mn: "Баримтыг харах", en: "View the document" },
+  "esign.signature.mode": { mn: "Гарын үсэг оруулах арга", en: "How to sign" },
+  "esign.signature.mode_draw": { mn: "Зурах", en: "Draw" },
+  "esign.signature.mode_type": { mn: "Нэрээ бичих", en: "Type your name" },
+  "esign.signature.typed_label": { mn: "Овог, нэр", en: "Your full name" },
+  "esign.signature.draw_hint": {
+    mn: "Хулгана, хуруу эсвэл үзгээр цагаан талбарт гарын үсгээ зурна уу. Товшвол цэг үлдэнэ; «Буцаах» сүүлийн зураасыг арилгана.",
+    en: "Draw your signature in the white box with a mouse, finger or pen. A tap leaves a dot; Undo removes the last stroke.",
+  },
+  "esign.signature.type_hint": {
+    mn: "Зурах боломжгүй бол нэрээ бичнэ үү — бичмэл үсгээр гарын үсэг болгон буулгана.",
+    en: "If you cannot draw, type your name — it is set in a handwritten style as your signature.",
+  },
+
+  // ─── eID ceremony ──────────────────────────────────────────────────────────
+  "esign.eid.steps_label": { mn: "Гарын үсэг зурах алхам", en: "Signing steps" },
+  "esign.eid.step_pick": { mn: "Баримт сонгох", en: "Choose" },
+  "esign.eid.step_check": { mn: "Шалгах", en: "Check" },
+  "esign.eid.step_phone": { mn: "Утсаар батлах", en: "Confirm on phone" },
+  "esign.eid.step_download": { mn: "Татах", en: "Download" },
+  "esign.eid.step_done": { mn: "дууссан", en: "done" },
+  "esign.eid.confirm_title": { mn: "Илгээхээс өмнө шалгана уу", en: "Check before sending" },
+  "esign.eid.confirm_note": {
+    mn: "«Эхлүүлэх»-ийг дармагц энэ баримт eID Mongolia руу илгээгдэж, таны утсанд баталгаажуулах хүсэлт очно.",
+    en: "Once you press Start, this document is sent to eID Mongolia and a confirmation request goes to your phone.",
+  },
+  "esign.eid.size": { mn: "Хэмжээ", en: "Size" },
+  "esign.eid.start": { mn: "Гарын үсэг зурж эхлэх", en: "Start signing" },
+  "esign.eid.pick_other": { mn: "Өөр файл сонгох", en: "Choose another file" },
+  "esign.eid.preview_unavailable": {
+    mn: "Энэ хөтөч PDF-ийг энд харуулж чадахгүй байна.",
+    en: "This browser cannot show the PDF here.",
+  },
+  "esign.eid.open_preview": { mn: "Шинэ цонхонд нээх", en: "Open in a new tab" },
+  "esign.eid.step_open_app": { mn: "Утсандаа eID Mongolia аппыг нээнэ үү.", en: "Open the eID Mongolia app on your phone." },
+  "esign.eid.step_compare_code": {
+    mn: "Апп дээрх код энд харагдаж буй кодтой яг таарч байгааг шалгана уу.",
+    en: "Check that the code in the app matches the code shown here exactly.",
+  },
+  "esign.eid.expires_in": { mn: "Хүчинтэй хугацаа: {time}", en: "Expires in {time}" },
+  "esign.eid.expires_in_minutes": { mn: "Ойролцоогоор {minutes} минут үлдлээ", en: "About {minutes} minutes left" },
+  "esign.eid.expiring": { mn: "Хугацаа дуусч байна…", en: "Expiring…" },
+
+  // ─── Batches, probe, placement ─────────────────────────────────────────────
+  "esign.action.cancel_batch": { mn: "Багцыг цуцлах", en: "Cancel the batch" },
+  "esign.action.keep_batch": { mn: "Үргэлжлүүлэх", en: "Keep it" },
+  "esign.confirm.cancel_batch_title": { mn: "Багцыг цуцлах уу?", en: "Cancel this batch?" },
+  "esign.confirm.cancel_batch_body": {
+    mn: "«{name}» багцын зураагүй үлдсэн баримтууд алгасагдана. Зурсан баримтууд хэвээр үлдэнэ. Буцаах боломжгүй.",
+    en: "The documents in “{name}” that are not yet signed are skipped. Signed ones stay signed. This cannot be undone.",
+  },
+  "esign.message.item_failed": { mn: "Энэ баримтад гарын үсэг зурагдсангүй.", en: "This document could not be signed." },
+  "esign.message.probe_ok": { mn: "HSM холболт хэвийн байна.", en: "The HSM connection works." },
+  "esign.message.probe_failed": { mn: "HSM-тэй холбогдож чадсангүй.", en: "The HSM could not be reached." },
+  "esign.field.placement_box": { mn: "гарын үсгийн байрлал", en: "signature box" },
+  "esign.message.placement_box_label": {
+    mn: "Гарын үсгийн хайрцаг: X {x}, Y {y}, өргөн {width}, өндөр {height} цэг",
+    en: "Signature box: X {x}, Y {y}, width {width}, height {height} points",
+  },
+  "esign.message.placement_drag_hint": {
+    mn: "Хайрцгийг чирж зөөнө, буланг нь чирж томруулна. Сумаар 1 цэг (Shift — 10), Alt+сумаар хэмжээг өөрчилнө.",
+    en: "Drag the box to move it, drag its corner to resize. Arrow keys move it 1 pt (Shift: 10); Alt+arrows resize.",
+  },
 } as const;

@@ -163,9 +163,12 @@ func (h *Handlers) HandleEIDPoll(w http.ResponseWriter, r *http.Request) {
 		auth.ReportSessionFailure(w, err)
 		return
 	}
-	auth.SetSessionCookie(w, token, expiresAt)
+	// A native client that sent X-Session-Transport: bearer gets the token in
+	// the answer instead of a cookie — see auth.DeliverSession.
+	bodyToken := auth.DeliverSession(w, r, token, expiresAt)
 	audit.Record(r.Context(), tenantID, userID, "auth.eid_app_login_success", "eid", map[string]any{"verified": true, "method": "eid-app"})
-	httpx.JSON(w, http.StatusOK, map[string]any{"state": result.State, "expires_at": expiresAt, "identity": result.Identity})
+	httpx.JSON(w, http.StatusOK, auth.WithSessionToken(
+		map[string]any{"state": result.State, "expires_at": expiresAt, "identity": result.Identity}, bodyToken))
 }
 
 func (h *Handlers) HandleEIDLogin(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +225,7 @@ func (h *Handlers) HandleEIDLogin(w http.ResponseWriter, r *http.Request) {
 		auth.ReportSessionFailure(w, err)
 		return
 	}
-	auth.SetSessionCookie(w, token, expiresAt)
+	bodyToken := auth.DeliverSession(w, r, token, expiresAt)
 
 	telemetry.RecordLogin(telemetry.LoginEID, true)
 	audit.Record(r.Context(), tenantID, userID, "auth.eid_login_success", "eid", map[string]any{
@@ -233,7 +236,7 @@ func (h *Handlers) HandleEIDLogin(w http.ResponseWriter, r *http.Request) {
 	claims, _ := h.sessions.Resolve(r.Context(), token)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(auth.WithSessionToken(map[string]any{
 		"expires_at": expiresAt,
 		"identity":   identity,
 		"user": map[string]any{
@@ -243,7 +246,7 @@ func (h *Handlers) HandleEIDLogin(w http.ResponseWriter, r *http.Request) {
 			"email":     claims.Email,
 			"is_admin":  claims.IsAdmin,
 		},
-	})
+	}, bodyToken))
 }
 
 func (h *Handlers) HandleDANLogin(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +297,7 @@ func (h *Handlers) HandleDANLogin(w http.ResponseWriter, r *http.Request) {
 		auth.ReportSessionFailure(w, err)
 		return
 	}
-	auth.SetSessionCookie(w, token, expiresAt)
+	bodyToken := auth.DeliverSession(w, r, token, expiresAt)
 
 	telemetry.RecordLogin(telemetry.LoginDAN, true)
 	audit.Record(r.Context(), tenantID, userID, "auth.dan_gerege_login_success", "dan", map[string]any{
@@ -305,7 +308,7 @@ func (h *Handlers) HandleDANLogin(w http.ResponseWriter, r *http.Request) {
 	claims, _ := h.sessions.Resolve(r.Context(), token)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(auth.WithSessionToken(map[string]any{
 		"expires_at":  expiresAt,
 		"dan_profile": profile,
 		"user": map[string]any{
@@ -315,5 +318,5 @@ func (h *Handlers) HandleDANLogin(w http.ResponseWriter, r *http.Request) {
 			"email":     claims.Email,
 			"is_admin":  claims.IsAdmin,
 		},
-	})
+	}, bodyToken))
 }

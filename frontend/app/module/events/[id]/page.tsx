@@ -9,15 +9,15 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, CalendarDays, Check, MapPin, Pencil, Plus, Undo2, UserPlus, Users, X } from "lucide-react";
+import { CalendarDays, Check, MapPin, Pencil, Plus, Undo2, UserPlus, Users, Vote, X } from "lucide-react";
 
 import { eventsApi, type AttendanceStatus, type EventInput, type EventRecord, type Participant } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
-import { Screen, Panel, Loading, ErrorNote, Chip, useAccess } from "@/components/module/kit";
-import { Modal, selectClass, fieldClass } from "@/components/ui";
-import { EventForm, eventStatusTone, formatWhen } from "../shared";
+import { Screen, Panel, ErrorNote, Chip, useAccess } from "@/components/module/kit";
+import { Banner, LoadingBlock, Modal, selectClass, fieldClass, useConfirm } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { EventForm, eventCounts, eventStatusTone, formatWhen } from "../shared";
 import CheckinCode from "@/components/membership/CheckinCode";
 import EventDiscussion from "@/components/events/EventDiscussion";
 import EventTasks from "@/components/events/EventTasks";
@@ -30,8 +30,12 @@ const attendanceTone: Record<AttendanceStatus, "slate" | "emerald" | "amber" | "
 
 export default function EventPage() {
   const { id } = useParams<{ id: string }>();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
   const { allowed: canManage } = useAccess("events.manage");
+  const [voting, setVoting] = useState(0);
+  const onSummary = useCallback(({ voting }: { voting: number }) => setVoting(voting), []);
   const [event, setEvent] = useState<EventRecord | null | undefined>(undefined);
   const [people, setPeople] = useState<Participant[]>([]);
   const [failed, setFailed] = useState("");
@@ -45,15 +49,17 @@ export default function EventPage() {
 
   const load = useCallback(async () => {
     setFailed("");
-    try {
-      const [one, list] = await Promise.all([eventsApi.get(id), eventsApi.participants(id)]);
-      setEvent(one);
-      setPeople(list.participants);
-    } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+    // The participant list is secondary: if only it fails, the event still shows.
+    const [one, list] = await Promise.allSettled([eventsApi.get(id), eventsApi.participants(id)]);
+    if (one.status === "rejected") {
+      setFailed(errorMessage(one.reason));
       setEvent(null);
+      return;
     }
-  }, [id]);
+    setEvent(one.value);
+    if (list.status === "fulfilled") setPeople(list.value.participants);
+    else setFailed(errorMessage(list.reason));
+  }, [id, errorMessage]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -64,7 +70,7 @@ export default function EventPage() {
       await run();
       await load();
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -78,7 +84,7 @@ export default function EventPage() {
         const already = new Set(people.map((p) => p.user_id));
         setMembers(listed.filter((m) => !already.has(m.user_id)));
       } catch (err: unknown) {
-        setFailed(err instanceof Error ? err.message : "—");
+        setFailed(errorMessage(err));
       }
     }
   }
@@ -97,7 +103,7 @@ export default function EventPage() {
     try {
       await eventsApi.mark(id, correction.person.user_id, correction.status, correctionReason.trim());
       setCorrection(null); await load();
-    } catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
+    } catch (err) { setFailed(errorMessage(err)); }
     finally { setBusy(false); }
   }
 
@@ -112,19 +118,60 @@ export default function EventPage() {
     }
   }
 
-  if (event === undefined) return <Loading label={t("events.message.loading")} />;
+  async function withdraw() {
+    if (!(await confirm({ title: t("events.action.withdraw_confirm"), confirmLabel: t("events.action.withdraw"), tone: "danger" }))) return;
+    await act(() => eventsApi.withdraw(id));
+  }
+
+  // The member shell above this page already carries the way back to the list.
+  if (event === undefined) return <LoadingBlock label={t("events.message.loading")} />;
   if (event === null) {
     return (
       <Screen icon={<CalendarDays className="w-5 h-5" />} title={t("events.view.title")} subtitle="">
         <ErrorNote>{failed || t("events.message.not_found")}</ErrorNote>
-        <Link href="/module/events" className="text-sm text-accent inline-flex items-center gap-1"><ArrowLeft className="w-4 h-4" />{t("events.action.back")}</Link>
+        <button type="button" onClick={() => { setEvent(undefined); void load(); }} className="min-h-11 rounded-lg border border-input px-4 text-sm">{t("membership.retry")}</button>
       </Screen>
     );
   }
 
   const full = event.capacity !== null && event.registered >= event.capacity;
   const open = event.status === "planned";
-  const btn = "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-line text-muted hover:text-foreground disabled:opacity-50";
+  const btn = "inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-line text-muted hover:text-foreground disabled:opacity-50";
+
+  const participantList = people.length === 0 ? (
+      <p className="p-8 text-center text-sm text-muted">{t("events.message.no_participants")}</p>
+    ) : (
+      <ul className="divide-y divide-line">
+        {people.map((p) => (
+          <li key={p.user_id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <span className="min-w-0 flex-1">
+              <strong className="block text-sm text-foreground truncate">{p.name || p.email}</strong>
+              <span className="text-xs text-muted">{p.email}{p.note ? ` · ${p.note}` : ""}</span>
+            </span>
+            <Chip tone={attendanceTone[p.status]}>{t(`events.attendance.${p.status}`)}</Chip>
+            {canManage && (
+              <span className="flex gap-1">
+                {p.status !== "attended" && (
+                  <button disabled={busy} title={t("events.action.mark_attended")}
+                    onClick={() => mark(p, "attended")}
+                    className={`${btn} text-success`}><Check className="w-3.5 h-3.5" /> {t("events.action.mark_attended")}</button>
+                )}
+                {p.status !== "absent" && (
+                  <button disabled={busy} title={t("events.action.mark_absent")}
+                    onClick={() => mark(p, "absent")}
+                    className={btn}><X className="w-3.5 h-3.5" /> {t("events.action.mark_absent")}</button>
+                )}
+                {p.status !== "registered" && (
+                  <button disabled={busy} title={t("events.action.mark_registered")}
+                    onClick={() => mark(p, "registered")}
+                    className={btn}><Undo2 className="w-3.5 h-3.5" /> {t("events.action.mark_registered")}</button>
+                )}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+  );
 
   return (
     <Screen
@@ -132,22 +179,23 @@ export default function EventPage() {
       title={event.title}
       subtitle={event.description}
       action={canManage ? (
-        <button onClick={() => setEditing(true)} className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-muted">
+        <button onClick={() => setEditing(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-muted">
           <Pencil className="w-4 h-4" /> {t("events.action.edit")}
         </button>
       ) : undefined}
     >
-      <Link href="/module/events" className="text-sm text-accent inline-flex items-center gap-1"><ArrowLeft className="w-4 h-4" />{t("events.action.back")}</Link>
+      {voting > 0 && <Banner tone="info">
+        <a href="#discussion" className="inline-flex min-h-11 items-center gap-2 font-semibold underline"><Vote aria-hidden="true" className="h-4 w-4" />{t("events.discussion.open_banner", { count: voting })}</a>
+      </Banner>}
 
       <Panel className="p-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <Chip tone={eventStatusTone[event.status]}>{t(`events.status.${event.status}`)}</Chip>
-        <span className="inline-flex items-center gap-1.5 text-muted"><CalendarDays className="w-4 h-4" />
-          {formatWhen(event.starts_at, locale)}{event.ends_at ? ` — ${formatWhen(event.ends_at, locale)}` : ""}
+        <span className="inline-flex items-center gap-1.5 text-muted tabular-nums"><CalendarDays aria-hidden="true" className="w-4 h-4" />
+          {formatWhen(event.starts_at)}{event.ends_at ? ` — ${formatWhen(event.ends_at)}` : ""}
         </span>
         {event.location && <span className="inline-flex items-center gap-1.5 text-muted"><MapPin className="w-4 h-4" />{event.location}</span>}
-        <span className="inline-flex items-center gap-1.5 text-muted"><Users className="w-4 h-4" />
-          {t("events.message.counts", { registered: event.registered, attended: event.attended })}
-          {event.capacity ? ` / ${event.capacity}` : ""}
+        <span className="inline-flex items-center gap-1.5 text-muted tabular-nums"><Users aria-hidden="true" className="w-4 h-4" />
+          {eventCounts(t, event)}
           {full && <Chip tone="rose">{t("events.message.full")}</Chip>}
         </span>
         <span className="ml-auto flex items-center gap-2">
@@ -156,14 +204,14 @@ export default function EventPage() {
               <span className="text-xs text-muted">{t("events.message.my_status")}:</span>
               <Chip tone={attendanceTone[event.my_status]}>{t(`events.attendance.${event.my_status}`)}</Chip>
               {event.my_status === "registered" && open && (
-                <button disabled={busy} onClick={() => act(() => eventsApi.withdraw(id))} className={btn}>
+                <button disabled={busy} onClick={() => void withdraw()} className={btn}>
                   <X className="w-3.5 h-3.5" /> {t("events.action.withdraw")}
                 </button>
               )}
             </>
           ) : open && !full ? (
             <button disabled={busy} onClick={() => act(() => eventsApi.register(id))}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50">
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50">
               <Plus className="w-4 h-4" /> {t("events.action.register")}
             </button>
           ) : null}
@@ -174,51 +222,29 @@ export default function EventPage() {
 
       {canManage && open && <CheckinCode eventID={id} />}
 
-      <Panel>
-        <header className="flex items-center justify-between px-4 py-3 border-b border-line">
+      {canManage ? <>
+        <Panel>
+        <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-line">
           <h2 className="text-sm font-semibold text-foreground">{t("events.view.participants")} ({people.length})</h2>
           {canManage && (
             <button onClick={() => void openAdd()} className={btn}><UserPlus className="w-3.5 h-3.5" /> {t("events.view.add_participant")}</button>
           )}
         </header>
-        {people.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted">{t("events.message.no_participants")}</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {people.map((p) => (
-              <li key={p.user_id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <strong className="block text-sm text-foreground truncate">{p.name || p.email}</strong>
-                  <span className="text-xs text-muted">{p.email}{p.note ? ` · ${p.note}` : ""}</span>
-                </span>
-                <Chip tone={attendanceTone[p.status]}>{t(`events.attendance.${p.status}`)}</Chip>
-                {canManage && (
-                  <span className="flex gap-1">
-                    {p.status !== "attended" && (
-                      <button disabled={busy} title={t("events.action.mark_attended")}
-                        onClick={() => mark(p, "attended")}
-                        className={`${btn} text-green-700`}><Check className="w-3.5 h-3.5" /> {t("events.action.mark_attended")}</button>
-                    )}
-                    {p.status !== "absent" && (
-                      <button disabled={busy} title={t("events.action.mark_absent")}
-                        onClick={() => mark(p, "absent")}
-                        className={btn}><X className="w-3.5 h-3.5" /> {t("events.action.mark_absent")}</button>
-                    )}
-                    {p.status !== "registered" && (
-                      <button disabled={busy} title={t("events.action.mark_registered")}
-                        onClick={() => mark(p, "registered")}
-                        className={btn}><Undo2 className="w-3.5 h-3.5" /> {t("events.action.mark_registered")}</button>
-                    )}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-
-      <EventDiscussion eventID={id} />
-      <EventTasks eventID={id} closed={event.status !== "planned"} />
+        {participantList}
+        </Panel>
+        <EventDiscussion eventID={id} onSummary={onSummary} />
+        <EventTasks eventID={id} closed={event.status !== "planned"} />
+      </> : <>
+        <EventDiscussion eventID={id} onSummary={onSummary} />
+        <EventTasks eventID={id} closed={event.status !== "planned"} />
+        {/* For a member the list of who else is coming is the least of it, so it is folded away below what asks something of them. */}
+        <Panel>
+          <details>
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 py-3 text-sm font-semibold text-foreground">{t("events.view.participants")} ({people.length})</summary>
+            {participantList}
+          </details>
+        </Panel>
+      </>}
 
       {correction && <Modal label={t("membership.record.correction")} onClose={() => { if (!busy) setCorrection(null); }}>
         <form onSubmit={saveCorrection} className="space-y-4">

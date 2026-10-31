@@ -61,4 +61,8 @@ registerDictionary("dues", source({
   "dues.after_part": { mn: "Дараа нь үлдэх", en: "Left afterwards" },
   "dues.awaiting_all": { mn: "Үлдэгдлийг бүхэлд нь мэдээлсэн. Санхүүгийн баталгаажуулалт хүлээж байна.", en: "You have reported the whole balance. Awaiting finance verification." },
   "dues.cancel": { mn: "Болих", en: "Cancel" },
+  "dues.overdue": { mn: "Хугацаа хэтэрсэн", en: "Overdue" },
+  "dues.charge_confirm": { mn: "{period} сарын хураамжийг ногдуулах уу?", en: "Charge dues for {period}?" },
+  "dues.charge_confirm_body": { mn: "Энэ сарын хураамжгүй одоогийн бүх гишүүнд {amount} ногдоно. Буцаахдаа гишүүн бүрийг тусад нь чөлөөлөх шаардлагатай.", en: "Every current member without a charge for this month is charged {amount}. Undoing it means exempting each member separately." },
+  "dues.charge_confirm_count": { mn: "Идэвхтэй {count} гишүүний энэ сарын хураамжгүй хүн бүрд {amount} ногдоно. Буцаахдаа гишүүн бүрийг тусад нь чөлөөлөх шаардлагатай.", en: "Each of the {count} active members without a charge for this month is charged {amount}. Undoing it means exempting each member separately." },
 }));

@@ -76,6 +76,13 @@ export const app_store = {
   "app_store.message.update_failed": { mn: "{app}-ыг шинэчилж чадсангүй.", en: "Could not update {app}." },
   "app_store.message.enabled": { mn: "{app} идэвхжлээ.", en: "Enabled {app}." },
   "app_store.message.disabled": { mn: "{app} идэвхгүй боллоо.", en: "Disabled {app}." },
+  // Asked before an app is switched off, with what that does to the people
+  // using it — the button alone reads like a preference, and it is not one.
+  "app_store.message.confirm_disable": { mn: "{app}-ыг идэвхгүй болгох уу?", en: "Disable {app}?" },
+  "app_store.message.disable_impact": {
+    mn: "Байгууллагын бүх гишүүнд энэ аппын цэс, дэлгэцүүд шууд алга болж, түүнээс хамаарах ажлууд зогсоно. Өгөгдөл устахгүй — дахин идэвхжүүлэхэд хэвээрээ байна.",
+    en: "Its menu and screens disappear for everyone in the organisation straight away, and anything that depends on it stops. Its data is kept, and is all there again when you re-enable it.",
+  },
 
   // Said where the decision is made. An app whose new version asks for more
   // than the installed one is not updated on its own — the administrator is
@@ -137,4 +144,5 @@ export const app_store = {
   // this deployment is one of them — which is worth saying, because nothing
   // else on the card distinguishes it from an app anybody can install.
   "app_store.label.private": { mn: "Хаалттай", en: "Private" },
+  "app_store.label.category": { mn: "Ангилал", en: "Category" },
 } as const;

@@ -1,10 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, FileText, Layers, Play, Plus, Smartphone, XCircle } from "lucide-react";
-import { esign, type Batch, type EsignDocument } from "@/lib/esign";
+import { ChevronLeft, FileText, Layers, Play, Plus, XCircle } from "lucide-react";
+import { esign, type Batch, type EsignDocument, type SignSession } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import { Banner, EmptyState, Loading, Modal, PageHeader, cardClass, fieldClass, tableHeadClass } from "@/components/ui";
+import { formatDay } from "@/lib/datetime";
+import {
+  Banner,
+  EmptyState,
+  Loading,
+  Modal,
+  PageHeader,
+  cardClass,
+  fieldClass,
+  tableHeadClass,
+  useConfirm,
+} from "@/components/ui";
+import { EidWaitingPanel } from "@/components/esign/EidWaiting";
 import { BatchBadge, Card, ItemBadge, useErrorMessage } from "@/components/esign/shared";
 
 /**
@@ -65,13 +77,14 @@ export default function EsignBatchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Layers className="w-7 h-7 text-indigo-600" />}
+        icon={<Layers aria-hidden="true" className="w-7 h-7 text-accent" />}
         title={t("esign.view.batch_title")}
         subtitle={t("esign.view.batch_subtitle")}
         actions={
           <button
+            type="button"
             onClick={() => setCreating(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+            className="min-h-11 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
           >
             <Plus className="w-4 h-4" />
             {t("esign.action.new_batch")}
@@ -115,12 +128,13 @@ export default function EsignBatchPage() {
                   <td className="px-4 py-3">
                     <Progress signed={batch.signed} failed={batch.failed} total={batch.total} />
                   </td>
-                  <td className="px-4 py-3 font-mono text-[11px]">{batch.provider}</td>
-                  <td className="px-4 py-3 text-muted">{new Date(batch.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 font-mono text-2xs">{batch.provider}</td>
+                  <td className="px-4 py-3 text-muted">{formatDay(batch.created_at)}</td>
                   <td className="px-4 py-3 text-right">
                     <button
+                      type="button"
                       onClick={() => open(batch)}
-                      className="bg-surface-2 hover:bg-slate-200 text-foreground text-[11px] font-semibold px-3 py-1.5 rounded-lg"
+                      className="min-h-9 bg-surface-2 hover:bg-surface-hover border border-line text-foreground text-2xs font-semibold px-3 py-1.5 rounded-lg"
                     >
                       {t("base.action.open")}
                     </button>
@@ -150,11 +164,18 @@ function Progress({ signed, failed, total }: { signed: number; failed: number; t
   const done = total ? Math.round(((signed + failed) / total) * 100) : 0;
   return (
     <div className="min-w-[120px]">
-      <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden flex">
-        <div className="bg-emerald-500 h-full" style={{ width: `${total ? (signed / total) * 100 : 0}%` }} />
-        <div className="bg-red-400 h-full" style={{ width: `${total ? (failed / total) * 100 : 0}%` }} />
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={signed + failed}
+        aria-valuetext={`${signed}/${total} · ${done}%`}
+        className="h-1.5 bg-surface-2 rounded-full overflow-hidden flex"
+      >
+        <div className="bg-success-solid h-full" style={{ width: `${total ? (signed / total) * 100 : 0}%` }} />
+        <div className="bg-danger-solid h-full" style={{ width: `${total ? (failed / total) * 100 : 0}%` }} />
       </div>
-      <div className="text-[10px] text-muted mt-1 font-mono">
+      <div className="text-2xs text-muted mt-1 font-mono">
         {signed}/{total} · {done}%
       </div>
     </div>
@@ -172,8 +193,10 @@ function BatchDetail({
 }) {
   const { t } = useI18n();
   const describe = useErrorMessage();
+  const confirm = useConfirm();
   const [running, setRunning] = useState(false);
-  const [code, setCode] = useState<string | null>(null);
+  const [session, setSession] = useState<SignSession | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancelled = React.useRef(false);
 
@@ -200,11 +223,13 @@ function BatchDetail({
         await onRefresh(batch.id);
 
         if (step.error) {
-          setError(step.error);
+          // The server's own words for one document's failure — translated
+          // when a code is known, a plain "this one failed" otherwise.
+          setError(describe(step.error, t("esign.message.item_failed")));
         }
         if (!step.session) break; // nothing left to sign
 
-        setCode(step.session.verification_code ?? "····");
+        setSession(step.session);
 
         let settled = false;
         while (!cancelled.current && !settled) {
@@ -216,24 +241,43 @@ function BatchDetail({
             // transient — the ceremony is still open on the citizen's phone
           }
         }
-        setCode(null);
+        setSession(null);
         await onRefresh(batch.id);
       }
     } catch (err) {
       setError(describe(err, t("base.message.error")));
     } finally {
       setRunning(false);
-      setCode(null);
+      setSession(null);
     }
   };
 
-  const cancelBatch = async () => {
+  /** Stops the run here; the batch stays as it is and can be run again. */
+  const stopRun = () => {
     cancelled.current = true;
+    setSession(null);
+  };
+
+  const cancelBatch = async () => {
+    // Cancelling the batch is final — the remaining documents are skipped —
+    // so it is asked, not done on a single press beside "Run".
+    const ok = await confirm({
+      title: t("esign.confirm.cancel_batch_title"),
+      body: t("esign.confirm.cancel_batch_body", { name: batch.name }),
+      confirmLabel: t("esign.action.cancel_batch"),
+      cancelLabel: t("esign.action.keep_batch"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    cancelled.current = true;
+    setCancelling(true);
     try {
       await esign.cancelBatch(batch.id);
       await onRefresh(batch.id);
     } catch (err) {
       setError(describe(err, t("base.message.error")));
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -241,13 +285,13 @@ function BatchDetail({
 
   return (
     <div className="space-y-6">
-      <button onClick={onBack} className="text-xs text-muted hover:text-foreground flex items-center gap-1">
-        <ChevronLeft className="w-4 h-4" />
+      <button type="button" onClick={onBack} className="min-h-9 text-xs text-muted hover:text-foreground flex items-center gap-1">
+        <ChevronLeft aria-hidden="true" className="w-4 h-4" />
         {t("esign.action.back_to_batches")}
       </button>
 
       <PageHeader
-        icon={<Layers className="w-7 h-7 text-indigo-600" />}
+        icon={<Layers aria-hidden="true" className="w-7 h-7 text-accent" />}
         title={batch.name}
         subtitle={t("esign.view.batch_detail_subtitle", {
           signed: batch.signed,
@@ -257,21 +301,25 @@ function BatchDetail({
           <div className="flex gap-2">
             {pending && batch.status !== "CANCELLED" && (
               <button
+                type="button"
                 onClick={run}
                 disabled={running}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+                aria-busy={running || undefined}
+                className="min-h-11 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
               >
-                <Play className="w-4 h-4" />
+                <Play aria-hidden="true" className="w-4 h-4" />
                 {running ? t("esign.message.batch_running") : t("esign.action.run_batch")}
               </button>
             )}
             {batch.status !== "CANCELLED" && batch.status !== "COMPLETED" && (
               <button
+                type="button"
                 onClick={cancelBatch}
-                className="bg-surface-2 hover:bg-slate-200 text-foreground text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+                disabled={cancelling}
+                className="min-h-11 bg-surface-2 hover:bg-surface-hover border border-line text-danger text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
               >
-                <XCircle className="w-4 h-4" />
-                {t("base.action.cancel")}
+                <XCircle aria-hidden="true" className="w-4 h-4" />
+                {t("esign.action.cancel_batch")}
               </button>
             )}
           </div>
@@ -280,26 +328,19 @@ function BatchDetail({
 
       {error && <Banner tone="error" message={error} onDismiss={() => setError(null)} />}
 
-      {code && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-center">
-          <div className="inline-flex items-center gap-2 text-indigo-700 font-semibold text-sm">
-            <Smartphone className="w-4 h-4 animate-pulse" />
-            {t("esign.message.pin2_instruction")}
-          </div>
-          <div className="flex justify-center gap-2 mt-3">
-            {code.split("").map((digit, index) => (
-              <span
-                key={index}
-                className="w-10 h-12 inline-flex items-center justify-center text-xl font-semibold font-mono text-indigo-700 bg-surface rounded-lg border border-indigo-200"
-              >
-                {digit}
-              </span>
-            ))}
-          </div>
+      {session && (
+        <div className={`${cardClass} p-6`}>
+          <EidWaitingPanel
+            code={session.verification_code}
+            filename={batch.items?.find((item) => item.status === "RUNNING")?.document_title}
+            expiresAt={session.expires_at}
+            onCancel={stopRun}
+          />
         </div>
       )}
 
       <Card title={t("esign.view.batch_documents")}>
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-xs text-muted">
           <thead className={tableHeadClass}>
             <tr>
@@ -315,7 +356,7 @@ function BatchDetail({
                 <td className="px-4 py-3 text-muted font-mono">{index + 1}</td>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-foreground flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-muted" />
+                    <FileText aria-hidden="true" className="w-3.5 h-3.5 text-muted" />
                     {item.document_title}
                   </div>
                   <div className="text-muted font-mono mt-0.5">{item.file_name}</div>
@@ -323,11 +364,14 @@ function BatchDetail({
                 <td className="px-4 py-3">
                   <ItemBadge status={item.status} />
                 </td>
-                <td className="px-4 py-3 text-muted">{item.error || "—"}</td>
+                <td className="px-4 py-3 text-muted">
+                  {item.error ? describe(item.error, t("esign.message.item_failed")) : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -385,7 +429,14 @@ function CreateBatchModal({
   };
 
   return (
-    <Modal size="lg" className="max-h-[90vh] flex flex-col" label={t("esign.view.new_batch_title")}>
+    <Modal
+      size="lg"
+      className="max-h-[90vh] flex flex-col"
+      label={t("esign.view.new_batch_title")}
+      onClose={onClose}
+      dismissible={!busy}
+      dirty={!!name.trim() || picked.size > 0}
+    >
       <h2 className="text-xl font-semibold text-foreground mb-4">{t("esign.view.new_batch_title")}</h2>
       {error && <div className="mb-3"><Banner tone="error" message={error} onDismiss={() => setError(null)} /></div>}
 
@@ -422,11 +473,11 @@ function CreateBatchModal({
                     type="checkbox"
                     checked={picked.has(doc.id)}
                     onChange={() => toggle(doc.id)}
-                    className="rounded border-input text-indigo-600 focus:ring-indigo-500"
+                    className="h-4 w-4 rounded border-input accent-[var(--gerege-blue)]"
                   />
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-foreground truncate">{doc.title}</span>
-                    <span className="block text-[11px] text-muted font-mono truncate">{doc.file_name}</span>
+                    <span className="block text-2xs text-muted font-mono truncate">{doc.file_name}</span>
                   </span>
                 </label>
               ))
@@ -438,14 +489,15 @@ function CreateBatchModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-1/2 bg-surface-2 hover:bg-slate-200 text-foreground font-medium py-2 rounded-lg text-xs"
+            className="w-1/2 min-h-11 bg-surface-2 hover:bg-surface-hover border border-line text-foreground font-medium py-2 rounded-lg text-xs"
           >
             {t("base.action.cancel")}
           </button>
           <button
             type="submit"
             disabled={busy || picked.size === 0 || !name.trim()}
-            className="w-1/2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs"
+            aria-busy={busy || undefined}
+            className="w-1/2 min-h-11 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent font-medium py-2 rounded-lg text-xs"
           >
             {t("esign.action.create_batch")}
           </button>

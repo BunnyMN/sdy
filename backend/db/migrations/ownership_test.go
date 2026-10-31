@@ -136,6 +136,10 @@ var platformTables = map[string]table{
 	// What anybody, signed in or not, tells the platform from its front page.
 	// Nobody's organisation: it exists once per deployment. Migration 00114.
 	"public_feedback": {"operator", "public feedback"},
+	// A person asking for their account to be deleted, and how that ended.
+	// The person's, not any organisation's: it outlives every membership it
+	// ends. Written only on the login path. Migration 00115.
+	"account_deletion_requests": {"operator", "a person's own deletion request"},
 	// Who does what, deployment-wide. In registry because it is neither one
 	// workspace's nor one person's: an organisation publishes into it and
 	// everybody reads it. Migration 00090.

@@ -425,6 +425,10 @@ services:
       SERVICE_URL_BACKUPS: ${SERVICE_URL_BACKUPS:-}
       SERVICE_URL_MONITOR: ${SERVICE_URL_MONITOR:-}
       SERVICE_URL_DOCS: ${SERVICE_URL_DOCS:-}
+      # The Apple Developer team id of the iOS member app (ten characters).
+      # Read per request by app/.well-known/apple-app-site-association; empty
+      # answers 404 there, which is right for a deployment without the app.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
     volumes:
       # Mounted always and usually empty. Copy is configuration a person edits,
       # so it must not need an image rebuild — and it is not something the app

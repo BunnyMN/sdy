@@ -1,11 +1,13 @@
 "use client";
 
-import {useCallback,useEffect,useRef,useState} from "react";
+import {useCallback,useEffect,useId,useRef,useState} from "react";
 import dynamic from "next/dynamic";
 import {api} from "@/lib/api";
 import {useI18n} from "@/lib/i18n";
-import {Fingerprint,RefreshCw,ShieldCheck,Smartphone,X} from "lucide-react";
+import {useErrorMessage} from "@/lib/useErrorMessage";
+import {ExternalLink,Fingerprint,HelpCircle,RefreshCw,ShieldCheck,Smartphone,X} from "lucide-react";
 import {safeReturnPath} from "@/lib/safeReturnPath.mjs";
+import {EID_NEXT_KEY} from "@/lib/signIn";
 
 // Fetched when a QR code is actually drawn, which is after the visitor has
 // chosen to sign in with their phone. Imported at the top it was 15 KB over the
@@ -40,6 +42,22 @@ const TOLERATED_FAILURES=3;
 // minutes. A tighter figure here abandons approvals that were still in progress.
 const BACKSTOP=15*60_000;
 
+// Where somebody without the eID Mongolia app gets it. Store searches rather
+// than listings, the same as the iOS member app (native-apps/sdy-ios Config.swift):
+// TODO: replace with the official App Store / Google Play listing URLs once the
+// eID Mongolia publisher confirms them.
+export const EID_APP_STORE_URL="https://apps.apple.com/mn/search?term=eID%20Mongolia";
+export const EID_PLAY_STORE_URL="https://play.google.com/store/search?q=eID%20Mongolia&c=apps";
+
+// A registration number is two Cyrillic letters and eight digits. People type
+// it on a Latin keyboard as often as not, so Latin letters that look like a
+// Cyrillic one are read as that letter — "AA" and "АА" are the same thing on
+// screen and should be the same thing to eID.
+const LOOKALIKE:Record<string,string>={A:"А",B:"В",C:"С",E:"Е",H:"Н",K:"К",M:"М",O:"О",P:"Р",T:"Т",X:"Х",Y:"У"};
+export function normaliseNationalId(raw:string){return raw.toUpperCase().replace(/[A-Z]/g,c=>LOOKALIKE[c]??c).replace(/\s+/g,"")}
+// Register number, or a civil-registration number (digits only).
+export function validNationalId(value:string){return /^[А-ЯЁӨҮ]{2}\d{8}$/.test(value)||/^\d{8,}$/.test(value)}
+
 function mobile(){return typeof navigator!=="undefined"&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)}
 // Аль browser-ээс эхэлснийг eID апп руу дамжуулна — approve хийсний дараа ЯГ ТЭР browser руу
 // буцна. Үгүй бол апп системийн default browser-ыг нээж (iOS дээр ихэвчлэн Safari), иргэн
@@ -72,7 +90,17 @@ function clock(seconds:number){return `${Math.floor(seconds/60)}:${String(second
  */
 export default function EIDLogin({next="/member",compact=false,variant="card",binding,link=false,onLinked}:{next?:string;compact?:boolean;variant?:"card"|"signin";binding?:string;link?:boolean;onLinked?:()=>void}){
   const {t}=useI18n();
+  const errorMessage=useErrorMessage();
+  const uid=useId();
   const returnTo=safeReturnPath(next,"/member");
+  // Read after mount: the server cannot know, and guessing differently from the
+  // browser is a hydration mismatch.
+  const [onPhone,setOnPhone]=useState(false);
+  useEffect(()=>{setOnPhone(mobile())},[]);
+  const [invalid,setInvalid]=useState(false);
+  // What a screen reader is told about the countdown: twice, not every second.
+  const [announce,setAnnounce]=useState("");
+  const announced=useRef(0);
   const [method,setMethod]=useState<Method>("id"),[phase,setPhase]=useState<Phase>("idle"),[nationalId,setNationalId]=useState(""),[start,setStart]=useState<Start|null>(null),[error,setError]=useState(""),[left,setLeft]=useState(0);
   // Each attempt takes a ticket. Anything asynchronous compares its ticket
   // before touching state, so a cancelled or superseded attempt cannot revive
@@ -104,11 +132,11 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
         if(res.state==="REFUSED"){setPhase("refused");return}
       }catch(e:any){
         if(ticket.current!==mine)return;
-        if(++failures>TOLERATED_FAILURES){setError(e?.message||t("auth.message.error_link"));setPhase("error");return}
+        if(++failures>TOLERATED_FAILURES){setError(errorMessage(e,{fallback:"auth.message.error_link"}));setPhase("error");return}
       }
       await sleep(GAP);
     }
-  },[binding,link,onLinked,returnTo,stop,t]);
+  },[binding,link,onLinked,returnTo,stop,errorMessage]);
 
   const begin=useCallback(async(selected:Method)=>{
     stop();
@@ -116,20 +144,21 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
     setError("");setStart(null);setPhase("starting");
     try{
       const cb=mobile()?callbackURL():"";
+      if(cb&&!link&&!binding){try{sessionStorage.setItem(EID_NEXT_KEY,returnTo)}catch{/* Storage may be disabled; the callback falls back to /member. */}}
       const data:Start=binding
         ?await api.bindingEIDStart(binding,selected==="qr"?undefined:nationalId.trim().toUpperCase())
         :(selected==="qr"?await api.startEID(cb):await api.startEIDByNationalID(nationalId.trim().toUpperCase(),cb));
       if(ticket.current!==mine)return;
       // Same phone: eID's v3 Web2App link opens the app and brings the citizen
-      // back to /auth/eid/callback. The old geregesmartid:// scheme is no longer
-      // read by the eID app.
-      if(selected==="qr"&&mobile()&&data.app_link)window.location.href=data.app_link;
+      // back to /auth/eid/callback. It is a button now rather than an automatic
+      // jump: a phone without the app took the jump to a dead end, with no way
+      // to learn why. The old geregesmartid:// scheme is no longer read.
       void watch(data);
-    }catch(e:any){
+    }catch(e:unknown){
       if(ticket.current!==mine)return;
-      setError(e?.message||t("auth.message.error_service"));setPhase("error");
+      setError(errorMessage(e,{fallback:"auth.message.error_service"}));setPhase("error");
     }
-  },[binding,nationalId,stop,t,watch]);
+  },[binding,link,nationalId,returnTo,stop,errorMessage,watch]);
 
   /* Runs down the backstop, and shows it only when eID actually gave a deadline
      to run down. A countdown the API made up is worse than none: it hurried the
@@ -137,11 +166,15 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
   useEffect(()=>{
     if(phase!=="waiting"||!start)return;
     const deadline=deadlineOf(start);
-    const tick=()=>{const secs=Math.max(0,Math.ceil((deadline-Date.now())/1000));setLeft(secs);if(secs===0){stop();setPhase("expired")}};
+    announced.current=0;
+    const tick=()=>{const secs=Math.max(0,Math.ceil((deadline-Date.now())/1000));setLeft(secs);if(secs===0){stop();setPhase("expired");return}
+      if(!hasDeadline(start))return;
+      const mark=secs<=10?10:secs<=60?60:0;
+      if(mark&&announced.current!==mark){announced.current=mark;setAnnounce(t("auth.message.expires_soon",{time:clock(secs)}))}};
     tick();
     const id=setInterval(tick,1000);
     return ()=>clearInterval(id);
-  },[phase,start,stop]);
+  },[phase,start,stop,t]);
 
   /* Turns the QR over every second, from the links the API already sent, and
      asks for the next minute before they run out. A refill that fails leaves
@@ -165,26 +198,53 @@ export default function EIDLogin({next="/member",compact=false,variant="card",bi
   },[phase,method,start]);
 
   useEffect(()=>()=>{stop()},[stop]);
-  const cancel=()=>{stop();setPhase("idle");setStart(null);setError("")};
-  const switchMethod=(value:Method)=>{stop();setMethod(value);setPhase("idle");setStart(null);setError("");if(value==="qr")void begin("qr")};
+  const cancel=()=>{stop();setPhase("idle");setStart(null);setError("");setAnnounce("")};
+  const switchMethod=(value:Method)=>{if(value===method)return;stop();setMethod(value);setPhase("idle");setStart(null);setError("");setInvalid(false);setAnnounce("");if(value==="qr")void begin("qr")};
+  const submitId=(e:React.FormEvent)=>{e.preventDefault();const value=normaliseNationalId(nationalId);setNationalId(value);if(!validNationalId(value)){setInvalid(true);document.getElementById(`${uid}-rd`)?.focus();return}setInvalid(false);void begin("id")};
+  const methods:Method[]=["id","qr"];
+  const onTabKey=(e:React.KeyboardEvent)=>{if(e.key!=="ArrowRight"&&e.key!=="ArrowLeft"&&e.key!=="Home"&&e.key!=="End")return;e.preventDefault();
+    const at=methods.indexOf(method),to=e.key==="Home"?0:e.key==="End"?methods.length-1:(at+(e.key==="ArrowRight"?1:-1)+methods.length)%methods.length;
+    switchMethod(methods[to]);document.getElementById(`${uid}-tab-${methods[to]}`)?.focus()};
   const pending=phase==="starting"||phase==="waiting";
   const terminal=phase==="error"||phase==="expired"||phase==="refused";
   const bare=variant==="signin";
-  return <div className={`eid-login ${compact?"eid-login--compact":""}`} aria-live="polite">
+  const hintId=`${uid}-rd-hint`,errorId=`${uid}-rd-error`;
+  // Only status messages speak. The card used to be one polite live region,
+  // which read the countdown out every second for as long as it ran.
+  return <div className={`eid-login ${compact?"eid-login--compact":""}`}>
     {!bare&&<header className="eid-login__head"><span><Fingerprint/></span><div><h2>{t("auth.eid.title")}</h2><p>{t("auth.eid.subtitle")}</p></div></header>}
-    <div className="eid-tabs" role="tablist"><button className={method==="id"?"is-active":""} onClick={()=>switchMethod("id")}>{t("auth.eid.tab_id")}</button><button className={method==="qr"?"is-active":""} onClick={()=>switchMethod("qr")}>{t("auth.eid.tab_qr")}</button></div>
+    <div className="eid-tabs" role="tablist" aria-label={t("auth.eid.method_label")} onKeyDown={onTabKey}>
+      {methods.map(value=><button key={value} type="button" role="tab" id={`${uid}-tab-${value}`} aria-selected={method===value} aria-controls={`${uid}-panel`} tabIndex={method===value?0:-1} className={method===value?"is-active":""} onClick={()=>switchMethod(value)}>{t(value==="id"?"auth.eid.tab_id":"auth.eid.tab_qr")}</button>)}
+    </div>
+    <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${method}`}>
     {bare&&method==="id"&&!pending&&<p className="signin-instruction">{t("auth.eid.instruction")}</p>}
-    {error&&<p className="eid-alert eid-alert--error">{error}</p>}{phase==="expired"&&<p className="eid-alert">{t("auth.message.expired")}</p>}{phase==="refused"&&<p className="eid-alert eid-alert--error">{t("auth.message.refused")}</p>}
-    {method==="id"&&!pending&&<form onSubmit={e=>{e.preventDefault();void begin("id")}}><label htmlFor="eid-rd">{t("auth.eid.reg_number")}</label><input id="eid-rd" value={nationalId} onChange={e=>setNationalId(e.target.value.toUpperCase())} placeholder={t("auth.eid.reg_number_placeholder")} autoComplete="off" required minLength={8}/><button className="eid-primary"><Smartphone/> {t("auth.eid.send_request")}</button></form>}
-    {phase==="starting"&&<div className="eid-status"><RefreshCw className="animate-spin"/> {t("auth.message.starting")}</div>}
+    {error&&<p className="eid-alert eid-alert--error" role="alert">{error}</p>}{phase==="expired"&&<p className="eid-alert" role="alert">{t("auth.message.expired")}</p>}{phase==="refused"&&<p className="eid-alert eid-alert--error" role="alert">{t("auth.message.refused")}</p>}
+    {method==="id"&&!pending&&<form onSubmit={submitId} noValidate><label htmlFor={`${uid}-rd`}>{t("auth.eid.reg_number")}</label>
+      <input id={`${uid}-rd`} value={nationalId} onChange={e=>{setNationalId(normaliseNationalId(e.target.value));setInvalid(false)}} placeholder={t("auth.eid.reg_number_placeholder")} autoComplete="off" autoCapitalize="characters" spellCheck={false} autoFocus={bare} required minLength={8} maxLength={12}
+        aria-invalid={invalid||undefined} aria-describedby={invalid?`${errorId} ${hintId}`:hintId}/>
+      <small id={hintId} className="text-xs text-muted">{t("auth.eid.reg_number_hint")}</small>
+      {invalid&&<p id={errorId} className="eid-alert eid-alert--error" role="alert">{t("auth.eid.reg_number_invalid")}</p>}
+      <button type="submit" className="eid-primary"><Smartphone aria-hidden="true"/> {t("auth.eid.send_request")}</button></form>}
+    {phase==="starting"&&<div className="eid-status" role="status"><RefreshCw className="animate-spin" aria-hidden="true"/> {t("auth.message.starting")}</div>}
     {phase==="waiting"&&start&&<div className="eid-wait">
+      {/* On the phone that has the app, the button is the way in; the QR stays
+          for scanning from a second phone. */}
+      {method==="qr"&&onPhone&&start.app_link&&<a className="eid-primary" style={{width:"100%",textDecoration:"none"}} href={start.app_link}><ExternalLink aria-hidden="true"/> {t("auth.action.app_to_app")}</a>}
       {method==="qr"&&qrLink&&<div className="eid-qr"><QRCodeSVG value={qrLink} size={compact?154:190} level="L"/></div>}
-      <p>{t(method==="qr"?"auth.message.scan_qr":"auth.message.sent_push")}</p><small>{t("auth.eid.verification_code")}</small><strong>{start.verification_code}</strong><span><ShieldCheck/> {t("auth.eid.confirm_hint")}</span>
-      {hasDeadline(start)&&<span className="eid-countdown">{t("auth.message.expires_in",{time:clock(left)})}</span>}
+      <p role="status">{t(method==="qr"?"auth.message.scan_qr":"auth.message.sent_push")}</p><small>{t("auth.eid.verification_code")}</small><strong>{start.verification_code}</strong><span><ShieldCheck aria-hidden="true"/> {t("auth.eid.confirm_hint")}</span>
+      {hasDeadline(start)&&<span className="eid-countdown" aria-live="off">{t("auth.message.expires_in",{time:clock(left)})}</span>}
     </div>}
-    {pending&&<button className="eid-cancel" onClick={cancel}><X/> {t("auth.action.cancel")}</button>}
-    {phase==="success"&&<p className="eid-alert eid-alert--success">{t("auth.message.success")}</p>}
-    {terminal&&<button className="eid-retry" onClick={()=>void begin(method)}><RefreshCw/> {t("auth.action.retry")}</button>}
-    {!bare&&<footer><ShieldCheck/> {t("auth.eid.footer")}</footer>}
+    <span className="sr-only" role="status">{phase==="waiting"?announce:""}</span>
+    {pending&&<button type="button" className="eid-cancel" onClick={cancel}><X aria-hidden="true"/> {t("auth.action.cancel")}</button>}
+    {phase==="success"&&<p className="eid-alert eid-alert--success" role="status">{t("auth.message.success")}</p>}
+    {terminal&&<button type="button" className="eid-retry" onClick={()=>void begin(method)}><RefreshCw aria-hidden="true"/> {t("auth.action.retry")}</button>}
+    {!link&&phase!=="success"&&<details className="mt-3 text-xs text-muted">
+      <summary className="flex items-center gap-1.5 cursor-pointer min-h-[44px]"><HelpCircle aria-hidden="true" className="w-4 h-4"/> {t("auth.eid.no_app_title")}</summary>
+      <p className="mt-1">{t("auth.eid.no_app_body")}</p>
+      <p className="mt-1">{t("auth.eid.no_app_stores")}</p>
+      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1"><a className="underline text-accent" href={EID_APP_STORE_URL} target="_blank" rel="noopener noreferrer">App Store</a><a className="underline text-accent" href={EID_PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">Google Play</a></p>
+    </details>}
+    </div>
+    {!bare&&<footer><ShieldCheck aria-hidden="true"/> {t("auth.eid.footer")}</footer>}
   </div>
 }

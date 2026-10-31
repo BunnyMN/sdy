@@ -4,12 +4,22 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import type { MembershipTransfer } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass, Modal } from "@/components/ui";
+import { Badge, Banner, fieldClass, Modal } from "@/components/ui";
 import { memberDate } from "@/lib/memberFormat";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
-export function transferErrorMessage(error: unknown, t: (key: string) => string) {
-  const message = error instanceof Error ? error.message : "";
-  return t(message.startsWith("transfer_") || message === "branch_transfer_required" ? `membership.${message}` : "membership.transfer_failed");
+/** The transfer API's reasons, each with its own sentence. Anything else reads membership.transfer_failed. */
+const TRANSFER_REASONS = [
+  "transfer_reason_required", "transfer_source_unavailable", "transfer_destination_unavailable", "transfer_already_member",
+  "transfer_already_pending", "transfer_not_pending", "transfer_not_found", "transfer_source_changed",
+  "transfer_organisation_unavailable", "transfer_last_admin", "transfer_member_role_unavailable", "transfer_not_authorized",
+  "transfer_decision_required", "branch_transfer_required",
+] as const;
+export const TRANSFER_ERROR_CODES: Record<string, string> = Object.fromEntries(TRANSFER_REASONS.map(code => [code, `membership.${code}`]));
+
+/** useErrorMessage with the transfer API's own reasons. */
+export function useTransferErrorMessage() {
+  return useErrorMessage({ codes: TRANSFER_ERROR_CODES, fallback: "membership.transfer_failed" });
 }
 
 export default function MembershipTransfers({ memberships, branches, requests, reload }: {
@@ -19,6 +29,7 @@ export default function MembershipTransfers({ memberships, branches, requests, r
   reload: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const errorMessage = useTransferErrorMessage();
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState("");
   const [slug, setSlug] = useState("");
@@ -32,13 +43,13 @@ export default function MembershipTransfers({ memberships, branches, requests, r
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try { await api.requestTransfer(source, slug, message.trim()); setOpen(false); setMessage(""); setSlug(""); await reload(); }
-    catch (err) { setError(transferErrorMessage(err, t)); }
+    catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   async function cancel(id: string) {
     setBusy(true); setError("");
     try { await api.cancelTransfer(id); setCancelID(null); await reload(); }
-    catch (err) { setError(transferErrorMessage(err, t)); }
+    catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   if (!memberships.length && !requests.length) return null;
@@ -48,7 +59,7 @@ export default function MembershipTransfers({ memberships, branches, requests, r
     {error && <Banner tone="error" message={error} />}
     {requests.map(request => <article key={request.id} className="space-y-2 rounded-lg border border-line p-4">
       <p className="font-medium">{request.from_name} → {request.to_name}</p>
-      <p role="status" className={`w-fit rounded-sm px-2 py-1 text-xs font-medium ${request.status === "PENDING" ? "bg-warning-soft text-warning" : request.status === "ACCEPTED" ? "bg-success-soft text-success" : "bg-neutral-soft text-neutral"}`}>{t(`membership.transfer_${request.status.toLowerCase()}`)}</p>
+      <p role="status"><Badge tone={request.status === "PENDING" ? "warning" : request.status === "ACCEPTED" ? "success" : "neutral"}>{t(`membership.transfer_${request.status.toLowerCase()}`)}</Badge></p>
       <p className="whitespace-pre-wrap break-words text-sm text-muted">{request.message}</p>
       <time className="block text-xs text-muted tabular-nums" dateTime={request.created_at}>{memberDate(request.created_at)}</time>
       {request.status === "PENDING" && <button disabled={busy} onClick={() => { setCancelID(request.id); setError(""); }} className="min-h-11 rounded-md border border-input px-4 disabled:opacity-50">{t("membership.transfer_cancel")}</button>}

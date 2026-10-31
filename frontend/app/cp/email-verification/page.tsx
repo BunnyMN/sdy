@@ -19,6 +19,7 @@ import { CheckCircle2, Clock, ExternalLink, MailCheck, RefreshCw, XCircle } from
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type VerificationLedger } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote } from "@/components/ui";
 
 export default function Verifications() {
   const { t } = useI18n();
@@ -66,9 +67,7 @@ export default function Verifications() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label={t("emailverify.stat.total")} value={stats?.total} />
@@ -81,9 +80,9 @@ export default function Verifications() {
         <div className="p-4 space-y-2 text-sm">
           <p className="flex items-center gap-2">
             {service?.reachable ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <CheckCircle2 className="w-4 h-4 text-success" />
             ) : (
-              <XCircle className="w-4 h-4 text-red-600" />
+              <XCircle className="w-4 h-4 text-danger" />
             )}
             <span className="text-foreground">
               {!service?.configured
@@ -133,6 +132,7 @@ export default function Verifications() {
             </Badge>,
             formatMoment(row.verified_at || row.created_at),
           ])}
+          loading={!ledger && !failure}
           empty={t("emailverify.message.no_verifications")}
         />
       </Card>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chargeProgress, instalments, partAmount, partChoices, percent, reportable, totalProgress } from "@/lib/duesProgress";
+import { chargeProgress, instalments, isOverdue, partAmount, partChoices, percent, reportable, totalProgress } from "@/lib/duesProgress";
 import type { Payment } from "@/lib/api/dues";
 
 const payment = (id: string, status: Payment["status"], amount: number, created_at: string, charge_id = "c1"): Payment =>
@@ -41,5 +41,14 @@ describe("dues progress", () => {
       payment("r", "rejected", 3000, "2026-09-02T00:00:00Z"),
     ], "c1");
     expect(list.map(p => [p.id, p.number])).toEqual([["a", 1], ["r", 0], ["b", 2]]);
+  });
+
+  it("calls a charge overdue only after its due day, with something still owed", () => {
+    const charge = { balance: 5000, due_date: "2026-09-15", waived: false };
+    expect(isOverdue(charge, "2026-09-15")).toBe(false);
+    expect(isOverdue(charge, "2026-09-16")).toBe(true);
+    expect(isOverdue({ ...charge, due_date: "2026-09-15T00:00:00Z" }, "2026-09-16")).toBe(true);
+    expect(isOverdue({ ...charge, balance: 0 }, "2026-10-01")).toBe(false);
+    expect(isOverdue({ ...charge, waived: true }, "2026-10-01")).toBe(false);
   });
 });

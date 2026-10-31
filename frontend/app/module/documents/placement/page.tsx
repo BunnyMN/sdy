@@ -64,7 +64,7 @@ export default function EsignPlacementPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Move className="w-7 h-7 text-indigo-600" />}
+        icon={<Move aria-hidden="true" className="w-7 h-7 text-accent" />}
         title={t("esign.view.placement_title")}
         subtitle={t("esign.view.placement_subtitle")}
       />
@@ -125,7 +125,7 @@ export default function EsignPlacementPage() {
                 onChange={(event) => update({ page_number: Number(event.target.value) })}
                 className={fieldClass}
               />
-              <p className="text-[11px] text-muted mt-1">{t("esign.field.page_number_hint")}</p>
+              <p className="text-2xs text-muted mt-1">{t("esign.field.page_number_hint")}</p>
             </div>
 
             <div>
@@ -147,7 +147,7 @@ export default function EsignPlacementPage() {
                 onClick={() =>
                   setPlacement({ x: 80, y: 216, width: 200, height: 56, page_number: 0, text: "Тоон гарын үсгээр баталгаажив." })
                 }
-                className="bg-surface-2 hover:bg-slate-200 text-foreground text-xs font-medium px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
+                className="min-h-11 bg-surface-2 hover:bg-surface-hover border border-line text-foreground text-xs font-medium px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 {t("esign.action.reset_default")}
@@ -155,7 +155,8 @@ export default function EsignPlacementPage() {
               <button
                 type="submit"
                 disabled={saving || offPage}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
+                aria-busy={saving || undefined}
+                className="min-h-11 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"
               >
                 <Save className="w-3.5 h-3.5" />
                 {saving ? t("base.message.saving") : t("base.action.save")}
@@ -167,30 +168,157 @@ export default function EsignPlacementPage() {
         <Card title={t("esign.view.placement_preview")}>
           <div className="p-4">
             <div
+              data-placement-page
               className="relative mx-auto bg-surface border border-input shadow-inner"
               style={{ width: "100%", maxWidth: 320, aspectRatio: `${A4_WIDTH} / ${A4_HEIGHT}` }}
             >
               {/* Percentages keep the preview faithful at any rendered width. */}
-              <div
-                className="absolute bg-indigo-100/70 border-2 border-dashed border-indigo-500 flex items-end justify-center"
-                style={{
-                  left: `${(placement.x / A4_WIDTH) * 100}%`,
-                  top: `${(placement.y / A4_HEIGHT) * 100}%`,
-                  width: `${(placement.width / A4_WIDTH) * 100}%`,
-                  height: `${(placement.height / A4_HEIGHT) * 100}%`,
-                }}
-              >
-                <span className="text-[7px] text-indigo-700 font-semibold truncate px-1 pb-0.5">
-                  {placement.text}
-                </span>
-              </div>
+              <PlacementBox placement={placement} onChange={update} />
             </div>
-            <p className="text-[11px] text-muted mt-3 text-center">
+            <p className="text-2xs text-muted mt-3 text-center">
               {t("esign.message.placement_preview_hint", { width: A4_WIDTH, height: A4_HEIGHT })}
+            </p>
+            <p id="placement-drag-hint" className="text-2xs text-muted mt-1 text-center">
+              {t("esign.message.placement_drag_hint")}
             </p>
           </div>
         </Card>
       </div>
+    </div>
+  );
+}
+
+const MIN_WIDTH = 40;
+const MIN_HEIGHT = 20;
+const clamp = (value: number, low: number, high: number) => Math.round(Math.min(high, Math.max(low, value)));
+
+/**
+ * The stamp on the preview page, which can be moved and resized directly.
+ *
+ * Drag the box to move it, drag its corner to resize; arrow keys nudge it by a
+ * point (Shift: ten), and Alt with an arrow resizes. The numbers on the left
+ * stay the source of truth — this only writes to them — so a placement can
+ * still be typed exactly.
+ */
+function PlacementBox({
+  placement,
+  onChange,
+}: {
+  placement: Placement;
+  onChange: (patch: Partial<Placement>) => void;
+}) {
+  const { t } = useI18n();
+  const drag = React.useRef<{
+    mode: "move" | "resize";
+    startX: number;
+    startY: number;
+    origin: Placement;
+    scale: number;
+  } | null>(null);
+
+  const begin = (mode: "move" | "resize") => (event: React.PointerEvent<HTMLElement>) => {
+    const page = event.currentTarget.closest("[data-placement-page]") as HTMLElement | null;
+    if (!page) return;
+    event.preventDefault();
+    event.stopPropagation();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    drag.current = {
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: placement,
+      // Screen pixels to PDF points.
+      scale: A4_WIDTH / page.getBoundingClientRect().width,
+    };
+  };
+
+  const moveTo = (event: React.PointerEvent<HTMLElement>) => {
+    const state = drag.current;
+    if (!state) return;
+    const dx = (event.clientX - state.startX) * state.scale;
+    const dy = (event.clientY - state.startY) * state.scale;
+    const { origin } = state;
+    if (state.mode === "move") {
+      onChange({
+        x: clamp(origin.x + dx, 0, A4_WIDTH - origin.width),
+        y: clamp(origin.y + dy, 0, A4_HEIGHT - origin.height),
+      });
+    } else {
+      onChange({
+        width: clamp(origin.width + dx, MIN_WIDTH, A4_WIDTH - origin.x),
+        height: clamp(origin.height + dy, MIN_HEIGHT, A4_HEIGHT - origin.y),
+      });
+    }
+  };
+
+  const end = (event: React.PointerEvent<HTMLElement>) => {
+    if (!drag.current) return;
+    drag.current = null;
+    const target = event.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 10 : 1;
+    const delta: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    const move = delta[event.key];
+    if (!move) return;
+    event.preventDefault();
+    if (event.altKey) {
+      onChange({
+        width: clamp(placement.width + move[0], MIN_WIDTH, A4_WIDTH - placement.x),
+        height: clamp(placement.height + move[1], MIN_HEIGHT, A4_HEIGHT - placement.y),
+      });
+    } else {
+      onChange({
+        x: clamp(placement.x + move[0], 0, A4_WIDTH - placement.width),
+        y: clamp(placement.y + move[1], 0, A4_HEIGHT - placement.height),
+      });
+    }
+  };
+
+  return (
+    <div
+      role="group"
+      tabIndex={0}
+      aria-roledescription={t("esign.field.placement_box")}
+      aria-label={t("esign.message.placement_box_label", {
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+      })}
+      aria-describedby="placement-drag-hint"
+      onKeyDown={onKeyDown}
+      onPointerDown={begin("move")}
+      onPointerMove={moveTo}
+      onPointerUp={end}
+      onPointerCancel={end}
+      className="absolute bg-accent-soft/70 border-2 border-dashed border-accent flex items-end justify-center cursor-move touch-none select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      style={{
+        left: `${(placement.x / A4_WIDTH) * 100}%`,
+        top: `${(placement.y / A4_HEIGHT) * 100}%`,
+        width: `${(placement.width / A4_WIDTH) * 100}%`,
+        height: `${(placement.height / A4_HEIGHT) * 100}%`,
+      }}
+    >
+      <span className="text-2xs text-accent font-semibold truncate px-1 pb-0.5 pointer-events-none">
+        {placement.text}
+      </span>
+      {/* The resize handle: a corner big enough to catch with a finger. */}
+      <span
+        aria-hidden="true"
+        onPointerDown={begin("resize")}
+        onPointerMove={moveTo}
+        onPointerUp={end}
+        onPointerCancel={end}
+        className="absolute -right-2 -bottom-2 w-4 h-4 rounded-sm bg-accent border-2 border-surface cursor-nwse-resize touch-none"
+      />
     </div>
   );
 }
@@ -226,7 +354,7 @@ function NumberField({
         onChange={(event) => onChange(Number(event.target.value))}
         className={fieldClass}
       />
-      {hint && <p className="text-[11px] text-muted mt-1">{hint}</p>}
+      {hint && <p className="text-2xs text-muted mt-1">{hint}</p>}
     </div>
   );
 }

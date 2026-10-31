@@ -34,4 +34,8 @@ export const ar: Record<string, string> = {
   "ai.view.tab_translate": "ترجمة",
   "ai.view.title": "مساعد AI",
   "ai.view.translate_placeholder": "نص للترجمة...",
+  "ai.message.request_failed": "تعذّر على المساعد الرد. يرجى المحاولة مرة أخرى.",
+  "ai.action.record": "تسجيل رسالة صوتية",
+  "ai.action.send": "إرسال",
+  "ai.field.message": "الرسالة",
 };

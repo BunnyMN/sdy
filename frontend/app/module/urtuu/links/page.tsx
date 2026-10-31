@@ -23,19 +23,22 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, KeyRound, Link2, Plus, RefreshCw, Route, X } from "lucide-react";
+import { Check, KeyRound, Link2, Plus, RefreshCw, Route, X } from "lucide-react";
 
 import { api, type UrtuuCode, type UrtuuPeer } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Banner,
+  CopyButton,
   LoadingBlock,
   Modal,
   PageHeader,
+  SecretRevealDialog,
   cardClass,
   fieldClass,
   rowActionClass,
   tableHeadClass,
+  useConfirm,
 } from "@/components/ui";
 import { formatMoment } from "@/lib/datetime";
 
@@ -65,6 +68,7 @@ function useLabels() {
 export default function UrtuuSettingsPage() {
   const { t, locale } = useI18n();
   const labels = useLabels();
+  const confirm = useConfirm();
 
   const [peers, setPeers] = useState<UrtuuPeer[]>([]);
   const [codes, setCodes] = useState<UrtuuCode[]>([]);
@@ -129,7 +133,7 @@ export default function UrtuuSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Route className="w-7 h-7 text-indigo-600" />}
+        icon={<Route className="w-7 h-7 text-accent" />}
         title={t("urtuu.view.title")}
         subtitle={t("urtuu.view.subtitle")}
       />
@@ -142,7 +146,7 @@ export default function UrtuuSettingsPage() {
       {enabled && (
         <section className={`${cardClass} p-4`}>
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-1">
-            <KeyRound className="w-4 h-4 text-indigo-500" />
+            <KeyRound className="w-4 h-4 text-accent" />
             {t("urtuu.view.identity")}
           </h2>
           <p className="text-xs text-muted mb-3">{t("urtuu.view.identity_hint")}</p>
@@ -157,14 +161,14 @@ export default function UrtuuSettingsPage() {
       <section className={`${cardClass} p-4`}>
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-indigo-500" />
+            <Link2 className="w-4 h-4 text-accent" />
             {t("urtuu.section.links")}
           </h2>
           <div className="flex gap-2">
             <button
               disabled={!enabled}
               onClick={() => setInviting(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+              className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
               {t("urtuu.action.invite")}
@@ -200,24 +204,24 @@ export default function UrtuuSettingsPage() {
                     <td className="px-3 py-2">
                       <p className="font-semibold text-foreground">{peer.name || peer.id.slice(0, 8)}</p>
                       {peer.base_url && (
-                        <p className="text-[11px] text-muted font-mono">{peer.base_url}</p>
+                        <p className="text-2xs text-muted font-mono">{peer.base_url}</p>
                       )}
                       {/* The health of a link, said where somebody is already
                           looking: an undelivered count and the reason nothing
                           is moving. "Not delivered" with no reason is a
                           support ticket. */}
                       {peer.undelivered > 0 && (
-                        <p className="text-[11px] text-amber-600">
+                        <p className="text-2xs text-warning">
                           {t("urtuu.message.undelivered", { count: peer.undelivered })}
                         </p>
                       )}
                       {peer.clock_skew_seconds !== 0 && (
-                        <p className="text-[11px] text-muted">
+                        <p className="text-2xs text-muted">
                           {t("urtuu.message.clock_skew", { seconds: peer.clock_skew_seconds })}
                         </p>
                       )}
                       {peer.last_error && (
-                        <p className="text-[11px] text-rose-600 break-all">{peer.last_error}</p>
+                        <p className="text-2xs text-danger break-all">{peer.last_error}</p>
                       )}
                     </td>
                     <td className="px-3 py-2 text-muted">{labels.role(peer.role)}</td>
@@ -249,11 +253,15 @@ export default function UrtuuSettingsPage() {
                         )}
                         {!peer.revoked_at && (
                           <button
-                            className={`${rowActionClass} border-rose-200 text-rose-600 hover:bg-rose-50`}
-                            onClick={() => {
-                              if (!window.confirm(t("urtuu.message.confirm_revoke", { name: peer.name || peer.id })))
-                                return;
-                              act(() => api.revokeUrtuuPeer(peer.id), t("urtuu.message.revoked"));
+                            className={`${rowActionClass} border-danger-border text-danger hover:bg-danger-soft`}
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: t("urtuu.message.confirm_revoke", { name: peer.name || peer.id }),
+                                confirmLabel: t("urtuu.action.revoke"),
+                                tone: "danger",
+                              });
+                              if (!ok) return;
+                              void act(() => api.revokeUrtuuPeer(peer.id), t("urtuu.message.revoked"));
                             }}
                           >
                             <X className="w-3.5 h-3.5" />
@@ -297,7 +305,7 @@ export default function UrtuuSettingsPage() {
                   );
                 }, t("urtuu.message.imported", { count: 0 }))
               }
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+              className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               {t("urtuu.action.ring_sync")}
@@ -306,7 +314,7 @@ export default function UrtuuSettingsPage() {
         </div>
         <p className="text-xs text-muted mb-3">{t("urtuu.hint.codes")}</p>
         {!ringConfigured && (
-          <p className="text-xs text-amber-600 mb-3">{t("urtuu.message.ring_off")}</p>
+          <p className="text-xs text-warning mb-3">{t("urtuu.message.ring_off")}</p>
         )}
 
         {codes.length === 0 ? (
@@ -354,7 +362,7 @@ export default function UrtuuSettingsPage() {
                             t("urtuu.message.code_updated"),
                           )
                         }
-                        className="w-4 h-4 accent-indigo-600"
+                        className="w-4 h-4 accent-accent"
                       />
                     </td>
                   </tr>
@@ -425,20 +433,12 @@ export default function UrtuuSettingsPage() {
 }
 
 function Fingerprint({ label, value }: { label: string; value: string }) {
-  const { t } = useI18n();
   return (
     <div>
       <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
       <dd className="flex items-center gap-2">
         <code className="text-xs font-mono text-foreground break-all">{value}</code>
-        <button
-          type="button"
-          title={t("urtuu.action.copy")}
-          onClick={() => navigator.clipboard?.writeText(value)}
-          className="text-muted hover:text-foreground shrink-0"
-        >
-          <Copy className="w-3.5 h-3.5" />
-        </button>
+        <CopyButton value={value} id={label} />
       </dd>
     </div>
   );
@@ -447,12 +447,12 @@ function Fingerprint({ label, value }: { label: string; value: string }) {
 function StatusPill({ status, label }: { status: UrtuuPeer["status"]; label: string }) {
   const tone =
     status === "active"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      ? "bg-success-soft text-success border-success-border"
       : status === "revoked"
         ? "bg-surface-2 text-muted border-line"
-        : "bg-amber-50 text-amber-700 border-amber-200";
+        : "bg-warning-soft text-warning border-warning-border";
   return (
-    <span className={`inline-block border rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>
+    <span className={`inline-block border rounded-full px-2 py-0.5 text-2xs font-semibold ${tone}`}>
       {label}
     </span>
   );
@@ -477,67 +477,57 @@ function InviteDialog({
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // The code, once minted, is shown by the shared one-time-secret dialog:
+  // Escape and the backdrop do nothing, Done waits for "I have saved it", and
+  // Copy only ticks when the clipboard took it.
+  if (code) {
+    return (
+      <SecretRevealDialog
+        title={t("urtuu.modal.invite")}
+        body={t("urtuu.message.invite_hint")}
+        items={[{ label: t("urtuu.field.invite_code"), value: code, secret: true }]}
+        onDone={onClose}
+      />
+    );
+  }
+
   return (
     <Modal onClose={onClose} label={t("urtuu.modal.invite")}>
       <h3 className="text-base font-semibold text-foreground mb-3">{t("urtuu.modal.invite")}</h3>
-      {code ? (
-        <div className="space-y-3">
-          <p className="text-xs text-muted">{t("urtuu.message.invite_hint")}</p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-surface-2 border border-line rounded-lg px-3 py-2 font-mono text-sm tracking-widest text-foreground break-all">
-              {code}
-            </code>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard?.writeText(code)}
-              className={rowActionClass}
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>{t("urtuu.action.copy")}</span>
-            </button>
-          </div>
-          <div className="flex justify-end">
-            <button onClick={onClose} className="text-sm font-semibold text-muted px-3 py-1.5">
-              {t("base.action.close")}
-            </button>
-          </div>
+      <form
+        className="space-y-3"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setBusy(true);
+          try {
+            await onCreate(name);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label className="block text-xs font-semibold text-muted">
+          {t("urtuu.field.name")}
+          <input
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className={`${fieldClass} mt-1`}
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="text-sm font-semibold text-muted px-3 py-1.5">
+            {t("base.action.cancel")}
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-sm font-semibold px-4 py-1.5 rounded-lg"
+          >
+            {t("urtuu.action.invite")}
+          </button>
         </div>
-      ) : (
-        <form
-          className="space-y-3"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setBusy(true);
-            try {
-              await onCreate(name);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <label className="block text-xs font-semibold text-muted">
-            {t("urtuu.field.name")}
-            <input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className={`${fieldClass} mt-1`}
-            />
-          </label>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="text-sm font-semibold text-muted px-3 py-1.5">
-              {t("base.action.cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded-lg"
-            >
-              {t("urtuu.action.invite")}
-            </button>
-          </div>
-        </form>
-      )}
+      </form>
     </Modal>
   );
 }
@@ -603,7 +593,7 @@ function JoinDialog({
           <button
             type="submit"
             disabled={busy}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded-lg"
+            className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-sm font-semibold px-4 py-1.5 rounded-lg"
           >
             {t("urtuu.action.join")}
           </button>
@@ -732,7 +722,7 @@ function CodeDialog({
             className={`${fieldClass} mt-1 font-mono text-xs`}
           />
         </label>
-        {schemaError && <p className="text-xs text-rose-600">{schemaError}</p>}
+        {schemaError && <p className="text-xs text-danger">{schemaError}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="text-sm font-semibold text-muted px-3 py-1.5">
             {t("base.action.cancel")}
@@ -740,7 +730,7 @@ function CodeDialog({
           <button
             type="submit"
             disabled={busy}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded-lg"
+            className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-sm font-semibold px-4 py-1.5 rounded-lg"
           >
             {t("urtuu.action.save")}
           </button>
@@ -768,13 +758,15 @@ function OpenCodesDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [selected, setSelected] = useState<string[]>(() =>
+  const [initial] = useState<string[]>(() =>
     codes.filter((code) => code.open_to?.includes(peer.id)).map((code) => code.code),
   );
+  const [selected, setSelected] = useState<string[]>(initial);
+  const dirty = selected.length !== initial.length || selected.some((code) => !initial.includes(code));
   const [busy, setBusy] = useState(false);
 
   return (
-    <Modal onClose={onClose} label={t("urtuu.modal.open_codes", { name: peer.name })} size="lg" className="max-h-[80vh] overflow-y-auto">
+    <Modal onClose={onClose} label={t("urtuu.modal.open_codes", { name: peer.name })} dirty={dirty} size="lg" className="max-h-[80vh] overflow-y-auto">
       <h3 className="text-base font-semibold text-foreground mb-3">
         {t("urtuu.modal.open_codes", { name: peer.name || peer.id.slice(0, 8) })}
       </h3>
@@ -795,7 +787,7 @@ function OpenCodesDialog({
                         : current.filter((value) => value !== code.code),
                     )
                   }
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-accent"
                 />
                 <span className="font-mono text-xs text-muted">{code.code}</span>
                 <span>{codeName(code)}</span>
@@ -819,7 +811,7 @@ function OpenCodesDialog({
               setBusy(false);
             }
           }}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded-lg"
+          className="bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-sm font-semibold px-4 py-1.5 rounded-lg"
         >
           {t("urtuu.action.save")}
         </button>

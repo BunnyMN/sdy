@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { Banner, LoadingBlock, PageHeader, TableCard, fieldClass, rowActionClass, selectClass } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { Banner, LoadingBlock, PageHeader, TableCard, fieldClass, rowActionClass, selectClass, useConfirm } from "@/components/ui";
 import { ActionMessage } from "@/components/documents/shared";
 import { Files, Plus, Save, Trash2, Wand2 } from "lucide-react";
 
@@ -27,6 +28,8 @@ const DOC_TYPES = ["CONTRACT", "REQUEST", "APPROVAL"] as const;
  */
 export default function DocumentTemplatesPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
   const { can } = useAccess();
   const mayManage = can("documents.manage");
 
@@ -93,7 +96,7 @@ export default function DocumentTemplatesPage() {
       // would overwrite what the action that triggered this refresh had just reported.
       setLoadFailed(true);
       if (templates.length === 0) {
-        setMessage({ type: "error", text: err?.message || t("documents.message.templates_failed") });
+        setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.templates_failed" }) });
       }
     } finally {
       setLoading(false);
@@ -119,7 +122,7 @@ export default function DocumentTemplatesPage() {
         await loadData();
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err?.message || t("documents.message.templates_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.templates_failed" }) });
     } finally {
       setBusy("create", false);
     }
@@ -148,7 +151,7 @@ export default function DocumentTemplatesPage() {
     } catch (err: any) {
       // The draft stays on screen so the operator can fix what was refused — unless
       // the row itself is gone, which is not something they can fix by retyping.
-      setMessage({ type: "error", text: err?.message || t("documents.message.templates_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.templates_failed" }) });
       if (err?.status === 404) reconcile(tpl, err);
     } finally {
       setBusy(tpl.id, false);
@@ -178,7 +181,7 @@ export default function DocumentTemplatesPage() {
         text: t("documents.message.template_used", { title: doc?.title || tpl.name }),
       });
     } catch (err: any) {
-      setMessage({ type: "error", text: err?.message || t("documents.message.templates_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.templates_failed" }) });
       reconcile(tpl, err);
     } finally {
       setBusy(tpl.id, false);
@@ -186,7 +189,13 @@ export default function DocumentTemplatesPage() {
   };
 
   const handleDelete = async (tpl: Template) => {
-    if (!confirm(t("documents.message.template_delete_confirm", { name: tpl.name }))) return;
+    const ok = await confirm({
+      title: t("base.action.delete"),
+      body: t("documents.message.template_delete_confirm", { name: tpl.name }),
+      confirmLabel: t("base.action.delete"),
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusy(tpl.id, true);
     setMessage(null);
     try {
@@ -204,7 +213,7 @@ export default function DocumentTemplatesPage() {
         removedRef.current.add(tpl.id);
         setTemplates((current) => current.filter((row) => row.id !== tpl.id));
       } else {
-        setMessage({ type: "error", text: err?.message || t("documents.message.templates_failed") });
+        setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.templates_failed" }) });
       }
     } finally {
       setBusy(tpl.id, false);
@@ -214,7 +223,7 @@ export default function DocumentTemplatesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<Files className="w-7 h-7 text-indigo-600" />}
+        icon={<Files className="w-7 h-7 text-accent" />}
         title={t("documents.menu.templates")}
         subtitle={t("documents.view.templates_hint")}
       />
@@ -264,13 +273,13 @@ export default function DocumentTemplatesPage() {
             <button
               type="submit"
               disabled={isBusy("create") || !form.name.trim() || !form.title_pattern.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center justify-center space-x-2 disabled:opacity-50"
+              className="w-full bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
               <span>{t("documents.action.add_template")}</span>
             </button>
           </div>
-          <p className="md:col-span-4 text-[11px] text-muted">{t("documents.message.title_pattern_hint")}</p>
+          <p className="md:col-span-4 text-2xs text-muted">{t("documents.message.title_pattern_hint")}</p>
         </form>
       )}
 
@@ -302,13 +311,13 @@ export default function DocumentTemplatesPage() {
                 dismissed, and a refresh that failed after an action must not be the only
                 thing that says the rows are old. */}
             {loadFailed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
-                <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-warning-border bg-warning-soft">
+                <p className="text-2xs text-warning">{t("documents.message.stale_rows")}</p>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={() => loadData()}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                  className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-warning-border text-warning hover:brightness-95 disabled:opacity-50"
                 >
                   {t("documents.action.retry")}
                 </button>
@@ -325,7 +334,7 @@ export default function DocumentTemplatesPage() {
                   value={tpl.name}
                   disabled={!mayManage}
                   onChange={(e) => edit(tpl.id, { name: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs font-semibold border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                  className="w-full px-2 py-1.5 text-xs font-semibold border border-input rounded-lg focus:ring-2 focus:ring-ring disabled:border-transparent disabled:bg-transparent"
                 />
               </td>
               <td className="px-4 py-3">
@@ -333,7 +342,7 @@ export default function DocumentTemplatesPage() {
                   value={tpl.doc_type}
                   disabled={!mayManage}
                   onChange={(e) => edit(tpl.id, { doc_type: e.target.value })}
-                  className="h-[30px] px-2 py-1.5 text-xs font-mono border border-input rounded-lg bg-surface focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                  className="h-[30px] px-2 py-1.5 text-xs font-mono border border-input rounded-lg bg-surface focus:ring-2 focus:ring-ring disabled:border-transparent disabled:bg-transparent"
                 >
                   {DOC_TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -348,7 +357,7 @@ export default function DocumentTemplatesPage() {
                   value={tpl.title_pattern}
                   disabled={!mayManage}
                   onChange={(e) => edit(tpl.id, { title_pattern: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs font-mono border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                  className="w-full px-2 py-1.5 text-xs font-mono border border-input rounded-lg focus:ring-2 focus:ring-ring disabled:border-transparent disabled:bg-transparent"
                 />
               </td>
               <td className="px-4 py-3">
@@ -358,7 +367,7 @@ export default function DocumentTemplatesPage() {
                   disabled={!mayManage}
                   onChange={(e) => edit(tpl.id, { active: e.target.checked })}
                   title={t("documents.message.template_active_hint")}
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-[var(--gerege-blue)]"
                 />
               </td>
               <td className="px-4 py-3 text-right">
@@ -367,7 +376,7 @@ export default function DocumentTemplatesPage() {
                     <button
                       onClick={() => handleSave(tpl)}
                       disabled={isBusy(tpl.id) || !tpl.name.trim() || !tpl.title_pattern.trim()}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-2xs font-semibold border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>{t("base.action.save")}</span>
@@ -390,14 +399,14 @@ export default function DocumentTemplatesPage() {
                     <button
                       onClick={() => handleDelete(tpl)}
                       disabled={isBusy(tpl.id)}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-2xs font-semibold border border-danger-border text-danger hover:bg-danger-soft disabled:opacity-50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>{t("base.action.delete")}</span>
                     </button>
                   </div>
                 ) : (
-                  <span className="text-subtle text-[11px]">—</span>
+                  <span className="text-subtle text-2xs">—</span>
                 )}
               </td>
             </tr>

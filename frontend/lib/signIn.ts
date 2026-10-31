@@ -39,3 +39,12 @@ export async function localSignInEnabledOnServer(): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Where the sign-in screen's `next` waits while the citizen is in the eID
+ * Mongolia app. On a phone the app hands back to /auth/eid/callback, a fresh
+ * page that knows nothing of the screen that started it, so EIDLogin writes the
+ * return address here (sessionStorage) and the callback reads it back through
+ * safeReturnPath.
+ */
+export const EID_NEXT_KEY = "sdy.eid.next";

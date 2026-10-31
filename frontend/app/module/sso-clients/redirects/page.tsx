@@ -29,7 +29,7 @@ function classify(uri: string): Entry["kind"] {
 
 export default function RedirectPoliciesPage() {
   const { t } = useI18n();
-  const { copied, copy } = useCopy();
+  const { copied, failed, copy } = useCopy();
   const [clients, setClients] = useState<OAuth2Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -75,7 +75,7 @@ export default function RedirectPoliciesPage() {
         <ul className="space-y-2.5">
           {rules.map((rule, index) => (
             <li key={index} className="flex items-start gap-2.5 text-xs text-muted">
-              <span className="text-indigo-600 shrink-0 mt-0.5">{rule.icon}</span>
+              <span className="text-accent shrink-0 mt-0.5">{rule.icon}</span>
               {rule.text}
             </li>
           ))}
@@ -99,7 +99,7 @@ export default function RedirectPoliciesPage() {
               </thead>
               <tbody className="divide-y divide-line">
                 {entries.map(({ client, uri, kind }) => (
-                  <tr key={`${client.client_id}:${uri}`} className="hover:bg-slate-50/60">
+                  <tr key={`${client.client_id}:${uri}`} className="hover:bg-surface-hover">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-foreground flex items-center gap-1.5">
                         {client.client_type === "public"
@@ -111,14 +111,14 @@ export default function RedirectPoliciesPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <code className="text-xs font-mono text-foreground break-all">{uri}</code>
-                        <CopyButton value={uri} id={`${client.client_id}:${uri}`} copied={copied} onCopy={copy} />
+                        <CopyButton value={uri} id={`${client.client_id}:${uri}`} copied={copied} failed={failed} onCopy={copy} />
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       {kind === "https" && <Chip tone="emerald">https</Chip>}
                       {kind === "loopback" && (
                         <span className="inline-flex items-center gap-1">
-                          <Laptop className="w-3.5 h-3.5 text-amber-600" />
+                          <Laptop className="w-3.5 h-3.5 text-warning" />
                           <Chip tone="amber">{t("sso_clients.redirects.loopback")}</Chip>
                         </span>
                       )}

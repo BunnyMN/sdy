@@ -15,6 +15,7 @@ import { ExternalLink, Gauge as GaugeIcon, RefreshCw } from "lucide-react";
 import { Badge, Card, Table } from "@/components/cp/ui";
 import { cp, type Overview } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote } from "@/components/ui";
 
 export default function Metrics() {
   const { t } = useI18n();
@@ -70,14 +71,12 @@ export default function Metrics() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       {health && !health.monitoring && (
-        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
+        <Banner tone="warning">
           {t("cp.message.no_monitoring")}
-        </p>
+        </Banner>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -102,6 +101,7 @@ export default function Metrics() {
             `${gauge.warning}${gauge.unit}`,
             <StateBadge key="s" state={gauge.state} />,
           ])}
+          loading={!health && !failure}
           empty={t("cp.message.no_monitoring")}
         />
       </Card>
@@ -115,6 +115,7 @@ export default function Metrics() {
             system.measured ? `${Math.round(system.p95_seconds * 1000)} ms` : <Unmeasured key="p" />,
             <StateBadge key="s" state={system.state} />,
           ])}
+          loading={!health && !failure}
           empty={t("cp.message.no_monitoring")}
         />
       </Card>
@@ -145,7 +146,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "re
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${tone === "red" ? "text-red-600" : "text-foreground"}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-semibold ${tone === "red" ? "text-danger" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }

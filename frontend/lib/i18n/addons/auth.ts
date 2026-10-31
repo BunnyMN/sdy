@@ -52,7 +52,7 @@ export const auth = {
     en: "{brand} — signing you in through the unified login",
   },
   "auth.signin.title": { mn: "Нэвтрэх", en: "Sign in" },
-  "auth.signin.lede": { mn: "eID Mongolia App-аар нэвтрэх", en: "Sign in with the eID Mongolia app" },
+  "auth.signin.lede": { mn: "eID Mongolia апп-аар нэвтрэнэ", en: "Sign in with the eID Mongolia app" },
   "auth.signin.or": { mn: "эсвэл", en: "or" },
   "auth.signin.google": { mn: "Google-ээр нэвтрэх", en: "Sign in with Google" },
   "auth.signin.google_soon": { mn: "Google нэвтрэлт удахгүй", en: "Google sign-in is coming soon" },
@@ -60,7 +60,7 @@ export const auth = {
 
   "auth.eid.title": { mn: "eID Mongolia", en: "eID Mongolia" },
   "auth.eid.instruction": {
-    mn: "РД эсвэл иргэний бүртгэлийн дугаараа оруулна уу. Утсан дээрх eID Mongolia App-д мэдэгдэл ирнэ.",
+    mn: "Регистрийн дугаараа оруулна уу. Утсан дээрх eID Mongolia апп-д мэдэгдэл ирнэ.",
     en: "Enter your registration or civil ID number. A notification arrives in the eID Mongolia app on your phone.",
   },
   "auth.eid.subtitle": { mn: "Үндэсний цахим үнэмлэхээр баталгаажна", en: "Verified by the national digital ID" },
@@ -68,13 +68,55 @@ export const auth = {
   "auth.eid.tab_qr": { mn: "QR код", en: "QR code" },
   "auth.eid.reg_number": { mn: "Регистрийн дугаар", en: "Registration number" },
   "auth.eid.reg_number_placeholder": { mn: "АА00112233", en: "AA00112233" },
-  "auth.eid.send_request": { mn: "eID апп руу хүсэлт илгээх", en: "Send a request to the eID app" },
+  "auth.eid.send_request": { mn: "eID Mongolia апп руу хүсэлт илгээх", en: "Send a request to the eID Mongolia app" },
   "auth.eid.verification_code": { mn: "Баталгаажуулах код", en: "Verification code" },
   "auth.eid.confirm_hint": { mn: "Апп дээрх кодтой тулгаад зөвшөөрнө үү", en: "Match the code shown in the app, then approve" },
   "auth.eid.footer": {
-    mn: "Нууц үг дамжуулахгүй · Баталгаажуулалт eID апп дотор хийгдэнэ",
+    mn: "Нууц үг дамжуулахгүй · Баталгаажуулалт eID Mongolia апп дотор хийгдэнэ",
     en: "No password is sent · Approval happens inside the eID app",
   },
+
+  // Регистрийн дугаар: 2 кирилл үсэг + 8 цифр. Иргэний бүртгэлийн дугаар нь
+  // зөвхөн цифр тул тэрийг ч хүлээн авна.
+  "auth.eid.reg_number_hint": {
+    mn: "2 кирилл үсэг + 8 цифр, жишээ нь АА00112233",
+    en: "2 Cyrillic letters + 8 digits, for example АА00112233",
+  },
+  "auth.eid.reg_number_invalid": {
+    mn: "Регистрийн дугаар 2 кирилл үсэг, 8 цифрээс бүрдэнэ.",
+    en: "A registration number is 2 Cyrillic letters followed by 8 digits.",
+  },
+  "auth.eid.method_label": { mn: "Нэвтрэх арга", en: "Sign-in method" },
+  "auth.eid.no_app_title": { mn: "eID Mongolia апп байхгүй юу?", en: "No eID Mongolia app?" },
+  "auth.eid.no_app_body": {
+    mn: "Утсандаа eID Mongolia апп-ыг суулгаж, үнэмлэхээ бүртгүүлээд дахин оролдоно уу.",
+    en: "Install the eID Mongolia app on your phone, register your ID card in it, then try again.",
+  },
+  "auth.eid.no_app_stores": {
+    mn: "Апп-ыг App Store эсвэл Google Play-ээс «eID Mongolia» гэж хайж олно.",
+    en: "Search for “eID Mongolia” in the App Store or on Google Play.",
+  },
+  "auth.message.expires_soon": {
+    mn: "Хүсэлтийн хугацаа дуусахад {time} үлдлээ.",
+    en: "{time} left before the request expires.",
+  },
+  "auth.action.signing_in": { mn: "Нэвтэрч байна…", en: "Signing in…" },
+  "auth.action.saving_password": { mn: "Хадгалж байна…", en: "Saving…" },
+  "auth.action.show_password": { mn: "Нууц үгийг харуулах", en: "Show password" },
+  "auth.action.hide_password": { mn: "Нууц үгийг нуух", en: "Hide password" },
+  "auth.message.checking_link": { mn: "Холбоосыг шалгаж байна…", en: "Checking the link…" },
+
+  // /auth/eid/callback — eID Mongolia апп-аас буцаж ирэх хуудас.
+  "auth.callback.checking_title": { mn: "Нэвтрэлтийг баталгаажуулж байна", en: "Confirming your sign-in" },
+  "auth.callback.checking_body": {
+    mn: "eID Mongolia апп-аас ирсэн хариуг шалгаж байна…",
+    en: "Checking the answer from the eID Mongolia app…",
+  },
+  "auth.callback.missing": {
+    mn: "Нэвтрэх хүсэлт олдсонгүй. Дахин эхлүүлнэ үү.",
+    en: "The sign-in request could not be found. Please start again.",
+  },
+  "auth.callback.sign_in_again": { mn: "Дахин нэвтрэх", en: "Sign in again" },
 
   "auth.action.retry": { mn: "Дахин оролдох", en: "Try again" },
   "auth.action.cancel": { mn: "Цуцлах", en: "Cancel" },
@@ -83,7 +125,7 @@ export const auth = {
   "auth.field.email": { mn: "И-мэйл", en: "Email" },
   "auth.field.password": { mn: "Нууц үг", en: "Password" },
   "auth.field.staff_pin": { mn: "Ажилтны PIN", en: "Staff PIN" },
-  "auth.action.app_to_app": { mn: "eID апп-аар шууд нэвтрэх", en: "Open the eID app" },
+  "auth.action.app_to_app": { mn: "eID Mongolia апп-аар нээх", en: "Open in the eID Mongolia app" },
   "auth.action.staff_sign_in": { mn: "Ээлжийн ажилтнаар нэвтрэх", en: "Sign in as shift staff" },
 
   "auth.message.starting": { mn: "Хүсэлт үүсгэж байна…", en: "Creating the request…" },
@@ -293,4 +335,15 @@ export const auth = {
     mn: "Таныг баталгаажууллаа, гэхдээ энэ систем дээр танд бүртгэл алга. Байгууллагынхаа админд хандана уу.",
     en: "You are verified, but this deployment has no account for you. Ask your administrator.",
   },
+  "me.status.pending": { mn: "Хүлээгдэж буй", en: "Pending" },
+  "me.status.accepted": { mn: "Зөвшөөрсөн", en: "Accepted" },
+  "me.status.declined": { mn: "Татгалзсан", en: "Declined" },
+  "profile.delete.title": { mn: "Бүртгэл устгах", en: "Delete account" },
+  "profile.delete.hint": { mn: "Хүсэлт өгсний дараа та бүх төхөөрөмжөөс гарна. {days} хоногийн дотор дахин нэвтэрвэл хүсэлт цуцлагдаж, гишүүнчлэл тань сэргэнэ. Энэ хугацаа өнгөрвөл таны хувийн мэдээллийг нэргүй болгоно.", en: "After you ask, you are signed out everywhere. Signing in again within {days} days cancels the request and restores your memberships. After that, your personal details are anonymised." },
+  "profile.delete.action": { mn: "Бүртгэлээ устгах хүсэлт өгөх", en: "Request account deletion" },
+  "profile.delete.confirm_title": { mn: "Бүртгэлээ устгах уу?", en: "Delete your account?" },
+  "profile.delete.confirm_body": { mn: "Та одоо бүх төхөөрөмжөөс гарна. {days} хоногийн дотор дахин нэвтэрвэл хүсэлт цуцлагдана.", en: "You will be signed out on every device now. Signing in again within {days} days cancels the request." },
+  "profile.delete.confirm": { mn: "Устгах хүсэлт өгөх", en: "Request deletion" },
+  "profile.delete.reason": { mn: "Шалтгаан (заавал биш)", en: "Reason (optional)" },
+  "profile.delete.signing_out": { mn: "Хүсэлт хүлээн авлаа. Гарч байна…", en: "Request received. Signing out…" },
 } as const;

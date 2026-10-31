@@ -5,14 +5,15 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
-import { Banner, Loading, Modal } from "@/components/ui";
+import { Banner, LoadingBlock, Modal } from "@/components/ui";
 import { memberDate } from "@/lib/memberFormat";
-import { transferErrorMessage } from "@/components/MembershipTransfers";
+import { useTransferErrorMessage } from "@/components/MembershipTransfers";
 
 type Request = Awaited<ReturnType<typeof api.getTransferRequests>>["requests"][number];
 
 export default function TransferRequests() {
   const { t } = useI18n();
+  const errorMessage = useTransferErrorMessage();
   const { isAdmin, loading } = useAccess();
   const [requests, setRequests] = useState<Request[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,22 +22,22 @@ export default function TransferRequests() {
   const [decision, setDecision] = useState<{ request: Request; accept: boolean } | null>(null);
   const load = useCallback(async () => {
     try { setRequests((await api.getTransferRequests()).requests); setError(""); }
-    catch (err) { setError(transferErrorMessage(err, t)); }
-  }, [t]);
+    catch (err) { setError(errorMessage(err)); }
+  }, [errorMessage]);
   useEffect(() => { if (!loading && isAdmin) void load(); }, [loading, isAdmin, load]);
   async function decide(id: string, accept: boolean) {
     setBusy(true); setError(""); setNotice("");
     try { await api.decideTransfer(id, accept); setDecision(null); setNotice(t("membership.decided")); await load(); }
-    catch (err) { setError(transferErrorMessage(err, t)); }
+    catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
-  if (loading) return <Loading />;
+  if (loading) return <LoadingBlock />;
   if (!isAdmin) return <div className="space-y-4"><h1>{t("membership.no_access_title")}</h1><p>{t("membership.transfer_admin_required")}</p><Link href="/member" className="inline-flex min-h-11 items-center rounded-md border border-input px-4">{t("membership.back")}</Link></div>;
   return <div className="mx-auto max-w-[720px] space-y-4">
     <header><h1 className="text-2xl font-semibold">{t("membership.transfer_requests")}</h1><p className="mt-2 text-sm text-muted">{t("membership.transfer_review_hint")}</p></header>
     <button disabled={busy} onClick={() => void load()} className="min-h-11 rounded-lg border border-line px-4">{t("membership.refresh")}</button>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="text-success">{notice}</p>}
-    {!requests && !error && <Loading />}
+    {!requests && !error && <LoadingBlock />}
     {requests?.length === 0 && <p className="rounded-xl border border-line p-4 sm:p-6 text-muted">{t("membership.no_requests")}</p>}
     {requests?.map(request => <article key={request.id} className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <div><h2 className="font-semibold">{request.name}</h2><p className="break-all text-sm text-muted">{request.email}</p></div>

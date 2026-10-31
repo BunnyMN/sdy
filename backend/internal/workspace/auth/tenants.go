@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -61,6 +62,18 @@ var ErrNoOrganisation = errors.New("this account does not belong to any organisa
 // organisation's three, and at a million people that is half the database it
 // would otherwise be.
 func (h *Handlers) FirstTenantFor(ctx context.Context, userID string) (string, error) {
+	// Somebody who asked for their account to be deleted and signs in again
+	// inside the thirty days has changed their mind. Every sign-in path asks
+	// this function where to open, and asks it only after the identity is
+	// proved, so this is the one place that sees all of them — and it has to
+	// happen before the question below, because the memberships the request
+	// ended are what the cancellation restores. Impersonation does not come
+	// through here, so an operator looking at an account cannot undo its
+	// owner's request. Migration 00115.
+	if err := h.cancelPendingDeletion(ctx, userID); err != nil {
+		return "", err
+	}
+
 	// Their own space first, and its error is not fatal to the sign-in. It is
 	// where they end up only if they work nowhere; somebody with an
 	// organisation to open should not be kept out of it because the workspace
@@ -182,6 +195,28 @@ func (h *Handlers) ensureHomeMembership(ctx context.Context, tenantID, userID st
 		                     WHERE tenant_id = $1::uuid AND user_id = $2::uuid)`,
 		tenantID, userID); err != nil {
 		return fmt.Errorf("make this person a member of their own home: %w", err)
+	}
+	return nil
+}
+
+// cancelPendingDeletion withdraws this person's pending account-deletion
+// request, if they have one, and puts back the memberships it ended.
+//
+// A failure fails the sign-in rather than being logged and passed over: a
+// person let in with the request still pending would be anonymised under
+// their own session at the end of the grace period, which is worse than being
+// asked to try again.
+func (h *Handlers) cancelPendingDeletion(ctx context.Context, userID string) error {
+	if userID == "" {
+		return nil
+	}
+	var cancelled bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT registry.cancel_account_deletion($1::uuid)`, userID).Scan(&cancelled); err != nil {
+		return fmt.Errorf("cancel pending account deletion: %w", err)
+	}
+	if cancelled {
+		slog.Info("a sign-in cancelled a pending account deletion", "user_id", userID)
 	}
 	return nil
 }

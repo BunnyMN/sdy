@@ -20,7 +20,7 @@ import {
 
 export default function ApiKeysPage() {
   const { t, locale } = useI18n();
-  const { copied, copy } = useCopy();
+  const { copied, failed, copy } = useCopy();
   // Every mutation below maps to developer.manage in the gate middleware, so
   // the screen asks the same question before offering the control.
   const { allowed: canManage } = useAccess("sso_clients.manage");
@@ -106,7 +106,7 @@ export default function ApiKeysPage() {
       action={canManage && (
         <button
           onClick={() => setCreating(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm"
+          className="bg-accent hover:bg-accent-hover text-on-accent px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm"
         >
           <Plus className="w-4 h-4" /> {t("sso_clients.keys.create")}
         </button>
@@ -135,9 +135,9 @@ export default function ApiKeysPage() {
                   </h3>
                   <div className="flex items-center gap-2 mt-1 text-xs font-mono text-muted">
                     {key.client_id}
-                    <CopyButton value={key.client_id} id={key.client_id} copied={copied} onCopy={copy} />
+                    <CopyButton value={key.client_id} id={key.client_id} copied={copied} failed={failed} onCopy={copy} />
                   </div>
-                  <p className="text-[11px] text-muted mt-1">
+                  <p className="text-2xs text-muted mt-1">
                     {t("sso_clients.field.last_used")}:{" "}
                     {relativeDate(key.last_used_at, t("sso_clients.message.never_used"), locale)}
                   </p>
@@ -145,13 +145,13 @@ export default function ApiKeysPage() {
                 <div className={`flex gap-1 ${canManage ? "" : "hidden"}`}>
                   <button
                     onClick={() => setConfirming({ client: key, action: "rotate" })}
-                    className="text-xs font-semibold text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                    className="text-xs font-semibold text-warning hover:bg-warning-soft px-3 py-1.5 rounded-lg flex items-center gap-1.5"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> {t("sso_clients.action.rotate")}
                   </button>
                   <button
                     onClick={() => setConfirming({ client: key, action: "delete" })}
-                    className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                    className="text-xs font-semibold text-danger hover:bg-danger-soft px-3 py-1.5 rounded-lg flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> {t("base.action.delete")}
                   </button>
@@ -168,10 +168,10 @@ export default function ApiKeysPage() {
 
               {endpoints.token_endpoint && (
                 <details className="mt-3 group">
-                  <summary className="text-[11px] font-semibold text-muted cursor-pointer flex items-center gap-1.5">
+                  <summary className="text-2xs font-semibold text-muted cursor-pointer flex items-center gap-1.5">
                     <Terminal className="w-3.5 h-3.5" /> {t("sso_clients.keys.curl")}
                   </summary>
-                  <pre className="mt-2 text-[11px] bg-slate-900 text-slate-200 rounded-lg p-3 overflow-x-auto">
+                  <pre className="mt-2 text-2xs bg-surface-2 text-foreground border border-line rounded-lg p-3 overflow-x-auto">
 {`curl -X POST ${endpoints.token_endpoint} \\
   -u '${key.client_id}:YOUR_SECRET' \\
   -d 'grant_type=client_credentials'`}
@@ -211,7 +211,7 @@ function CreateKeyDialog({ scopes, onCancel, onCreate }: {
   const [chosen, setChosen] = useState<string[]>(["erp.read"]);
 
   return (
-    <Modal onClose={onCancel}>
+    <Modal onClose={onCancel} label={t("sso_clients.keys.create")}>
       <form
         onSubmit={(e) => { e.preventDefault(); onCreate(name, chosen); }}
         className="space-y-4"
@@ -224,7 +224,7 @@ function CreateKeyDialog({ scopes, onCancel, onCreate }: {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            placeholder="Warehouse sync job"
+            placeholder={t("sso_clients.keys.name_placeholder")}
             className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-lg"
           />
         </label>
@@ -244,7 +244,7 @@ function CreateKeyDialog({ scopes, onCancel, onCreate }: {
                 />
                 <span>
                   <span className="font-mono text-foreground">{scope.name}</span>
-                  {scope.sensitive && <span className="ml-1.5"><Chip tone="amber">sensitive</Chip></span>}
+                  {scope.sensitive && <span className="ml-1.5"><Chip tone="amber">{t("oauth.consent.sensitive")}</Chip></span>}
                   <span className="block text-muted">
                     {locale === "mn" ? scope.description_mn : scope.description}
                   </span>
@@ -261,7 +261,7 @@ function CreateKeyDialog({ scopes, onCancel, onCreate }: {
           <button
             type="submit"
             disabled={chosen.length === 0}
-            className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-on-accent rounded-lg font-semibold disabled:opacity-50"
           >
             {t("base.action.create")}
           </button>

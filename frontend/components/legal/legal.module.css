@@ -1,0 +1,50 @@
+/* Нууцлалын бодлого, тусламжийн хуудсууд — уншихад зориулсан нэг багана.
+   Өнгөний утгууд SDY нүүр хуудастай (components/landing/sdy-landing.module.css)
+   ижил; глобал CSS-д хамаарахгүйн тулд энд тусад нь тодорхойлсон. */
+.page {
+  --lg-bg: #fff; --lg-soft: #f7f8fa; --lg-fg: #172033; --lg-muted: #526074;
+  --lg-border: #e2e7ee; --lg-accent: #9c1d25; --lg-ring: #9c1d25;
+  min-height: 100dvh; background: var(--lg-bg); color: var(--lg-fg);
+  font-size: 16px; line-height: 1.6; color-scheme: light;
+}
+:global(.dark) .page {
+  --lg-bg: #0c111b; --lg-soft: #121a27; --lg-fg: #f1f4f8; --lg-muted: #b3bed0;
+  --lg-border: #303c4e; --lg-accent: #efa0a5; --lg-ring: #efa0a5; color-scheme: dark;
+}
+.page :is(h1,h2,h3,p,ul,ol,dl) { margin: 0; }
+.page :is(h1,h2,h3,strong,dt) { font-weight: 600; }
+.page :is(p,li,dd,a) { overflow-wrap: break-word; }
+.page a { color: var(--lg-accent); text-underline-offset: 3px; }
+.page a:focus-visible, .page summary:focus-visible { outline: 2px solid var(--lg-ring); outline-offset: 3px; border-radius: 2px; }
+
+.header { border-bottom: 1px solid var(--lg-border); background: var(--lg-bg); }
+.headerInner { width: min(100% - 32px, 760px); margin-inline: auto; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--lg-fg) !important; text-decoration: none; }
+.brand img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
+.brand span { display: flex; flex-direction: column; line-height: 1.2; }
+.brand small { color: var(--lg-muted); font-size: 12px; }
+.headerNav { display: flex; gap: 16px; font-size: 14px; }
+.headerNav a { color: var(--lg-muted); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.headerNav a:hover { color: var(--lg-accent); text-decoration: underline; }
+
+.main { width: min(100% - 32px, 760px); margin-inline: auto; padding: 40px 0 64px; display: grid; gap: 32px; }
+.title { display: grid; gap: 8px; }
+.title h1 { font-size: clamp(28px, 5vw, 36px); line-height: 1.2; }
+.title p { color: var(--lg-muted); }
+.section { display: grid; gap: 12px; }
+.section h2 { font-size: 20px; line-height: 1.3; }
+.section h3 { font-size: 16px; }
+.section ul, .section ol { padding-left: 22px; display: grid; gap: 6px; }
+.note { padding: 16px; border: 1px solid var(--lg-border); border-radius: 8px; background: var(--lg-soft); display: grid; gap: 8px; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
+.facts dt { color: var(--lg-muted); font-weight: 500; }
+.facts dd { margin: 0; }
+@media (max-width: 520px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 8px; } }
+.faq { display: grid; gap: 8px; }
+.faq details { border: 1px solid var(--lg-border); border-radius: 8px; padding: 0 16px; }
+.faq summary { cursor: pointer; font-weight: 600; min-height: 48px; display: flex; align-items: center; }
+.faq details > div { padding-bottom: 16px; display: grid; gap: 8px; }
+
+.footer { border-top: 1px solid var(--lg-border); color: var(--lg-muted); font-size: 14px; }
+.footerInner { width: min(100% - 32px, 760px); margin-inline: auto; padding: 20px 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.footerInner nav { display: flex; gap: 16px; flex-wrap: wrap; }

@@ -20,11 +20,13 @@ import Link from "next/link";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type QuotaLine } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote } from "@/components/ui";
 
 export default function Quotas() {
   const { t } = useI18n();
   const [quotas, setQuotas] = useState<QuotaLine[]>([]);
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -32,6 +34,8 @@ export default function Quotas() {
       setFailure("");
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -51,14 +55,12 @@ export default function Quotas() {
         <p className="mt-1 text-sm text-muted">{t("cp.hint.quotas")}</p>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       {unlimited > 0 && (
-        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
+        <Banner tone="warning">
           {t("cp.message.unlimited_count", { count: String(unlimited) })}
-        </p>
+        </Banner>
       )}
 
       <Card title={t("cp.section.quotas")}>
@@ -84,7 +86,7 @@ export default function Quotas() {
               {line.max_users === null ? (
                 <span className="text-muted"> / {t("cp.state.no_limit")}</span>
               ) : (
-                <span className={line.users > line.max_users ? "text-red-600 font-semibold" : "text-muted"}>
+                <span className={line.users > line.max_users ? "text-danger font-semibold" : "text-muted"}>
                   {" "}/ {line.max_users}
                 </span>
               )}
@@ -96,6 +98,7 @@ export default function Quotas() {
             </Badge>,
             formatMoment(line.updated_at),
           ])}
+          loading={loading}
           empty={t("cp.message.no_tenants")}
         />
       </Card>

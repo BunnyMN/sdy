@@ -1,0 +1,5 @@
+// Хуулж аваад нэрийг нь Signing.xcconfig болгоно:
+//   cp Config/Signing.example.xcconfig Config/Signing.xcconfig
+// Тэгээд өөрийн Apple Developer Team ID-г бичнэ (developer.apple.com →
+// Membership details → Team ID, 10 тэмдэгт).
+SDY_TEAM_ID = ABCDE12345

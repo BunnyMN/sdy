@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Plug, ServerCog, XCircle } from "lucide-react";
 import { esign, type HSMSettings, type Probe } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
+import { formatMoment } from "@/lib/datetime";
 import { Banner, Loading, PageHeader } from "@/components/ui";
 import { Card, useErrorMessage } from "@/components/esign/shared";
 
@@ -54,14 +55,16 @@ export default function EsignHSMPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<ServerCog className="w-7 h-7 text-indigo-600" />}
+        icon={<ServerCog className="w-7 h-7 text-accent" />}
         title={t("esign.view.hsm_title")}
         subtitle={t("esign.view.hsm_subtitle")}
         actions={
           <button
+            type="button"
             onClick={test}
             disabled={testing}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+            aria-busy={testing || undefined}
+            className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
           >
             <Plug className="w-4 h-4" />
             {testing ? t("esign.message.testing") : t("esign.action.test_connection")}
@@ -85,9 +88,9 @@ export default function EsignHSMPage() {
               label={t("esign.field.mode")}
               value={
                 hsm.mock_mode ? (
-                  <span className="text-amber-700 font-semibold">{t("esign.state.mock")}</span>
+                  <span className="text-warning font-semibold">{t("esign.state.mock")}</span>
                 ) : (
-                  <span className="text-emerald-700 font-semibold">{t("esign.state.live")}</span>
+                  <span className="text-success font-semibold">{t("esign.state.live")}</span>
                 )
               }
             />
@@ -95,7 +98,7 @@ export default function EsignHSMPage() {
               label={t("esign.field.token")}
               value={
                 hsm.has_token ? (
-                  <span className="inline-flex items-center gap-1.5 text-emerald-700 font-semibold">
+                  <span className="inline-flex items-center gap-1.5 text-success font-semibold">
                     <CheckCircle2 className="w-4 h-4" />
                     {t("esign.state.token_present")}
                   </span>
@@ -108,7 +111,7 @@ export default function EsignHSMPage() {
               }
             />
           </dl>
-          <p className="px-4 py-3 text-[11px] text-muted border-t border-line flex items-start gap-1.5">
+          <p className="px-4 py-3 text-2xs text-muted border-t border-line flex items-start gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             {t("esign.message.hsm_env_managed")}
           </p>
@@ -118,10 +121,11 @@ export default function EsignHSMPage() {
           {probe ? (
             <div className="p-4 space-y-3">
               <div
+                role={probe.ok ? "status" : "alert"}
                 className={`p-3 rounded-lg border text-sm flex items-start gap-2 ${
                   probe.ok
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-red-50 border-red-200 text-red-700"
+                    ? "bg-success-soft border-success-border text-success"
+                    : "bg-danger-soft border-danger-border text-danger"
                 }`}
               >
                 {probe.ok ? (
@@ -129,11 +133,18 @@ export default function EsignHSMPage() {
                 ) : (
                   <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 )}
-                <span>{probe.message}</span>
+                <span>
+                  {/* The probe's own sentence is the server's English; the
+                      verdict is said in the reader's language, the detail kept
+                      for the operator who needs it. */}
+                  {probe.ok
+                    ? t("esign.message.probe_ok")
+                    : describe(probe.message, t("esign.message.probe_failed"))}
+                </span>
               </div>
               <dl className="divide-y divide-line text-sm border-t border-line">
                 <Row label={t("esign.field.latency")} value={<span className="font-mono">{probe.latency_ms} ms</span>} />
-                <Row label={t("esign.field.checked_at")} value={new Date(probe.checked_at).toLocaleString()} />
+                <Row label={t("esign.field.checked_at")} value={formatMoment(probe.checked_at)} />
                 {probe.checked_by && <Row label={t("esign.field.checked_by")} value={probe.checked_by} />}
               </dl>
             </div>

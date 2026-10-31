@@ -132,7 +132,7 @@ test("removing knowledge is a destructive action and asks first", async () => {
 
   render(<Assistant />);
   await screen.findByText("Хуучирсан журам");
-  await person.click(screen.getByRole("button", { name: "base.action.delete" }));
+  await person.click(screen.getByRole("button", { name: "base.action.delete: Хуучирсан журам" }));
 
   const dialog = await screen.findByRole("dialog", { name: "base.action.delete" });
   expect(within(dialog).getByText("Хуучирсан журам")).toBeTruthy();

@@ -160,9 +160,22 @@ test("the handover is shown once and the enrolment is finished from it", async (
   await person.click(within(handover).getByRole("button", { name: "cp.action.confirm" }));
 
   await waitFor(() =>
-    expect(api.confirmEnrolment).toHaveBeenCalledWith(CREATED.id, "123456", `enrolled ${CREATED.email}`),
+    expect(api.confirmEnrolment).toHaveBeenCalledWith(
+      CREATED.id,
+      "123456",
+      `cp.audit.enrolled {email=${CREATED.email}}`,
+    ),
   );
   expect(await within(handover).findByText("cp.message.enrolled")).toBeTruthy();
+
+  // Escape does not throw the values away, and Close waits until the operator
+  // says they are stored.
+  await person.keyboard("{Escape}");
+  expect(screen.getByRole("dialog", { name: "cp.view.handover" })).toBeTruthy();
+  const close = within(handover).getByRole("button", { name: "base.action.close" }) as HTMLButtonElement;
+  expect(close.disabled).toBe(true);
+  await person.click(within(handover).getByLabelText("base.secret.saved_ack"));
+  expect(close.disabled).toBe(false);
 });
 
 test("the enrolment code takes six digits and nothing else", async () => {
@@ -196,6 +209,9 @@ test("changing somebody's role asks why, and sends the reason", async () => {
   render(<Operators />);
   await shown("bat@example.test");
   await person.selectOptions(screen.getByRole("combobox", { name: "cp.field.role" }), "auditor");
+  // Picking a role is not yet asking for it: the change waits for the button.
+  expect(screen.queryByRole("dialog", { name: "cp.action.change_role" })).toBeNull();
+  await person.click(screen.getByRole("button", { name: "cp.action.change_role" }));
 
   const dialog = await screen.findByRole("dialog", { name: "cp.action.change_role" });
   expect(api.setOperatorRole).not.toHaveBeenCalled();

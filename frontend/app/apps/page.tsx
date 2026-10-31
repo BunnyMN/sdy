@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, type ManifestReleaseNotes, type ReleaseKind } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Banner } from "@/components/ui";
+import { Banner, LoadingBlock, useConfirm } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import AppHistory from "@/components/AppHistory";
 import {
   Search,
@@ -55,8 +56,8 @@ interface AppItem {
  * nothing — everything urgent means nothing is.
  */
 const releaseTone: Partial<Record<NonNullable<ReleaseKind>, string>> = {
-  breaking: "bg-rose-50 text-rose-700 border-rose-200",
-  security: "bg-amber-50 text-amber-700 border-amber-200",
+  breaking: "bg-danger-soft text-danger border-danger-border",
+  security: "bg-warning-soft text-warning border-warning-border",
 };
 
 
@@ -88,6 +89,8 @@ const VIEW_STORAGE_KEY = "gerege_apps_view";
 
 export default function AppStorePage() {
   const { t, locale } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
   const [apps, setApps] = useState<AppItem[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -114,12 +117,12 @@ export default function AppStorePage() {
     try {
       const data = await api.getStoreApps();
       setApps(data || []);
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || t("app_store.message.load_failed") });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "app_store.message.load_failed" }) });
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [errorMessage]);
 
   // The store's copy is translated by the API, so a language change means
   // fetching the catalogue again rather than re-rendering what is held. `t`
@@ -139,8 +142,8 @@ export default function AppStorePage() {
       await api.installApp(app.slug);
       setMessage({ type: "success", text: t("app_store.message.install_succeeded", { app: app.name }) });
       await loadApps();
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || t("app_store.message.install_failed", { app: app.name }) });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: `${t("app_store.message.install_failed", { app: app.name })} ${errorMessage(err)}` });
     } finally {
       setActionLoading(null);
     }
@@ -159,14 +162,22 @@ export default function AppStorePage() {
         text: t("app_store.message.update_succeeded", { app: app.name, version: app.latest_version }),
       });
       await loadApps();
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || t("app_store.message.update_failed", { app: app.name }) });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: `${t("app_store.message.update_failed", { app: app.name })} ${errorMessage(err)}` });
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleToggleState = async (app: AppItem) => {
+    // Switching an app off hides it from every member of the organisation at
+    // once, so it is asked about; switching it on is not.
+    if (app.enabled && !(await confirm({
+      title: t("app_store.message.confirm_disable", { app: app.name }),
+      body: t("app_store.message.disable_impact"),
+      confirmLabel: t("app_store.action.disable"),
+      tone: "danger",
+    }))) return;
     setActionLoading(app.slug);
     setMessage(null);
     try {
@@ -178,8 +189,8 @@ export default function AppStorePage() {
         setMessage({ type: "success", text: t("app_store.message.enabled", { app: app.name }) });
       }
       await loadApps();
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || t("app_store.message.action_failed") });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "app_store.message.action_failed" }) });
     } finally {
       setActionLoading(null);
     }
@@ -203,14 +214,14 @@ export default function AppStorePage() {
         {app.update_available ? `v${app.installed_version} → v${app.latest_version}` : `v${app.version}`}
       </span>
       {app.installed && app.update_available && (
-        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-info-soft text-info">
           {t("app_store.state.update_available")}
         </span>
       )}
       {app.installed && (
         <span
           className={`text-xs font-semibold px-2 py-0.5 rounded ${
-            app.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            app.enabled ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
           }`}
         >
           {app.enabled ? t("app_store.state.installed") : t("app_store.state.disabled")}
@@ -245,7 +256,7 @@ export default function AppStorePage() {
           : "";
     return (
       <p className="text-xs text-muted mt-1 flex items-start gap-1.5">
-        <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-px" />
+        <Sparkles aria-hidden="true" className="w-3.5 h-3.5 text-accent shrink-0 mt-px" />
         <span className="min-w-0">
           <span className="font-semibold text-foreground">{t("app_store.field.whats_new")}</span>{" "}
           {line}
@@ -275,7 +286,7 @@ export default function AppStorePage() {
           <button
             onClick={() => handleInstall(app)}
             disabled={actionLoading === app.slug}
-            className={`${width} bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition disabled:opacity-50`}
+            className={`${width} min-h-11 bg-accent hover:bg-accent-hover text-on-accent font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition disabled:opacity-50`}
           >
             <Download className="w-4 h-4" />
             <span>
@@ -290,7 +301,7 @@ export default function AppStorePage() {
                 card's release note already shows. */}
             <button
               onClick={() => setHistoryFor(app.slug)}
-              className={`${width} bg-surface hover:bg-surface-hover text-foreground border border-line font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition`}
+              className={`${width} min-h-11 bg-surface hover:bg-surface-hover text-foreground border border-line font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition`}
             >
               <History className="w-4 h-4" />
               <span>{t("app_store.action.history")}</span>
@@ -302,7 +313,7 @@ export default function AppStorePage() {
               <button
                 onClick={() => handleUpdate(app)}
                 disabled={actionLoading === app.slug}
-                className={`${width} bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition disabled:opacity-50`}
+                className={`${width} min-h-11 bg-accent hover:bg-accent-hover text-on-accent font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition disabled:opacity-50`}
               >
                 <ArrowUpCircle className="w-4 h-4" />
                 <span>
@@ -313,10 +324,11 @@ export default function AppStorePage() {
             <button
               onClick={() => handleToggleState(app)}
               disabled={actionLoading === app.slug}
-              className={`${width} font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition border ${
+              aria-busy={actionLoading === app.slug || undefined}
+              className={`${width} min-h-11 font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition border disabled:opacity-50 ${
                 app.enabled
-                  ? "bg-surface hover:bg-red-50 text-red-600 border-red-200"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+                  ? "bg-surface hover:bg-danger-soft text-danger border-danger-border"
+                  : "bg-success-solid hover:brightness-110 text-white border-transparent"
               }`}
             >
               {app.enabled ? (
@@ -356,23 +368,26 @@ export default function AppStorePage() {
           <p className="text-sm text-muted">{t("app_store.view.subtitle")}</p>
         </div>
 
-        {/* Search & Category */}
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted" />
+        {/* Search & Category. Wraps on a phone: at 375px the three side by
+            side pushed the view toggle off the edge of the screen. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative min-w-0 flex-1 basis-56 sm:flex-none">
+            <span className="sr-only">{t("app_store.view.search_placeholder")}</span>
+            <Search aria-hidden="true" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
-              type="text"
+              type="search"
               placeholder={t("app_store.view.search_placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-3 py-1.5 text-sm border border-input rounded-lg w-64 bg-surface"
+              className="min-h-11 pl-9 pr-3 py-1.5 text-sm border border-input rounded-lg w-full sm:w-64 bg-surface"
             />
-          </div>
+          </label>
 
           <select
+            aria-label={t("app_store.label.category")}
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-input rounded-lg bg-surface"
+            className="min-h-11 px-3 py-1.5 text-sm border border-input rounded-lg bg-surface"
           >
             {categories.map((c) => (
               <option key={c} value={c}>
@@ -397,9 +412,9 @@ export default function AppStorePage() {
                 aria-pressed={view === option.mode}
                 aria-label={option.label}
                 title={option.label}
-                className={`p-1.5 rounded-md transition ${
+                className={`grid min-h-9 min-w-9 place-items-center rounded-md transition ${
                   view === option.mode
-                    ? "bg-surface text-indigo-600 shadow-sm"
+                    ? "bg-surface text-accent shadow-sm"
                     : "text-muted hover:text-foreground"
                 }`}
               >
@@ -419,7 +434,7 @@ export default function AppStorePage() {
 
       {/* App Cards Grid */}
       {loading ? (
-        <div className="py-12 text-center text-muted text-sm">{t("app_store.message.loading")}</div>
+        <LoadingBlock label={t("app_store.message.loading")} />
       ) : filteredApps.length === 0 ? (
         <div className="py-12 text-center text-muted text-sm">{t("app_store.message.no_match")}</div>
       ) : view === "list" ? (
@@ -427,20 +442,20 @@ export default function AppStorePage() {
           {filteredApps.map((app) => (
             <div key={app.id} className="p-4 flex flex-wrap items-center gap-4">
               <div className="p-2 bg-surface-2 rounded-lg border border-line shrink-0">
-                <MenuIcon name={appIcon(app)} className="w-8 h-8 text-indigo-500" />
+                <MenuIcon name={appIcon(app)} className="w-8 h-8 text-accent" />
               </div>
               {/* min-w-0 so the description truncates instead of pushing the
                   buttons off the end of the row. */}
               <div className="flex-1 min-w-56">
                 <div className="flex items-baseline gap-2">
                   <h2 className="font-semibold text-foreground">{app.name}</h2>
-                  <span className="text-xs font-medium text-indigo-600">{app.category}</span>
+                  <span className="text-xs font-medium text-accent">{app.category}</span>
                   {/* Said out loud, because an app in this list looks exactly
                       like one every platform can get. Whoever is deciding to
                       install it should know it arrived by arrangement — and
                       that the platform next door does not see it. */}
                   {app.visibility === "private" && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-semibold text-warning ring-1 ring-warning-border">
                       <Lock className="w-3 h-3" />
                       {t("app_store.label.private")}
                     </span>
@@ -470,13 +485,13 @@ export default function AppStorePage() {
               <div>
                 <div className="flex items-start justify-between mb-3">
                   <div className="p-2.5 bg-surface-2 rounded-xl border border-line">
-                    <MenuIcon name={appIcon(app)} className="w-8 h-8 text-indigo-500" />
+                    <MenuIcon name={appIcon(app)} className="w-8 h-8 text-accent" />
                   </div>
                   {renderChips(app)}
                 </div>
 
                 <h2 className="text-lg font-semibold text-foreground">{app.name}</h2>
-                <p className="text-xs font-medium text-indigo-600 mb-2">{app.category}</p>
+                <p className="text-xs font-medium text-accent mb-2">{app.category}</p>
                 <p className="text-sm text-muted line-clamp-2">{app.description}</p>
                 {renderReleaseNote(app)}
                 <div className="mb-4" />

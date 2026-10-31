@@ -53,4 +53,7 @@ export const es: Record<string, string> = {
   "integrations.view.create_title": "Registrar conector de integración",
   "integrations.view.subtitle": "Gestione pasarelas gubernamentales, conectores REST API y webhooks de eventos",
   "integrations.view.title": "Integraciones de sistemas externos y Webhooks",
+  "integrations.state.active": "Activo",
+  "integrations.state.failing": "Con errores",
+  "integrations.state.off": "Desactivado",
 };

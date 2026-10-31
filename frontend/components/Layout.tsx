@@ -12,6 +12,7 @@ import UserMenu from "@/components/UserMenu";
 import MemberShell from "@/components/membership/MemberShell";
 import { TenantChoices, forgetTenants, useTenants } from "@/components/TenantChoices";
 import AICopilot from "@/components/AICopilot";
+import { useDialogFocus } from "@/components/ui";
 import { invokeShell, useShell, SHELL_EVENTS, SHELL_METHODS, type ShellNavigatePayload, type ShellSearchPayload } from "@/lib/shell";
 import { currentDeviceLine, type DeviceLine } from "@/lib/deviceLine";
 import { MenuIcon } from "@/lib/icons";
@@ -86,6 +87,11 @@ export default function Layout({children}:{children:React.ReactNode}){
   useEffect(()=>setPanelOpen(localStorage.getItem("gerege_sidebar_open")!=="false"),[]);
   useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(GROUPS_KEY)||"[]");if(Array.isArray(saved))setClosedGroups(saved.filter(id=>typeof id==="string"))}catch{/* hand-edited or half-written storage is not worth a crashed shell */}},[]);
   useEffect(()=>setDeviceLine(currentDeviceLine()),[]);
+  // The menu button does two different things either side of 900px — folds the
+  // desktop panel, or slides the phone drawer — so what it reports as expanded
+  // has to follow the same line, or a desktop reader hears "collapsed" over an
+  // open panel.
+  const narrow=useNarrow();
   const workAreaOnly=inShell||deviceLine!==null;
   useEffect(()=>{
     if(isPublic){setLoading(false);return}
@@ -251,7 +257,7 @@ export default function Layout({children}:{children:React.ReactNode}){
   const remainingMobileTabs=hasMobileMore?mobileAppTabs.slice(4):[];
 
   if(isPublic)return <>{children}</>;
-  if(loading||!user)return <div className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
+  if(loading||!user)return <div role="status" className="min-h-dvh flex items-center justify-center bg-surface-2 text-muted font-medium">{t("web.message.loading_platform")}</div>;
 
   const platformMenus=<><MenuGroup id={PLATFORM_GROUPS.modules} title={t("web.group.modules")} closed={closedGroups.includes(PLATFORM_GROUPS.modules)} onToggle={toggleGroup}>
     <NavLink href="/member" active={pathname==="/member"} icon={<Building2 className="w-5 h-5"/>} label={t("membership.home")}/>
@@ -309,6 +315,7 @@ export default function Layout({children}:{children:React.ReactNode}){
   // доторх навигаци бөгөөд аль апп идэвхтэй, ямар эрхтэй, ямар хэлээр гэдгийг
   // web тал аль хэдийн мэддэг.
   if(workAreaOnly)return <div className="gerege-shell gerege-workarea h-dvh flex flex-col overflow-hidden">
+    <SkipLink/>
     <ImpersonationBanner active={!!user?.impersonated}/>
     <RibbonBar selected={selected} brandTitle={brandTitle} user={user} setShellSearchOpen={setShellSearchOpen} t={t} onLogout={logout} />
     <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -323,27 +330,18 @@ export default function Layout({children}:{children:React.ReactNode}){
           </nav></div>
         </aside>
       </div>
-      <main className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">{children}</main>
+      <main id="main" tabIndex={-1} className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 focus:outline-none">{children}</main>
     </div>
     <WorkareaFooter />
-    {shellSearchOpen&&<div className="gerege-shell-search" role="dialog" aria-modal="true" aria-label={t("web.view.search_placeholder")}>
-      <button type="button" className="gerege-shell-search-backdrop" aria-label={t("base.action.close")} onClick={()=>{setShellSearchOpen(false);setQuery("")}}/>
-      <div className="gerege-shell-search-panel">
-        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"/>
-          <input autoFocus value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{
-            if(e.key==="Escape"){setShellSearchOpen(false);setQuery("")}
-            if(e.key==="Enter"&&results[0]){router.push(results[0].path);setShellSearchOpen(false);setQuery("")}
-          }} placeholder={t("web.view.search_placeholder")} className="w-full h-11 rounded-xl border border-line bg-surface pl-10 pr-4 text-sm focus:border-accent"/>
-        </div>
-        {results.length>0&&<div className="mt-2 space-y-0.5">{results.map(item=><button key={item.path} onClick={()=>{router.push(item.path);setShellSearchOpen(false);setQuery("")}} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2"><span className="text-accent">{<MenuIcon name={item.icon} className="w-4 h-4"/>}</span><span className="min-w-0"><strong className="block text-sm truncate">{item.label}</strong><small className="text-muted truncate">{item.app}</small></span></button>)}</div>}
-      </div>
-    </div>}
+    {shellSearchOpen&&<ShellSearch query={query} setQuery={setQuery} results={results}
+      onClose={()=>{setShellSearchOpen(false);setQuery("")}} onGo={path=>{router.push(path);setShellSearchOpen(false);setQuery("")}}/>}
     <AICopilot/>
   </div>;
 
   if(memberArea)return <MemberShell user={user} onLogout={logout}><ImpersonationBanner active={!!user?.impersonated}/><PlatformNotices notices={user?.notices}/>{children}</MemberShell>;
 
   return <div className="gerege-shell min-h-dvh flex flex-col">
+    <SkipLink/>
     <ImpersonationBanner active={!!user?.impersonated}/>
     <PlatformNotices notices={user?.notices}/>
     <header className="gerege-topbar h-16 flex items-center border-b sticky top-0 z-sticky">
@@ -356,23 +354,23 @@ export default function Layout({children}:{children:React.ReactNode}){
       </TenantSwitcher>
       <div className={`gerege-header-context h-full flex items-center gap-3 overflow-hidden transition-all duration-200 ${panelOpen?"is-open":""}`}>
         <span className="shrink-0 text-accent">{selected?(<MenuIcon name={selected.icon} className="w-5 h-5"/>):<LayoutGrid className="w-5 h-5"/>}</span>
-        <span className="min-w-0"><small className="block text-[11px] leading-4 text-muted truncate">{brand.name}</small><strong className="block text-[15px] leading-5 text-foreground truncate">{brandTitle}</strong></span>
+        <span className="min-w-0"><small className="block text-2xs text-muted truncate">{brand.name}</small><strong className="block text-[15px] leading-5 text-foreground truncate">{brandTitle}</strong></span>
       </div>
       <div className="gerege-menu-toggle h-full shrink-0 flex items-center justify-center gap-1">
-        <button onClick={togglePanel} className="grid place-items-center w-10 h-10 rounded-lg text-muted hover:bg-surface-hover" aria-label={t("web.action.toggle_menu")} aria-expanded={mobileOpen}><HamburgerIcon className="w-5 h-5"/></button>
+        <button type="button" onClick={togglePanel} className="grid place-items-center w-11 h-11 rounded-lg text-muted hover:bg-surface-hover" aria-label={t("web.action.toggle_menu")} aria-expanded={narrow?mobileOpen:panelOpen} aria-controls="gerege-sidebar"><HamburgerIcon aria-hidden="true" className="w-5 h-5"/></button>
         {/* Beside the control that opens the panel, because it acts on what
             that panel contains. Icon-only: the words fit in a 14rem column,
             not in a header cell next to the menu button. */}
         {visibleGroups.length>1&&<button type="button" onClick={toggleAllGroups} aria-expanded={allGroupsOpen}
           aria-label={allGroupsOpen?t("web.action.collapse_all"):t("web.action.expand_all")}
           title={allGroupsOpen?t("web.action.collapse_all"):t("web.action.expand_all")}
-          className="grid place-items-center w-10 h-10 rounded-lg text-muted hover:bg-surface-hover">
+          className="grid place-items-center w-11 h-11 rounded-lg text-muted hover:bg-surface-hover">
           {allGroupsOpen?<ChevronsDownUp className="w-5 h-5"/>:<ChevronsUpDown className="w-5 h-5"/>}
         </button>}
       </div>
       <div className="hidden lg:flex items-center gap-2 px-4 min-w-0"><span className="gerege-session-dot w-2 h-2 rounded-full shrink-0"/><strong className="text-base text-foreground font-semibold truncate max-w-56">{user?.tenant_name||"Demo Tenant"}</strong></div>
       <div className="gerege-header-search hidden md:flex flex-1 items-center justify-center min-w-0 px-5 relative">
-        <div className="relative w-full max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&results[0]){router.push(results[0].path);setQuery("")}}} placeholder={t("web.view.search_placeholder")} className="w-full h-10 rounded-full border border-line bg-surface-2 pl-10 pr-4 text-sm focus:border-accent focus:ring-2 focus:ring-[color-mix(in_srgb,var(--gerege-blue)_15%,transparent)]"/>
+        <div className="relative w-full max-w-md"><Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"/><input type="search" aria-label={t("web.view.search_placeholder")} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&results[0]){router.push(results[0].path);setQuery("")}if(e.key==="Escape")setQuery("")}} placeholder={t("web.view.search_placeholder")} className="w-full h-10 rounded-full border border-line bg-surface-2 pl-10 pr-4 text-sm focus:border-accent focus:ring-2 focus:ring-[color-mix(in_srgb,var(--gerege-blue)_15%,transparent)]"/>
           {results.length>0&&<div className="gerege-topbar-onlight absolute top-12 inset-x-0 bg-surface border border-line rounded-xl shadow-lg p-1.5 z-dropdown">{results.map(item=><button key={item.path} onClick={()=>{router.push(item.path);setQuery("")}} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2"><span className="text-accent">{<MenuIcon name={item.icon} className="w-4 h-4"/>}</span><span className="min-w-0"><strong className="block text-sm truncate">{item.label}</strong><small className="text-muted truncate">{item.app}</small></span></button>)}</div>}
         </div>
       </div>
@@ -384,8 +382,12 @@ export default function Layout({children}:{children:React.ReactNode}){
     </header>
 
     <div className="flex flex-1 min-h-0">
-      {mobileOpen&&<button className="gerege-mobile-backdrop fixed inset-0 top-16 bg-slate-950/40 z-overlay" aria-label={t("web.action.close_menu")} onClick={()=>setMobileOpen(false)}/>}
-      <div className={`gerege-sidebar top-16 bottom-0 left-0 z-modal flex overflow-hidden ${mobileOpen?"is-mobile-open":""} ${panelOpen?"is-desktop-open":""}`}>
+      {mobileOpen&&<button type="button" className="gerege-mobile-backdrop fixed inset-0 top-16 bg-overlay z-overlay" aria-label={t("web.action.close_menu")} onClick={()=>setMobileOpen(false)}/>}
+      {/* On a phone this is a drawer, and a shut drawer is out of reach, not
+          just out of sight: globals.css hides it with visibility once it has
+          slid away, and inert says the same to Tab and to a screen reader —
+          otherwise focus walked into a menu parked off the left edge. */}
+      <div id="gerege-sidebar" inert={narrow&&!mobileOpen} className={`gerege-sidebar top-16 bottom-0 left-0 z-modal flex overflow-hidden ${mobileOpen?"is-mobile-open":""} ${panelOpen?"is-desktop-open":""}`}>
         <nav className="w-16 min-w-16 shrink-0 py-3 flex flex-col items-center gap-2 border-r border-line">
           <AppRailLink href="/apps" active={platformActive} title={t("web.label.platform")} icon={<LayoutGrid className="w-5 h-5"/>}/>
           {railApps.map(app=><AppRailLink key={app.id} href={app.path} external={!!app.externalUrl} active={selected?.id===app.id} title={app.name} icon={<MenuIcon name={app.icon} className="w-5 h-5"/>}/>) }
@@ -398,12 +400,12 @@ export default function Layout({children}:{children:React.ReactNode}){
           </div>
         </aside>
       </div>
-      <main className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">{children}</main>
+      <main id="main" tabIndex={-1} className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 focus:outline-none">{children}</main>
     </div>
-    {mobileMoreOpen&&<><button className="gerege-mobile-more-backdrop" aria-label={t("web.action.close_more")} onClick={()=>setMobileMoreOpen(false)}/><section className="gerege-mobile-more-sheet" role="dialog" aria-modal="true" aria-label={t("web.view.more_apps")}><div className="gerege-mobile-more-handle"/><h2>{t("web.view.more_apps")}</h2><div className="gerege-mobile-more-grid">{remainingMobileTabs.map(tab=><MobileMoreApp key={tab.id} {...tab}/>)}</div></section></>}
+    {mobileMoreOpen&&<MobileMoreSheet onClose={()=>setMobileMoreOpen(false)}>{remainingMobileTabs.map(tab=><MobileMoreApp key={tab.id} {...tab}/>)}</MobileMoreSheet>}
     <nav className="gerege-mobile-tabs" aria-label={t("web.label.apps")}>
       {primaryMobileTabs.map(tab=><MobileAppTab key={tab.id} {...tab}/>)}
-      {hasMobileMore&&<button type="button" onClick={()=>setMobileMoreOpen(v=>!v)} aria-expanded={mobileMoreOpen} className={`gerege-mobile-tab ${remainingMobileTabs.some(tab=>tab.active)||mobileMoreOpen?"is-active":""}`}><span><Ellipsis className="w-5 h-5"/></span><small>{t("web.action.more")}</small></button>}
+      {hasMobileMore&&<button type="button" onClick={()=>setMobileMoreOpen(v=>!v)} aria-expanded={mobileMoreOpen} aria-haspopup="dialog" className={`gerege-mobile-tab ${remainingMobileTabs.some(tab=>tab.active)||mobileMoreOpen?"is-active":""}`}><span><Ellipsis className="w-5 h-5"/></span><small>{t("web.action.more")}</small></button>}
     </nav>
   </div>;
 }
@@ -438,14 +440,14 @@ function RibbonBar({
           {selected ? (<MenuIcon name={selected.icon} className="w-4 h-4"/>) : <LayoutGrid className="w-4 h-4" />}
         </span>
         <div className="flex items-center gap-1.5 text-xs min-w-0">
-          <span className="font-semibold text-foreground dark:text-slate-100">{brand.name}</span>
-          <span className="text-slate-300 dark:text-muted">/</span>
+          <span className="font-semibold text-foreground">{brand.name}</span>
+          <span aria-hidden="true" className="text-subtle">/</span>
           <span className="font-semibold text-accent truncate">{brandTitle}</span>
         </div>
         {user?.tenant_name && (
-          <div className="hidden md:flex items-center pl-3 border-l border-line dark:border-slate-800">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <div className="hidden md:flex items-center pl-3 border-l border-line">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-medium bg-success-soft text-success border border-success-border">
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-success-solid" />
               <span className="truncate max-w-36">{user.tenant_name}</span>
             </span>
           </div>
@@ -453,18 +455,22 @@ function RibbonBar({
       </div>
       <div className="flex items-center gap-2.5 shrink-0 text-xs">
         <button
+          type="button"
           onClick={() => setShellSearchOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium text-muted dark:text-slate-400 bg-surface-2 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+          aria-haspopup="dialog"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-2xs font-medium text-muted bg-surface-2 hover:bg-surface-hover hover:text-foreground transition"
         >
-          <Search className="w-3.5 h-3.5 text-muted" />
+          <Search aria-hidden="true" className="w-3.5 h-3.5 text-muted" />
           <span>{t("web.view.search_placeholder")}</span>
         </button>
         <button
+          type="button"
           onClick={() => window.location.reload()}
           title={t("web.action.reload")}
-          className="p-1.5 text-muted hover:text-foreground dark:hover:text-slate-200 rounded-md hover:bg-surface-hover dark:hover:bg-slate-800 transition"
+          aria-label={t("web.action.reload")}
+          className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface-hover transition"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw aria-hidden="true" className="w-3.5 h-3.5" />
         </button>
         <UserMenu user={user} onLogout={onLogout} />
       </div>
@@ -476,13 +482,13 @@ function RibbonBar({
 function WorkareaFooter() {
   const brand = useBrand();
   return (
-    <footer className="gerege-footer h-7 shrink-0 border-t border-line bg-chrome px-4 flex items-center justify-between text-[11px] text-muted dark:text-slate-400 select-none z-sticky">
-      <span className="flex items-center gap-1.5 font-medium text-foreground dark:text-slate-300">
-        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+    <footer className="gerege-footer h-7 shrink-0 border-t border-line bg-chrome px-4 flex items-center justify-between text-2xs text-muted select-none z-sticky">
+      <span className="flex items-center gap-1.5 font-medium text-foreground">
+        <span aria-hidden="true" className="w-2 h-2 rounded-full bg-success-solid"></span>
         <span>{brand.name}</span>
       </span>
       <span className="hidden sm:inline-flex items-center gap-1 text-muted">
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+        <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 text-success" />
         <span>TLS</span>
       </span>
     </footer>
@@ -524,7 +530,7 @@ function TenantSwitcher({current,currentName,children}:{current?:string;currentN
       {children}
     </button>
     {open&&<div role="menu" aria-label={t("web.view.tenants")} className="gerege-topbar-onlight absolute left-2 top-14 w-64 bg-surface border border-line rounded-xl shadow-lg p-1.5 z-dropdown">
-      <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">{t("web.view.tenants")}</p>
+      <p className="px-4 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted">{t("web.view.tenants")}</p>
       <TenantChoices current={current} tenants={tenants} activeIDs={activeIDs} switching={switching} failed={failed} onChoose={id=>void switchTo(id)} onStay={()=>setOpen(false)} onToggleActive={id=>void toggleActive(id,current||"")}/>
     </div>}
   </div>;
@@ -538,7 +544,7 @@ function ExternalAnchor({href,className,children,...rest}:{href:string;className
 function AppRailLink({href,external,active,title,icon}:{href:string;external?:boolean;active:boolean;title:string;icon:React.ReactNode}){
   const className=`w-11 h-11 rounded-xl grid place-items-center transition ${active?"bg-accent-soft text-accent shadow-sm":"text-muted hover:bg-[var(--gerege-surface-2)] hover:text-foreground"}`;
   if(external)return <ExternalAnchor href={href} title={title} aria-label={title} className={className}>{icon}</ExternalAnchor>;
-  return <Link href={href} title={title} aria-label={title} className={className}>{icon}</Link>;
+  return <Link href={href} title={title} aria-label={title} aria-current={active?"page":undefined} className={className}>{icon}</Link>;
 }
 function MobileAppTab({href,external,active,label,icon}:{href:string;external?:boolean;active:boolean;label:string;icon:React.ReactNode}){
   const className=`gerege-mobile-tab ${active?"is-active":""}`;
@@ -550,7 +556,7 @@ function MobileMoreApp({href,external,active,label,icon}:{href:string;external?:
   if(external)return <ExternalAnchor href={href} className={className}><span>{icon}</span><strong>{label}</strong></ExternalAnchor>;
   return <Link href={href} aria-current={active?"page":undefined} className={className}><span>{icon}</span><strong>{label}</strong></Link>;
 }
-function NavLink({href,active,icon,label}:{href:string;active:boolean;icon:React.ReactNode;label:string}){return <Link href={href} className={`gerege-nav-link flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition ${active?"gerege-nav-link-active font-semibold":""}`}><span className="gerege-nav-icon">{icon}</span><span>{label}</span></Link>}
+function NavLink({href,active,icon,label}:{href:string;active:boolean;icon:React.ReactNode;label:string}){return <Link href={href} aria-current={active?"page":undefined} className={`gerege-nav-link flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition ${active?"gerege-nav-link-active font-semibold":""}`}><span aria-hidden="true" className="gerege-nav-icon">{icon}</span><span>{label}</span></Link>}
 // The same row as a NavLink, minus the highlight: an external destination has
 // no path under this application, so nothing it opens can ever be "the page
 // you are on".
@@ -562,7 +568,7 @@ function MenuGroup({id,title,closed,onToggle,children}:{id:string;title:string;c
         the button inside is what the heading names, which is the pairing
         aria-expanded/aria-controls expects. */}
     <h3 className="mb-2">
-      <button type="button" onClick={()=>onToggle(id)} aria-expanded={!closed} aria-controls={bodyId} className="w-full flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-muted hover:bg-surface-2 transition">
+      <button type="button" onClick={()=>onToggle(id)} aria-expanded={!closed} aria-controls={bodyId} className="w-full flex items-center gap-1.5 px-3 py-1 rounded-md text-2xs font-semibold uppercase tracking-wider text-muted hover:text-foreground hover:bg-surface-2 transition">
         <span className="min-w-0 truncate text-left">{title}</span>
         <ChevronDown className={`w-3.5 h-3.5 ml-auto shrink-0 transition-transform duration-200 ${closed?"":"rotate-180"}`}/>
       </button>
@@ -632,12 +638,77 @@ function ImpersonationBanner({active}:{active:boolean}){
  */
 function PlatformNotices({notices}:{notices?:Array<{kind:string;title:string;body:string}>}){
   if(!notices?.length) return null;
-  const tone=(kind:string)=>kind==="maintenance"?"bg-slate-800 text-slate-100"
-    :kind==="warning"?"bg-amber-100 text-amber-900 border-b border-amber-200"
-    :"bg-blue-50 text-blue-900 border-b border-blue-100";
+  // The status tokens, so a notice reads in dark mode too. Maintenance is a
+  // warning by another name — something is about to stop working — and it
+  // used to be a fixed slate bar that sat black-on-black once the page was.
+  const tone=(kind:string)=>kind==="maintenance"||kind==="warning"?"bg-warning-soft text-warning border-b border-warning-border"
+    :"bg-info-soft text-info border-b border-info-border";
   return <>{notices.map((notice,index)=>
     <div key={index} role="status" className={`w-full text-sm px-4 py-2 ${tone(notice.kind)}`}>
       <strong className="font-medium">{notice.title}</strong>
       {notice.body&&<span className="ml-2 opacity-90">{notice.body}</span>}
     </div>)}</>;
+}
+
+/** Whether the window is at or under the 900px line the mobile shell draws. */
+function useNarrow(){
+  const [narrow,setNarrow]=useState(false);
+  useEffect(()=>{
+    const media=window.matchMedia("(max-width:900px)");
+    const update=()=>setNarrow(media.matches);
+    update();
+    media.addEventListener?.("change",update);
+    return()=>media.removeEventListener?.("change",update);
+  },[]);
+  return narrow;
+}
+
+/**
+ * The first thing Tab reaches on every page: a way past the header, the rail
+ * and the menu, straight to the screen itself. Invisible until focused.
+ */
+function SkipLink(){
+  const {t}=useI18n();
+  return <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-tooltip focus:rounded-lg focus:border focus:border-line focus:bg-surface focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg">{t("base.a11y.skip_to_content")}</a>;
+}
+
+/**
+ * The phone's "More" apps sheet. A dialog in name before this, and now in
+ * behaviour: focus moves into it, Tab stays inside, Escape closes it, and
+ * focus goes back to the More button afterwards.
+ */
+function MobileMoreSheet({onClose,children}:{onClose:()=>void;children:React.ReactNode}){
+  const {t}=useI18n();
+  const panel=useRef<HTMLElement>(null);
+  const onKeyDown=useDialogFocus(panel,{onEscape:onClose});
+  return <>
+    <button type="button" className="gerege-mobile-more-backdrop" aria-label={t("web.action.close_more")} onClick={onClose}/>
+    <section ref={panel} tabIndex={-1} onKeyDown={onKeyDown} className="gerege-mobile-more-sheet focus:outline-none" role="dialog" aria-modal="true" aria-label={t("web.view.more_apps")}>
+      <div aria-hidden="true" className="gerege-mobile-more-handle"/>
+      <h2>{t("web.view.more_apps")}</h2>
+      <div className="gerege-mobile-more-grid">{children}</div>
+    </section>
+  </>;
+}
+
+/**
+ * Search inside the native shell, which draws no header of its own here. The
+ * same focus rules as every other layer: Tab stays inside, Escape closes, and
+ * focus returns to wherever it was.
+ */
+function ShellSearch({query,setQuery,results,onClose,onGo}:{query:string;setQuery:(value:string)=>void;results:Array<{label:string;app:string;path:string;icon:string}>;onClose:()=>void;onGo:(path:string)=>void}){
+  const {t}=useI18n();
+  const panel=useRef<HTMLDivElement>(null);
+  const onKeyDown=useDialogFocus(panel,{onEscape:onClose});
+  return <div className="gerege-shell-search">
+    <button type="button" tabIndex={-1} className="gerege-shell-search-backdrop" aria-label={t("base.action.close")} onClick={onClose}/>
+    <div ref={panel} tabIndex={-1} onKeyDown={onKeyDown} role="dialog" aria-modal="true" aria-label={t("web.view.search_placeholder")} className="gerege-shell-search-panel focus:outline-none">
+      <div className="relative"><Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"/>
+        <input type="search" autoFocus aria-label={t("web.view.search_placeholder")} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{
+          if(e.key==="Enter"&&results[0])onGo(results[0].path);
+        }} placeholder={t("web.view.search_placeholder")} className="w-full h-11 rounded-xl border border-line bg-surface pl-10 pr-4 text-sm focus:border-accent"/>
+      </div>
+      {results.length>0&&<div className="mt-2 space-y-0.5">{results.map(item=><button type="button" key={item.path} onClick={()=>onGo(item.path)} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2"><span aria-hidden="true" className="text-accent">{<MenuIcon name={item.icon} className="w-4 h-4"/>}</span><span className="min-w-0"><strong className="block text-sm truncate">{item.label}</strong><small className="text-muted truncate">{item.app}</small></span></button>)}</div>}
+    </div>
+  </div>;
 }

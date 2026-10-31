@@ -30,6 +30,10 @@ import { es as integrations } from "../locales/es/integrations";
 import { es as sso_clients } from "../locales/es/sso_clients";
 import { es as storefront } from "../locales/es/storefront";
 import { es as urtuu } from "../locales/es/urtuu";
+import { es as documents } from "../locales/es/documents";
+import { es as esign } from "../locales/es/esign";
+import { es as line } from "../locales/es/line";
+import { es as reports } from "../locales/es/reports";
 
 // ai.ts sits beside these and is deliberately absent: its keys are part of the
 // core dictionary (lib/i18n/addons/ai.ts, spread in core.ts), not an app's, and
@@ -37,7 +41,7 @@ import { es as urtuu } from "../locales/es/urtuu";
 // a dictionary that did not exist before this file did.
 const es = {
   core,
-  apps: { integrations, sso_clients, storefront, urtuu },
+  apps: { integrations, sso_clients, storefront, urtuu, documents, esign, line, reports },
 };
 
 export default es;

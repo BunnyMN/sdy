@@ -3,9 +3,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass } from "@/components/ui";
+import { Banner, LoadingBlock, useConfirm, useUnsavedChanges } from "@/components/ui";
 import { useAccess } from "@/lib/permissions";
-import { Building2, Megaphone, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Building2, RefreshCw } from "lucide-react";
 
 /**
  * The organisation as it is, rather than as it is labelled.
@@ -68,6 +68,12 @@ export default function OrganisationPage() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const confirm = useConfirm();
+
+  // An edited field that has not been saved is work the reader would lose by
+  // closing or reloading the tab; the browser asks first.
+  const dirty = Object.keys(draft).length > 0;
+  useUnsavedChanges(dirty);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +112,17 @@ export default function OrganisationPage() {
   // front of them, and doing that on a timer would mean Tuesday's edit quietly
   // disappearing on Wednesday.
   const syncFromCore = async () => {
+    // The refresh replaces the draft as well as the record, so typed edits
+    // would vanish with it — asked about first rather than lost.
+    if (dirty) {
+      const ok = await confirm({
+        title: t("base.confirm.discard_title"),
+        body: t("base.confirm.discard_body"),
+        confirmLabel: t("core.action.core_sync"),
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
     setSyncing(true);
     setMessage(null);
     try {
@@ -121,7 +138,11 @@ export default function OrganisationPage() {
   };
 
   if (!organisation) {
-    return <div className="py-12 text-center text-muted text-sm">{t("base.message.loading")}</div>;
+    return message?.type === "error" ? (
+      <Banner tone="error" message={message.text} />
+    ) : (
+      <LoadingBlock label={t("base.message.loading")} />
+    );
   }
 
   const value = (key: keyof Organisation) => draft[key] ?? (organisation[key] as string) ?? "";
@@ -129,7 +150,7 @@ export default function OrganisationPage() {
   return (
     <div className="space-y-6">
       <div className="border-b border-line pb-4 flex items-center gap-3">
-        <Building2 className="w-6 h-6 text-muted" />
+        <Building2 aria-hidden="true" className="w-6 h-6 text-muted" />
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{t("core.view.organisation_title")}</h1>
           <p className="text-sm text-muted">{t("core.view.organisation_subtitle")}</p>
@@ -142,7 +163,7 @@ export default function OrganisationPage() {
             title={t("core.hint.core_sync")}
             className="ml-auto inline-flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm hover:bg-surface-hover disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            <RefreshCw aria-hidden="true" className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
             {t("core.action.core_sync")}
           </button>
         )}
@@ -163,7 +184,7 @@ export default function OrganisationPage() {
                   placeholder={field.placeholder}
                   disabled={!canManage}
                   onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg disabled:bg-surface-2 disabled:text-muted"
+                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-surface disabled:bg-surface-2 disabled:text-muted"
                 />
               </label>
             ))}
@@ -238,12 +259,12 @@ export default function OrganisationPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={save}
-            disabled={saving || Object.keys(draft).length === 0}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium text-sm py-2 px-5 rounded-lg"
+            disabled={saving || !dirty}
+            className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent font-medium text-sm py-2 px-5 rounded-lg"
           >
             {saving ? t("base.message.saving") : t("base.action.save")}
           </button>
-          {Object.keys(draft).length > 0 && (
+          {dirty && (
             <button onClick={() => setDraft({})} className="text-sm text-muted hover:text-foreground">
               {t("base.action.cancel")}
             </button>

@@ -11,13 +11,16 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Megaphone } from "lucide-react";
+import { Loader2, Megaphone } from "lucide-react";
 
 import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
-import { cp, type Announcement } from "@/lib/cp";
+import { cp, type Announcement, type TenantSummary } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { ubLocalToISO } from "@/lib/ubTime";
+import { ErrorNote, Modal } from "@/components/ui";
+
+const REQUIRED = "after:ml-0.5 after:text-danger after:content-['*']";
 
 export default function Announcements() {
   const { t } = useI18n();
@@ -25,6 +28,11 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [writing, setWriting] = useState(false);
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
+  // The organisations, so a row says whose it is by name and the dialog can
+  // offer a list instead of a box for a pasted UUID. Not being able to read
+  // them costs only that: the rows fall back to the id.
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -32,12 +40,19 @@ export default function Announcements() {
       setFailure("");
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+    cp.tenants("")
+      .then((result) => setTenants(result.tenants ?? []))
+      .catch(() => setTenants([]));
   }, [load]);
+
+  const tenantName = (id: string) => tenants.find((tenant) => tenant.id === id)?.name;
 
   return (
     <div className="space-y-6">
@@ -55,9 +70,7 @@ export default function Announcements() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <Card title={t("cp.section.announcements")}>
         <Table
@@ -70,7 +83,15 @@ export default function Announcements() {
             <Badge key="k" tone={announcement.kind === "maintenance" ? "red" : announcement.kind === "warning" ? "amber" : "slate"}>
               {t(`cp.kind.${announcement.kind}`)}
             </Badge>,
-            announcement.tenant_id ?? t("cp.state.everyone"),
+            announcement.tenant_id ? (
+              <span key="o" title={announcement.tenant_id}>
+                {tenantName(announcement.tenant_id) ?? (
+                  <span className="font-mono text-xs">{announcement.tenant_id}</span>
+                )}
+              </span>
+            ) : (
+              t("cp.state.everyone")
+            ),
             formatMoment(announcement.ends_at) || "—",
             <button
               key="w"
@@ -79,6 +100,7 @@ export default function Announcements() {
                 action.run({
                   title: t("cp.action.withdraw"),
                   detail: announcement.title,
+                  danger: true,
                   perform: (reason) => cp.withdraw(announcement.id, reason),
                   onDone: load,
                 })
@@ -88,12 +110,14 @@ export default function Announcements() {
               {t("cp.action.withdraw")}
             </button>,
           ])}
+          loading={loading}
           empty={t("cp.message.no_announcements")}
         />
       </Card>
 
       {writing && (
         <WriteDialog
+          tenants={tenants}
           onClose={() => setWriting(false)}
           onPublished={() => {
             setWriting(false);
@@ -106,7 +130,15 @@ export default function Announcements() {
   );
 }
 
-function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublished: () => void }) {
+function WriteDialog({
+  tenants,
+  onClose,
+  onPublished,
+}: {
+  tenants: TenantSummary[];
+  onClose: () => void;
+  onPublished: () => void;
+}) {
   const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -119,6 +151,7 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setFailure("");
     try {
@@ -126,11 +159,11 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
         title,
         body,
         kind,
-        // Empty means everybody. The field is an organisation's id rather than
-        // a picker because this screen is reached from a list where the id is
-        // already in the operator's clipboard.
+        // Empty means everybody.
         tenant_id: tenantID || null,
-        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        // The time typed is Ulaanbaatar's, as every time this console shows
+        // is — not whatever zone the operator's laptop is set to.
+        ends_at: endsAt ? ubLocalToISO(endsAt) || null : null,
         reason,
       });
       onPublished();
@@ -142,21 +175,19 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.action.announce")}>
+    <Modal onClose={busy ? undefined : onClose} label={t("cp.action.announce")}>
       <form onSubmit={submit} className="p-5 space-y-3">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.action.announce")}</h2>
 
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.title")}</span>
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.title")}</span>
           <input
             required
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
@@ -166,7 +197,7 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
             rows={3}
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
@@ -175,7 +206,7 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
           <select
             value={kind}
             onChange={(event) => setKind(event.target.value as typeof kind)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           >
             <option value="info">{t("cp.kind.info")}</option>
             <option value="warning">{t("cp.kind.warning")}</option>
@@ -185,12 +216,20 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
 
         <label className="block text-sm">
           <span className="text-muted">{t("cp.field.organisation")}</span>
-          <input
+          <select
             value={tenantID}
             onChange={(event) => setTenantID(event.target.value)}
-            placeholder={t("cp.state.everyone")}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono text-xs"
-          />
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
+          >
+            <option value="">{t("cp.state.everyone")}</option>
+            {[...tenants]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name} ({tenant.slug})
+                </option>
+              ))}
+          </select>
         </label>
 
         <label className="block text-sm">
@@ -199,29 +238,40 @@ function WriteDialog({ onClose, onPublished }: { onClose: () => void; onPublishe
             type="datetime-local"
             value={endsAt}
             onChange={(event) => setEndsAt(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            aria-describedby="announcement-until-hint"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
+          <span id="announcement-until-hint" className="mt-1 block text-xs text-muted">
+            {t("cp.hint.ub_time")}
+          </span>
         </label>
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.reason")}</span>
           <input
             required
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
+          >
             {t("cp.action.cancel")}
           </button>
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
+            aria-busy={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
           >
+            {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
             {t("cp.action.announce")}
           </button>
         </div>

@@ -7,69 +7,55 @@
  * They lived in the tenant detail page for a phase, and four other screens
  * imported them from it — a page importing a page, which works and reads as an
  * accident. This is where they belong.
+ *
+ * They are adapters now onto components/ui, which the module kit and the
+ * workspace screens use too. The console kept its own names — `red`, `amber`,
+ * `emerald` — and those stay, so no screen changes; what changed is that the
+ * colours behind them are the status tokens, readable in dark mode, and the
+ * table scrolls sideways, keeps its header row and names its columns.
  */
 
 import React from "react";
 
+import { Badge as UIBadge, Card as UICard, Table as UITable, type BadgeTone } from "@/components/ui";
+
 export function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="bg-surface rounded-xl border border-line overflow-hidden">
-      <h2 className="px-4 py-3 border-b border-line font-medium text-foreground flex items-center gap-3">
-        <span className="flex-1">{title}</span>
-        {action}
-      </h2>
+    <UICard title={title} action={action}>
       {children}
-    </section>
+    </UICard>
   );
 }
 
-export function Table({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-surface-2 text-muted">
-          <tr>
-            {head.map((cell, index) => (
-              <th key={index} className="text-left font-medium px-4 py-2.5">
-                {cell}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {rows.map((row, index) => (
-            <tr key={index} className="hover:bg-surface-hover">
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-4 py-2.5 text-foreground">
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={head.length} className="px-4 py-8 text-center text-muted">
-                {empty}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+export function Table({
+  head,
+  rows,
+  empty,
+  loading,
+}: {
+  head: string[];
+  rows: React.ReactNode[][];
+  empty: string;
+  /** The first load is still out: skeleton rows rather than the empty sentence. */
+  loading?: boolean;
+}) {
+  return <UITable head={head} rows={rows} empty={empty} loading={loading} />;
 }
 
 export type Tone = "red" | "amber" | "emerald" | "slate" | "green";
 
+// `green` and `emerald` are the same colour under two names, because two
+// screens were written months apart. Both stay.
+const TONES: Record<Tone, BadgeTone> = {
+  red: "danger",
+  amber: "warning",
+  emerald: "success",
+  green: "success",
+  slate: "neutral",
+};
+
 export function Badge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
-  const tones: Record<Tone, string> = {
-    red: "bg-red-100 text-red-800",
-    amber: "bg-amber-100 text-amber-900",
-    emerald: "bg-emerald-100 text-emerald-800",
-    green: "bg-emerald-100 text-emerald-800",
-    slate: "bg-surface-2 text-foreground",
-  };
-  return <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${tones[tone]}`}>{children}</span>;
+  return <UIBadge tone={TONES[tone] ?? "neutral"}>{children}</UIBadge>;
 }
 
 /**

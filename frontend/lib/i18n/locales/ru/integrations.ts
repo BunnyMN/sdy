@@ -53,4 +53,7 @@ export const ru: Record<string, string> = {
   "integrations.view.create_title": "Регистрация коннектора интеграции",
   "integrations.view.subtitle": "Управление государственными шлюзами, коннекторами REST API и webhooks событий",
   "integrations.view.title": "Интеграции с внешними системами и Webhook",
+  "integrations.state.active": "Активно",
+  "integrations.state.failing": "Ошибка",
+  "integrations.state.off": "Выключено",
 };

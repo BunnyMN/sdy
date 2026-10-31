@@ -12,12 +12,13 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { BookOpen, BrainCircuit, Plus, Save, Trash2 } from "lucide-react";
+import { BookOpen, BrainCircuit, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 
 import { useAction } from "@/components/cp/Action";
 import { Card, formatMoment } from "@/components/cp/ui";
 import { cp, type Knowledge, type Prompt } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote, LoadingBlock, useUnsavedChanges } from "@/components/ui";
 
 export default function Assistant() {
   const { t } = useI18n();
@@ -26,6 +27,8 @@ export default function Assistant() {
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
   const [draft, setDraft] = useState({ title: "", content: "", source_url: "" });
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
+  useUnsavedChanges(!!(draft.title.trim() || draft.content.trim() || draft.source_url.trim()));
 
   const load = useCallback(async () => {
     try {
@@ -35,6 +38,8 @@ export default function Assistant() {
       setFailure("");
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -52,9 +57,7 @@ export default function Assistant() {
         <p className="mt-1 text-sm text-muted">{t("cp.hint.assistant")}</p>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)] gap-6 items-start">
         <Card title={t("ai.view.system_prompt")}>
@@ -73,7 +76,8 @@ export default function Assistant() {
                 }
               />
             ))}
-            {prompts.length === 0 && <p className="text-sm text-muted">{t("cp.message.no_activity")}</p>}
+            {prompts.length === 0 &&
+              (loading ? <LoadingBlock rows={3} /> : <p className="text-sm text-muted">{t("cp.message.no_prompts")}</p>)}
           </div>
         </Card>
 
@@ -81,23 +85,26 @@ export default function Assistant() {
           <div className="p-4 space-y-4">
             <div className="grid gap-3">
               <input
+                aria-label={t("ai.field.knowledge_title")}
                 placeholder={t("ai.field.knowledge_title")}
                 value={draft.title}
                 onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                className="rounded-lg border border-input px-3 py-2 text-sm"
+                className="rounded-lg border border-input bg-surface px-3 py-2 text-sm"
               />
               <input
+                aria-label={t("ai.field.source_url")}
                 placeholder={t("ai.field.source_url")}
                 value={draft.source_url}
                 onChange={(event) => setDraft({ ...draft, source_url: event.target.value })}
-                className="rounded-lg border border-input px-3 py-2 text-sm"
+                className="rounded-lg border border-input bg-surface px-3 py-2 text-sm"
               />
               <textarea
+                aria-label={t("ai.field.knowledge_content")}
                 placeholder={t("ai.field.knowledge_content")}
                 value={draft.content}
                 onChange={(event) => setDraft({ ...draft, content: event.target.value })}
                 rows={6}
-                className="rounded-lg border border-input px-3 py-2 text-sm"
+                className="rounded-lg border border-input bg-surface px-3 py-2 text-sm"
               />
             </div>
             <button
@@ -127,11 +134,12 @@ export default function Assistant() {
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold text-foreground truncate">{entry.title}</h3>
                     <p className="text-xs text-muted line-clamp-2">{entry.content}</p>
-                    <p className="text-[11px] text-muted">{formatMoment(entry.updated_at)}</p>
+                    <p className="text-2xs text-muted">{formatMoment(entry.updated_at)}</p>
                   </div>
                   <button
                     type="button"
-                    aria-label={t("base.action.delete")}
+                    aria-label={`${t("base.action.delete")}: ${entry.title}`}
+                    title={t("base.action.delete")}
                     onClick={() =>
                       action.run({
                         title: t("base.action.delete"),
@@ -141,13 +149,14 @@ export default function Assistant() {
                         onDone: load,
                       })
                     }
-                    className="shrink-0 rounded-lg border border-line p-1.5 text-muted hover:bg-red-50 hover:text-red-600"
+                    className="shrink-0 rounded-lg border border-line p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </article>
               ))}
-              {knowledge.length === 0 && <p className="py-3 text-sm text-muted">{t("cp.message.no_activity")}</p>}
+              {knowledge.length === 0 &&
+                (loading ? <LoadingBlock rows={3} /> : <p className="py-3 text-sm text-muted">{t("cp.message.no_knowledge")}</p>)}
             </div>
           </div>
         </Card>
@@ -162,31 +171,67 @@ export default function Assistant() {
  * One prompt, with its own draft.
  *
  * The draft is local so that an operator editing the instructions does not lose
- * them when the list reloads after somebody else's save.
+ * them when the list reloads after somebody else's save. A reload used to
+ * overwrite it anyway — the effect copied every new server value into the
+ * draft — so the half-written instructions vanished the moment anybody saved
+ * any prompt. Now the draft follows the server only while it is untouched (or
+ * once it matches what the server holds, as after one's own save); an edited
+ * draft keeps its text, and the editor says that a newer version exists and
+ * offers to load it.
  */
 function PromptEditor({ prompt, onSave }: { prompt: Prompt; onSave: (content: string, active: boolean) => void }) {
   const { t } = useI18n();
   const [content, setContent] = useState(prompt.content);
   const [active, setActive] = useState(prompt.active);
+  // What the draft was started from.
+  const [base, setBase] = useState({ content: prompt.content, active: prompt.active });
 
-  useEffect(() => {
+  const dirty = content !== base.content || active !== base.active;
+  const serverMoved = prompt.content !== base.content || prompt.active !== base.active;
+  const matchesServer = content === prompt.content && active === prompt.active;
+  if (serverMoved && (!dirty || matchesServer)) {
+    // Adjusting state while rendering, React's way of following a prop: the
+    // update applies before anything is painted.
+    setBase({ content: prompt.content, active: prompt.active });
     setContent(prompt.content);
     setActive(prompt.active);
-  }, [prompt.content, prompt.active]);
+  }
+  const stale = serverMoved && dirty && !matchesServer;
+  useUnsavedChanges(dirty && !matchesServer);
 
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <label className="text-sm font-semibold text-foreground font-mono">{prompt.key}</label>
+        <label htmlFor={`prompt-${prompt.key}`} className="text-sm font-semibold text-foreground font-mono">
+          {prompt.key}
+        </label>
         <span className="text-xs text-muted">
           {prompt.updated_at ? formatMoment(prompt.updated_at) : t("cp.state.never")}
         </span>
       </div>
+      {stale && (
+        <div className="mb-2 space-y-2">
+          <Banner tone="warning" message={t("cp.message.prompt_changed_elsewhere")} />
+          <button
+            type="button"
+            onClick={() => {
+              setBase({ content: prompt.content, active: prompt.active });
+              setContent(prompt.content);
+              setActive(prompt.active);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-input px-3 py-1.5 text-xs text-foreground hover:bg-surface-hover"
+          >
+            <RotateCcw aria-hidden="true" className="w-3.5 h-3.5" />
+            {t("cp.action.load_latest")}
+          </button>
+        </div>
+      )}
       <textarea
+        id={`prompt-${prompt.key}`}
         rows={7}
         value={content}
         onChange={(event) => setContent(event.target.value)}
-        className="w-full rounded-lg border border-input px-3 py-2 text-sm font-mono"
+        className="w-full rounded-lg border border-input bg-surface px-3 py-2 text-sm font-mono"
       />
       <div className="mt-2 flex items-center gap-3">
         <button

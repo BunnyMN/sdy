@@ -57,3 +57,4 @@ import "./kiosk";
 import "./events";
 import "./membership";
 import "./dues";
+import "./line";

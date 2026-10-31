@@ -5,8 +5,9 @@ import { Inbox, Search, Send } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Banner, EmptyState, fieldClass, Loading, PageHeader, TableCard, tableHeadClass } from "@/components/ui";
+import { Badge, Banner, EmptyState, fieldClass, LoadingBlock, PageHeader, TableCard, tableHeadClass, type BadgeTone } from "@/components/ui";
 import { formatDay } from "@/lib/datetime";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
 /**
  * Юу гуйсан, хаана явна.
@@ -45,8 +46,25 @@ function when(iso: string) {
   return Number.isNaN(at.getTime()) ? "—" : formatDay(at);
 }
 
+/**
+ * The provider's status word, in the reader's language when it is one of the
+ * three the platform defines (pkg/nexus StatusPending/Accepted/Declined). A
+ * module may use its own words; those are shown as they came.
+ */
+const STATUS: Record<string, { key: string; tone: BadgeTone }> = {
+  PENDING: { key: "me.status.pending", tone: "warning" },
+  ACCEPTED: { key: "me.status.accepted", tone: "success" },
+  DECLINED: { key: "me.status.declined", tone: "neutral" },
+};
+function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
+  const known = STATUS[status.toUpperCase()];
+  return <Badge tone={known?.tone ?? "neutral"}>{known ? t(known.key) : status || "—"}</Badge>;
+}
+
 export default function MyRequestsPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState("");
 
@@ -58,14 +76,15 @@ export default function MyRequestsPage() {
     void api
       .getMyItems()
       .then((answer) => alive && setItems(answer.items || []))
-      .catch((err: unknown) => alive && setError(err instanceof Error ? err.message : "—"));
+      .catch((err: unknown) => alive && setError(errorMessage(err)));
     return () => {
       alive = false;
     };
-  }, [round]);
+  }, [round, errorMessage]);
 
+  // A <div>, not <main>: the shell around every page already supplies <main>.
   return (
-    <main className="p-6 space-y-6">
+    <div className="space-y-6">
       <PageHeader
         icon={<Inbox className="w-6 h-6 text-accent" />}
         title={t("me.view.requests_title")}
@@ -75,7 +94,12 @@ export default function MyRequestsPage() {
       <AskToJoin onAsked={reload} />
 
       {error && <Banner tone="error" message={error} />}
-      {!items && !error && <Loading />}
+      {error && !items && (
+        <button type="button" onClick={() => { setError(""); reload(); }} className="min-h-11 rounded-lg border border-input px-4 text-sm">
+          {t("base.action.retry")}
+        </button>
+      )}
+      {!items && !error && <LoadingBlock />}
 
       {items && items.length === 0 && (
         // Хоосон байх нь энэ дэлгэцийн ердийн байдал, алдаа биш: хүсэлт
@@ -87,7 +111,25 @@ export default function MyRequestsPage() {
         </div>
       )}
 
+      {/* On a phone a five-column table does not fit; each request is a card there. */}
       {items && items.length > 0 && (
+        <ul className="space-y-3 sm:hidden">
+          {items.map((item) => (
+            <li key={item.id} className="bg-surface rounded-xl border border-line p-4 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <strong className="text-sm text-foreground break-words">{item.code}</strong>
+                <StatusBadge status={item.status} />
+              </div>
+              <p className="text-sm text-muted">{t("me.field.provider")}: {item.provider || "—"}</p>
+              {item.answer && <p className="text-sm text-foreground break-words">{item.answer}</p>}
+              <p className="text-xs text-muted tabular-nums">{t("me.field.updated")}: {when(item.updated_at)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {items && items.length > 0 && (
+        <div className="hidden sm:block">
         <TableCard
           head={
             <tr className={tableHeadClass}>
@@ -104,7 +146,7 @@ export default function MyRequestsPage() {
               <td className="px-4 py-2 font-medium text-foreground">{item.code}</td>
               {/* Хоосон байж болно: хэн ч аваагүй хүсэлт хаана ч заахгүй. */}
               <td className="px-4 py-2">{item.provider || "—"}</td>
-              <td className="px-4 py-2">{item.status}</td>
+              <td className="px-4 py-2"><StatusBadge status={item.status} /></td>
               <td className="px-4 py-2 max-w-md truncate" title={item.answer}>
                 {item.answer || "—"}
               </td>
@@ -112,8 +154,9 @@ export default function MyRequestsPage() {
             </tr>
           ))}
         </TableCard>
+        </div>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -127,6 +170,7 @@ export default function MyRequestsPage() {
  */
 function AskToJoin({ onAsked }: { onAsked: () => void }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const [slug, setSlug] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,7 +191,7 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
     try {
       setFound((await api.searchDirectory(lookingFor.trim())).providers || []);
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(errorMessage(err));
     }
   }
   // The list is the picker: it is shown before anybody has typed, so a member
@@ -170,7 +214,7 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
       }
       onAsked();
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -220,7 +264,7 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
         />
         <button
           disabled={busy || slug.trim() === ""}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           <Send className="inline w-4 h-4 mr-1" />
           {t("me.action.ask")}
@@ -240,7 +284,7 @@ function AskToJoin({ onAsked }: { onAsked: () => void }) {
             placeholder={t("me.field.lookup_placeholder")}
             className={`${fieldClass} flex-1`}
           />
-          <button type="button" onClick={(e) => void search(e)} className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-muted">
+          <button type="button" onClick={(e) => void search(e)} className="min-h-11 shrink-0 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-muted">
             <Search className="inline w-4 h-4 mr-1" />
             {t("me.action.lookup")}
           </button>

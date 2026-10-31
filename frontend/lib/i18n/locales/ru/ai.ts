@@ -34,4 +34,8 @@ export const ru: Record<string, string> = {
   "ai.view.tab_translate": "Перевод",
   "ai.view.title": "AI-помощник",
   "ai.view.translate_placeholder": "Текст для перевода…",
+  "ai.message.request_failed": "Помощник не смог ответить. Попробуйте снова.",
+  "ai.action.record": "Записать голосовое сообщение",
+  "ai.action.send": "Отправить",
+  "ai.field.message": "Сообщение",
 };

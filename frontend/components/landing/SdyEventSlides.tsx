@@ -58,6 +58,27 @@ const slides: Slide[] = [
 
 const INTERVAL = 7000;
 
+/* Each poster also comes at 640 and 960 pixels wide (where it is wider than
+   that) and as a 24px copy for the backdrop — `public/sdy/events/<id>-640.webp`
+   and so on. A phone used to download the 1600px original. */
+const WIDTHS = [640, 960];
+function srcSet(slide: Slide) {
+  const base = slide.image.replace(/\.webp$/, "");
+  return [...WIDTHS.filter(w => w < slide.width).map(w => `${base}-${w}.webp ${w}w`), `${slide.image} ${slide.width}w`].join(", ");
+}
+function tiny(slide: Slide) { return slide.image.replace(/\.webp$/, "-tiny.webp"); }
+// The poster column: the whole width under 1024px, about 1.45/2.45 of the
+// container above it.
+const SIZES = "(max-width: 767px) calc(100vw - 32px), (max-width: 1024px) calc(100vw - 64px), 760px";
+
+/* Posters mix Mongolian and English. The English runs are marked as English, so
+   a screen reader reading the Mongolian page does not pronounce "Festival" with
+   Mongolian letter values. */
+function Mixed({ text }: { text: string }) {
+  const parts = text.split(/([A-Za-z][A-Za-z0-9 ,!'&.-]*[A-Za-z0-9!]|[A-Za-z])/);
+  return <>{parts.map((part, i) => i % 2 ? <span key={i} lang="en">{part}</span> : part)}</>;
+}
+
 /**
  * The union's events above the fold. A scroll-snap track, so it swipes and
  * scrolls with no JavaScript at all; the script adds the arrows, the dots and
@@ -128,27 +149,30 @@ export default function SdyEventSlides() {
         </div>}
       </div>
 
-      <div ref={track} className={styles.eventsTrack} aria-live={paused || held ? "polite" : "off"}>
+      {/* Focusable, so the arrow keys the section listens for have somewhere to
+          start from without reaching for the buttons. */}
+      <div ref={track} className={styles.eventsTrack} tabIndex={0} aria-label="Арга хэмжээнүүд — сум товчоор солино"
+        aria-live={paused || held ? "polite" : "off"}>
         {slides.map((slide, i) => (
           <article key={slide.id} className={styles.eventSlide} aria-roledescription="slide"
             aria-label={`${i + 1} / ${slides.length}: ${slide.title}`} aria-hidden={ready && i !== index ? true : undefined}>
             <div className={styles.eventPoster}>
-              {/* The same poster, blurred, fills the frame behind posters of every shape. */}
+              {/* The same poster, 24px wide and stretched, fills the frame behind posters of every shape. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className={styles.eventBackdrop} src={slide.image} alt="" aria-hidden="true" loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+              <img className={styles.eventBackdrop} src={tiny(slide)} alt="" aria-hidden="true" loading={i === 0 ? "eager" : "lazy"} decoding="async" />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className={styles.eventImage} src={slide.image} width={slide.width} height={slide.height}
-                alt={`${slide.title} — зурагт хуудас`} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+              <img className={styles.eventImage} src={slide.image} srcSet={srcSet(slide)} sizes={SIZES} width={slide.width} height={slide.height}
+                alt={`${slide.title} — зурагт хуудас`} loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"} decoding={i === 0 ? "sync" : "async"} />
             </div>
             <div className={styles.eventDetails}>
               <p className={styles.eventKicker}>{slide.kicker}</p>
-              <h3>{slide.title}</h3>
+              <h3><Mixed text={slide.title} /></h3>
               <ul>
                 <li><CalendarDays aria-hidden="true" /><span>{slide.when}</span></li>
-                <li><MapPin aria-hidden="true" /><span>{slide.where}</span></li>
-                {slide.who && <li><Users aria-hidden="true" /><span>{slide.who}</span></li>}
+                <li><MapPin aria-hidden="true" /><span><Mixed text={slide.where} /></span></li>
+                {slide.who && <li><Users aria-hidden="true" /><span><Mixed text={slide.who} /></span></li>}
               </ul>
-              <p className={styles.eventBody}>{slide.body}</p>
+              <p className={styles.eventBody}><Mixed text={slide.body} /></p>
             </div>
           </article>
         ))}

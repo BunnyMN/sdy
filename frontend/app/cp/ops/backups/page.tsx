@@ -17,6 +17,7 @@ import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type BackupEntry, type Overview } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote } from "@/components/ui";
 
 export default function Backups() {
   const { t } = useI18n();
@@ -79,14 +80,12 @@ export default function Backups() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       {status && !status.configured && (
-        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
+        <Banner tone="warning">
           {t("cp.message.no_backups_configured")}
-        </p>
+        </Banner>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -113,6 +112,7 @@ export default function Backups() {
             </Badge>,
             <span key="d" className="text-xs text-muted break-words">{entry.detail || "—"}</span>,
           ])}
+          loading={!status && !failure}
           empty={t("cp.message.no_backups")}
         />
       </Card>
@@ -126,7 +126,7 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className={`mt-1 text-lg font-semibold ${warn ? "text-amber-700" : "text-foreground"}`}>{value}</p>
+      <p className={`mt-1 text-lg font-semibold ${warn ? "text-warning" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }

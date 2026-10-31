@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { Banner, LoadingBlock, PageHeader, rowActionClass } from "@/components/ui";
-import { ActionMessage } from "@/components/documents/shared";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { Banner, LoadingBlock, PageHeader, rowActionClass, useConfirm } from "@/components/ui";
+import { ActionMessage, useDocTypeLabel } from "@/components/documents/shared";
 import { Plus, Save, Trash2, Workflow as WorkflowIcon } from "lucide-react";
 
 interface Step {
@@ -27,6 +28,9 @@ interface Chain {
  */
 export default function DocumentWorkflowsPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
+  const docTypeLabel = useDocTypeLabel();
   const { can } = useAccess();
   const mayManage = can("documents.manage");
 
@@ -45,7 +49,7 @@ export default function DocumentWorkflowsPage() {
   } = useResource(async () => (await api.getDocumentWorkflows()) || [], {
     initial: [] as Chain[],
     onError: (err: any) =>
-      setMessage({ type: "error", text: err?.message || t("documents.message.workflows_failed") }),
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.workflows_failed" }) }),
   });
 
   const editChain = (docType: string, steps: Step[]) =>
@@ -53,11 +57,24 @@ export default function DocumentWorkflowsPage() {
 
   const addStep = (chain: Chain) => editChain(chain.doc_type, [...chain.steps, { name: "", signer_reg_number: "" }]);
 
-  const removeStep = (chain: Chain, index: number) =>
+  // Asked first: a step removed by a stray click takes its name and signer with
+  // it, and nothing on the row says it was ever there.
+  const removeStep = async (chain: Chain, index: number) => {
+    const step = chain.steps[index];
+    if (step.name.trim() || step.signer_reg_number.trim()) {
+      const ok = await confirm({
+        title: t("documents.confirm.remove_step_title"),
+        body: t("documents.confirm.remove_step_body", { n: index + 1, name: step.name.trim() || "—" }),
+        confirmLabel: t("base.action.delete"),
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
     editChain(
       chain.doc_type,
       chain.steps.filter((_, i) => i !== index)
     );
+  };
 
   const editStep = (chain: Chain, index: number, patch: Partial<Step>) =>
     editChain(
@@ -73,7 +90,7 @@ export default function DocumentWorkflowsPage() {
         chain.doc_type,
         chain.steps.map((step) => ({ name: step.name, signer_reg_number: step.signer_reg_number }))
       );
-      setMessage({ type: "success", text: t("documents.message.workflow_saved", { type: chain.doc_type }) });
+      setMessage({ type: "success", text: t("documents.message.workflow_saved", { type: docTypeLabel(chain.doc_type) }) });
       // Only the chain that was saved is replaced, with what the server stored.
       // Reloading everything discarded steps the operator had typed into the other
       // document types under a banner saying only this one was saved.
@@ -95,7 +112,7 @@ export default function DocumentWorkflowsPage() {
     } catch (err: any) {
       // The draft stays on screen: a refused save is usually one blank step name,
       // and reloading here threw away everything the operator had typed.
-      setMessage({ type: "error", text: err?.message || t("documents.message.workflows_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.workflows_failed" }) });
     } finally {
       setBusy(null);
     }
@@ -104,7 +121,7 @@ export default function DocumentWorkflowsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<WorkflowIcon className="w-7 h-7 text-indigo-600" />}
+        icon={<WorkflowIcon className="w-7 h-7 text-accent" />}
         title={t("documents.menu.workflows")}
         subtitle={t("documents.view.workflows_hint")}
       />
@@ -123,8 +140,8 @@ export default function DocumentWorkflowsPage() {
             <section key={chain.doc_type} className="bg-surface border border-line rounded-xl overflow-hidden">
               <header className="flex items-center justify-between px-4 py-3 bg-surface-2 border-b border-line">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono font-semibold text-foreground text-sm">{chain.doc_type}</span>
-                  <span className="text-[11px] text-muted">
+                  <span className="font-semibold text-foreground text-sm">{docTypeLabel(chain.doc_type)}</span>
+                  <span className="text-2xs text-muted">
                     {chain.steps.length === 0
                       ? t("documents.message.chain_single_signature")
                       : t("documents.message.chain_signature_count", { count: chain.steps.length })}
@@ -133,13 +150,15 @@ export default function DocumentWorkflowsPage() {
                 {mayManage && (
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => addStep(chain)}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-input text-foreground hover:bg-surface"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 min-h-9 rounded-lg text-2xs font-semibold border border-input text-foreground hover:bg-surface-hover"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>{t("documents.action.add_step")}</span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => save(chain)}
                       disabled={busy === chain.doc_type || chain.steps.some((s) => !s.name.trim())}
                       title={chain.steps.some((s) => !s.name.trim()) ? t("documents.message.step_needs_name") : undefined}
@@ -158,23 +177,24 @@ export default function DocumentWorkflowsPage() {
                 <ul className="divide-y divide-line">
                   {chain.steps.map((step, index) => (
                     <li key={index} className="px-4 py-3 flex flex-wrap items-end gap-3">
-                      <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold grid place-items-center">
+                      <span className="w-6 h-6 shrink-0 rounded-full bg-accent-soft text-accent text-2xs font-semibold grid place-items-center">
                         {index + 1}
                       </span>
                       <div className="flex-1 min-w-[180px]">
-                        <label className="block text-[11px] font-semibold text-muted mb-1">
+                        <label htmlFor={`step-${chain.doc_type}-${index}-name`} className="block text-2xs font-semibold text-muted mb-1">
                           {t("documents.field.step_name")}
                         </label>
                         <input
+                          id={`step-${chain.doc_type}-${index}-name`}
                           type="text"
                           value={step.name}
                           disabled={!mayManage}
                           onChange={(e) => editStep(chain, index, { name: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-ring"
                         />
                       </div>
                       <div className="flex-1 min-w-[180px]">
-                        <label className="block text-[11px] font-semibold text-muted mb-1">
+                        <label htmlFor={`step-${chain.doc_type}-${index}-signer`} className="block text-2xs font-semibold text-muted mb-1">
                           {t("documents.field.step_signer")}
                         </label>
                         {/* The placeholder is the Cyrillic form, because that is what
@@ -182,18 +202,20 @@ export default function DocumentWorkflowsPage() {
                             example in Latin letters guides an operator into a step no
                             live signature can ever fill. Same example as the dialog. */}
                         <input
+                          id={`step-${chain.doc_type}-${index}-signer`}
                           type="text"
                           placeholder="УБ99010111"
                           value={step.signer_reg_number}
                           disabled={!mayManage}
                           onChange={(e) => editStep(chain, index, { signer_reg_number: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono"
+                          className="w-full px-3 py-1.5 text-xs border border-input rounded-lg focus:ring-2 focus:ring-ring font-mono"
                         />
                       </div>
                       {mayManage && (
                         <button
-                          onClick={() => removeStep(chain, index)}
-                          className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                          type="button"
+                          onClick={() => void removeStep(chain, index)}
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center p-1.5 rounded-lg border border-danger-border text-danger hover:bg-danger-soft"
                           aria-label={t("base.action.delete")}
                         >
                           <Trash2 className="w-3.5 h-3.5" />

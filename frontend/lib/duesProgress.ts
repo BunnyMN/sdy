@@ -69,3 +69,13 @@ export function instalments(payments: Payment[], chargeID: string): Instalment[]
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
     .map(payment => ({ ...payment, number: payment.status === "approved" || payment.status === "pending" ? ++number : 0 }));
 }
+
+/**
+ * Whether a charge is past its due date and still owes something. `today` is
+ * the Ulaanbaatar day as `yyyy-MM-dd` (lib/datetime `dayOf()`); `due_date`
+ * may arrive as a date or a timestamp, so only its day is compared.
+ */
+export function isOverdue(charge: Pick<Charge, "balance" | "due_date" | "waived">, today: string): boolean {
+  if (charge.waived || charge.balance <= 0 || !charge.due_date) return false;
+  return charge.due_date.slice(0, 10) < today;
+}

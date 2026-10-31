@@ -4,6 +4,7 @@ import React from "react";
 
 import Layout from "@/components/Layout";
 import InstallApp from "@/components/InstallApp";
+import { ConfirmProvider } from "@/components/ui";
 import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { BrandProvider } from "@/lib/brandContext";
@@ -40,8 +41,12 @@ export default function Providers({
     <I18nProvider brand={brand.name} copy={copy}>
       <BrandProvider brand={brand} copy={copy}>
         <ThemeProvider>
-          <Layout>{children}</Layout>
-          <InstallApp />
+          {/* Where useConfirm() draws its dialogs — the platform's own
+              replacement for window.confirm and window.prompt. */}
+          <ConfirmProvider>
+            <Layout>{children}</Layout>
+            <InstallApp />
+          </ConfirmProvider>
         </ThemeProvider>
       </BrandProvider>
     </I18nProvider>

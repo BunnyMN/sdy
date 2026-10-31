@@ -75,6 +75,9 @@ env:
   EID_APP_CALLBACKS: ${{ vars.EID_APP_CALLBACKS || 'gerege-nexus://auth' }}
   EID_BASE_URL: ${{ vars.EID_BASE_URL || 'https://rp.eidmongolia.mn' }}
   REDIS_URL: ${{ vars.REDIS_URL || 'redis://redis:6379/0' }}
+  # esdy iOS аппын Apple Team ID — /.well-known/apple-app-site-association
+  # (universal link: eID-ээс аппад буцах, QR ирц). Хоосон бол AASA 404.
+  APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || '' }}
   APP_DIR: /opt/sdy
   STACK: sdy
 
@@ -214,6 +217,7 @@ jobs:
           EID_APP_CALLBACKS: ${{ env.EID_APP_CALLBACKS }}
           EID_BASE_URL: ${{ env.EID_BASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
+          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
           APP_DIR: ${{ env.APP_DIR }}
           STACK: ${{ env.STACK }}
         with:
@@ -222,7 +226,7 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 20m
-          envs: IMAGE_TAG,REGISTRY_USER,REGISTRY_TOKEN,REPO,POSTGRES_PASSWORD,SSO_DEFAULT_CLIENT_SECRET,INTEGRATION_ENCRYPTION_KEY,GEMINI_API_KEY,EID_RP_UUID,EID_RP_SECRET,GEREGE_CORE_TOKEN,GOOGLE_LOGIN_CLIENT_ID,GOOGLE_LOGIN_CLIENT_SECRET,GOOGLE_LOGIN_TENANT,GOOGLE_LOGIN_ALLOWED_DOMAINS,PUBLIC_ORIGIN,CONTROL_PLANE_HOST,DEMO_MODE,PLATFORM_ACCESS_MODE,EID_MOCK_MODE,EID_APP_CALLBACKS,EID_BASE_URL,REDIS_URL,APP_DIR,STACK
+          envs: IMAGE_TAG,REGISTRY_USER,REGISTRY_TOKEN,REPO,POSTGRES_PASSWORD,SSO_DEFAULT_CLIENT_SECRET,INTEGRATION_ENCRYPTION_KEY,GEMINI_API_KEY,EID_RP_UUID,EID_RP_SECRET,GEREGE_CORE_TOKEN,GOOGLE_LOGIN_CLIENT_ID,GOOGLE_LOGIN_CLIENT_SECRET,GOOGLE_LOGIN_TENANT,GOOGLE_LOGIN_ALLOWED_DOMAINS,PUBLIC_ORIGIN,CONTROL_PLANE_HOST,DEMO_MODE,PLATFORM_ACCESS_MODE,EID_MOCK_MODE,EID_APP_CALLBACKS,EID_BASE_URL,REDIS_URL,APPLE_TEAM_ID,APP_DIR,STACK
           script: |
             set -euo pipefail
             cd "$APP_DIR"
@@ -264,6 +268,7 @@ jobs:
             EID_APP_CALLBACKS=${EID_APP_CALLBACKS}
             REDIS_URL=${REDIS_URL}
             GITHUB_REPOSITORY=${REPO}
+            APPLE_TEAM_ID=${APPLE_TEAM_ID}
             # ── Социал Демократ Монголын Залуучуудын Холбооны брэнд (docs/MZH.md) ──
             BRAND_NAME=Социал Демократ Монголын Залуучуудын Холбоо
             BRAND_SHORT_NAME=SDY

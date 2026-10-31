@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { Banner, LoadingBlock, PageHeader, TableCard, rowActionClass } from "@/components/ui";
-import { ActionMessage } from "@/components/documents/shared";
+import { ActionMessage, useDocTypeLabel } from "@/components/documents/shared";
 import { PenTool, Save } from "lucide-react";
 
 interface Policy {
@@ -26,6 +27,8 @@ interface Policy {
  */
 export default function SignaturePoliciesPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const docTypeLabel = useDocTypeLabel();
   const { can } = useAccess();
   const mayManage = can("documents.manage");
 
@@ -44,7 +47,7 @@ export default function SignaturePoliciesPage() {
   } = useResource(async () => (await api.getSignaturePolicies()) || [], {
     initial: [] as Policy[],
     onError: (err: any) =>
-      setMessage({ type: "error", text: err?.message || t("documents.message.policies_failed") }),
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.policies_failed" }) }),
   });
 
   const edit = (docType: string, patch: Partial<Policy>) =>
@@ -59,13 +62,13 @@ export default function SignaturePoliciesPage() {
         allow_dan: policy.allow_dan,
         require_named_signer: policy.require_named_signer,
       })) as Policy | undefined;
-      setMessage({ type: "success", text: t("documents.message.policy_saved", { type: policy.doc_type }) });
+      setMessage({ type: "success", text: t("documents.message.policy_saved", { type: docTypeLabel(policy.doc_type) }) });
       // Only the row that was saved is replaced. Reloading the table reverted the
       // edits an operator had made to the other document types, under a banner
       // naming only this one.
       if (saved && saved.doc_type) edit(policy.doc_type, saved);
     } catch (err: any) {
-      setMessage({ type: "error", text: err?.message || t("documents.message.policies_failed") });
+      setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.policies_failed" }) });
       // This refusal cannot be fixed on this screen — the chain beneath the policy is
       // what has to change — so this row goes back to what is stored. The others keep
       // whatever the operator has typed.
@@ -84,7 +87,7 @@ export default function SignaturePoliciesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={<PenTool className="w-7 h-7 text-indigo-600" />}
+        icon={<PenTool className="w-7 h-7 text-accent" />}
         title={t("documents.menu.signature_policies")}
         subtitle={t("documents.view.signature_policies_hint")}
       />
@@ -112,14 +115,14 @@ export default function SignaturePoliciesPage() {
         >
           {policies.map((policy) => (
             <tr key={policy.doc_type} className="hover:bg-surface-hover">
-              <td className="px-4 py-3 font-mono font-semibold text-foreground">{policy.doc_type}</td>
+              <td className="px-4 py-3 font-semibold text-foreground">{docTypeLabel(policy.doc_type)}</td>
               <td className="px-4 py-3">
                 <input
                   type="checkbox"
                   checked={policy.allow_eid}
                   disabled={!mayManage}
                   onChange={(e) => edit(policy.doc_type, { allow_eid: e.target.checked })}
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-[var(--gerege-blue)]"
                 />
               </td>
               <td className="px-4 py-3">
@@ -128,7 +131,7 @@ export default function SignaturePoliciesPage() {
                   checked={policy.allow_dan}
                   disabled={!mayManage}
                   onChange={(e) => edit(policy.doc_type, { allow_dan: e.target.checked })}
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-[var(--gerege-blue)]"
                 />
               </td>
               <td className="px-4 py-3">
@@ -137,16 +140,16 @@ export default function SignaturePoliciesPage() {
                   checked={policy.require_named_signer}
                   disabled={!mayManage}
                   onChange={(e) => edit(policy.doc_type, { require_named_signer: e.target.checked })}
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-[var(--gerege-blue)]"
                 />
               </td>
               <td className="px-4 py-3">
                 {policy.configured ? (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-accent border border-line">
                     {t("documents.state.policy_configured")}
                   </span>
                 ) : (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line">
+                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line">
                     {t("documents.state.policy_default")}
                   </span>
                 )}
@@ -162,7 +165,7 @@ export default function SignaturePoliciesPage() {
                     <span>{t("base.action.save")}</span>
                   </button>
                 ) : (
-                  <span className="text-subtle text-[11px]">—</span>
+                  <span className="text-subtle text-2xs">—</span>
                 )}
               </td>
             </tr>

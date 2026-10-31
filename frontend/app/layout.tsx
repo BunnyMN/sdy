@@ -10,6 +10,7 @@ import { brandCSSVariables, brandFromEnv } from "@/lib/brandEnv";
 import { brandCopyFromEnv } from "@/lib/brandCopy";
 import { localizedBrand } from "@/lib/brand";
 import { DEFAULT_LOCALE, LOCALE_KEY } from "@/lib/locale";
+import { siteOriginFromEnv } from "@/lib/siteOrigin";
 
 /**
  * Rendered per request, because the deployment's name is not the build's to
@@ -60,9 +61,23 @@ export async function generateMetadata(): Promise<Metadata> {
   // had.
   const locale = (await cookies()).get(LOCALE_KEY)?.value || DEFAULT_LOCALE;
   const brand = localizedBrand(brandFromEnv(), brandCopyFromEnv(), locale);
+  const origin = siteOriginFromEnv();
   return {
+    // What relative Open Graph image addresses resolve against. Only when the
+    // deployment's address is known (lib/siteOrigin.ts); Next falls back to
+    // the request's host otherwise.
+    ...(origin ? { metadataBase: new URL(origin) } : {}),
     title: brand.name,
     description: brand.description,
+    // A link shared anywhere unfurls with the deployment's name rather than a
+    // bare URL. Pages with a picture of their own (app/page.tsx) replace this.
+    openGraph: {
+      type: "website",
+      siteName: brand.name,
+      title: brand.name,
+      description: brand.description,
+      locale: OG_LOCALES[locale] ?? "mn_MN",
+    },
     // Apple reads none of the manifest: on iOS the name under the icon and the
     // status bar are decided by these instead. The short name is what there is
     // room for under an icon.
@@ -95,14 +110,36 @@ export function generateViewport(): Viewport {
   return { themeColor: brandFromEnv().themeColor };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/** Open Graph wants a language_TERRITORY pair, not the switcher's bare code. */
+const OG_LOCALES: Record<string, string> = { mn: "mn_MN", en: "en_US", ru: "ru_RU", zh: "zh_CN", ar: "ar_AR", fr: "fr_FR", es: "es_ES" };
+
+/** The languages the switcher can write into the cookie; anything else is the default. */
+const LOCALE_CODES = new Set(["mn", "ar", "zh", "en", "fr", "ru", "es"]);
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // <html lang> from the same cookie generateMetadata reads, so the first byte
+  // of HTML already names the language the page will be read in. It used to be
+  // "mn" for everybody until I18nProvider corrected it after hydration — a
+  // screen reader that started on an English page began in Mongolian
+  // pronunciation, and Arabic laid out left-to-right for a frame. The cookie
+  // is already being read for the title, so this costs nothing new: the route
+  // is force-dynamic either way.
+  const saved = (await cookies()).get(LOCALE_KEY)?.value || "";
+  const lang = LOCALE_CODES.has(saved) ? saved : DEFAULT_LOCALE;
   return (
-    // I18nProvider keeps <html lang> in step with the selected locale.
+    // I18nProvider keeps <html lang> in step with the selected locale after
+    // this, when the reader switches.
     // suppressHydrationWarning на <html>: public/theme-init.js нь React
     // ачаалахаас өмнө `dark` ангийг нэмдэг тул сервер илгээсэн className
     // болон бодит DOM-ынх нэг байхаа болино. Энэ бол яг тэр хүлээгдэж буй
     // зөрүү — өөр юуг ч нуухгүй: зөвхөн энэ элементийн атрибутад үйлчилнэ.
-    <html lang="mn" className={geist.variable} style={brandCSSVariables(brandFromEnv()) as React.CSSProperties} suppressHydrationWarning>
+    <html
+      lang={lang}
+      dir={lang === "ar" ? "rtl" : "ltr"}
+      className={geist.variable}
+      style={brandCSSVariables(brandFromEnv()) as React.CSSProperties}
+      suppressHydrationWarning
+    >
       <head>
         {/*
           Read before anything is painted, so a reader who chose dark never

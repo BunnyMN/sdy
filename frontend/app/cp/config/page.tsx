@@ -13,13 +13,14 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { History, KeyRound, RotateCcw, ToggleLeft, ToggleRight } from "lucide-react";
+import { History, KeyRound, Loader2, Pencil, RotateCcw, ToggleLeft, ToggleRight } from "lucide-react";
 
 import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
-import { cp, type Credential, type Flag, type Setting, type SettingChange } from "@/lib/cp";
+import { cp, StepUpRequired, type Credential, type Flag, type Setting, type SettingChange } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { ubDateToISO, isoToUbDate } from "@/lib/ubTime";
+import { Banner, ErrorNote, Modal } from "@/components/ui";
 
 export default function Configuration() {
   const { t } = useI18n();
@@ -29,9 +30,17 @@ export default function Configuration() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [flags, setFlags] = useState<Flag[]>([]);
   const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<Setting | null>(null);
-  const [history, setHistory] = useState<{ key: string; changes: SettingChange[] } | null>(null);
-  const [newFlag, setNewFlag] = useState(false);
+  const [history, setHistory] = useState<{
+    key: string;
+    changes: SettingChange[];
+    loading: boolean;
+    failure: string;
+  } | null>(null);
+  // null: closed; "new": creating; a flag: editing that one.
+  const [flagDialog, setFlagDialog] = useState<Flag | "new" | null>(null);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [sealing, setSealing] = useState(true);
   const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
@@ -45,8 +54,11 @@ export default function Configuration() {
       setCredentials(keys.credentials);
       setSealing(keys.sealing_configured);
       setFailure("");
+      setLoaded(true);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -54,9 +66,17 @@ export default function Configuration() {
     void load();
   }, [load]);
 
+  // The dialog opens at once and fills when the answer arrives; a refusal is
+  // said inside it rather than leaving the button looking dead.
   async function openHistory(key: string) {
-    const result = await cp.settingHistory(key);
-    setHistory({ key, changes: result.changes });
+    setHistory({ key, changes: [], loading: true, failure: "" });
+    try {
+      const result = await cp.settingHistory(key);
+      setHistory((current) => (current?.key === key ? { key, changes: result.changes, loading: false, failure: "" } : current));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setHistory((current) => (current?.key === key ? { ...current, loading: false, failure: message } : current));
+    }
   }
 
   return (
@@ -67,14 +87,14 @@ export default function Configuration() {
       </div>
 
       {warnings.map((warning) => (
-        <p key={warning} className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
-          {warning}
-        </p>
+        <Banner key={warning} tone="warning" message={warning} />
       ))}
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
+      {/* Nothing is drawn until all three lists have been read: a screen that
+          renders the half it got says the other half is empty, not unread. */}
+      {(loaded || !failure) && (
+      <>
       <Card title={t("cp.section.settings")}>
         <Table
           head={[t("cp.field.setting"), t("cp.field.value"), t("cp.field.source"), ""]}
@@ -93,6 +113,8 @@ export default function Configuration() {
               <button
                 type="button"
                 onClick={() => setEditing(setting)}
+                aria-label={`${t("cp.action.change")}: ${setting.key}`}
+                title={t("cp.action.change")}
                 className="text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover"
               >
                 {t("cp.action.change")}
@@ -108,16 +130,17 @@ export default function Configuration() {
               </button>
             </span>,
           ])}
-          empty={t("cp.message.no_activity")}
+          loading={loading}
+          empty={t("cp.message.no_settings")}
         />
       </Card>
 
       <Card title={t("cp.section.credentials")}>
         <p className="px-4 pt-4 text-sm text-muted">{t("cp.hint.credentials")}</p>
         {!sealing && (
-          <p className="mx-4 mt-3 text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2">
-            {t("cp.message.sealing_off")}
-          </p>
+          <div className="mx-4 mt-3">
+            <Banner tone="warning" message={t("cp.message.sealing_off")} />
+          </div>
         )}
         <Table
           head={[t("cp.field.credential"), t("cp.field.source"), t("cp.field.updated"), ""]}
@@ -170,6 +193,7 @@ export default function Configuration() {
               )}
             </span>,
           ])}
+          loading={loading}
           empty={t("cp.message.no_credentials")}
         />
       </Card>
@@ -178,7 +202,7 @@ export default function Configuration() {
         <div className="p-4 pb-0">
           <button
             type="button"
-            onClick={() => setNewFlag(true)}
+            onClick={() => setFlagDialog("new")}
             className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:brightness-105"
           >
             {t("cp.action.new_flag")}
@@ -200,7 +224,7 @@ export default function Configuration() {
             <span key="r" className="tabular-nums text-xs">
               {flag.enabled ? `${flag.rollout}%` : t("cp.state.off")}
             </span>,
-            <span key="e" className={flag.expires_at && new Date(flag.expires_at) < new Date() ? "text-amber-700" : ""}>
+            <span key="e" className={flag.expires_at && new Date(flag.expires_at) < new Date() ? "text-warning font-medium" : ""}>
               {formatMoment(flag.expires_at) || "—"}
             </span>,
             <span key="a" className="flex gap-2">
@@ -220,7 +244,20 @@ export default function Configuration() {
                 title={flag.enabled ? t("cp.action.turn_off") : t("cp.action.turn_on")}
                 className="text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover inline-flex items-center gap-1"
               >
-                {flag.enabled ? <ToggleRight className="w-4 h-4 text-emerald-600" /> : <ToggleLeft className="w-4 h-4" />}
+                {flag.enabled ? (
+                  <ToggleRight aria-hidden="true" className="w-4 h-4 text-success" />
+                ) : (
+                  <ToggleLeft aria-hidden="true" className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlagDialog(flag)}
+                aria-label={`${t("cp.action.edit_flag")}: ${flag.key}`}
+                title={t("cp.action.edit_flag")}
+                className="text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover inline-flex items-center gap-1"
+              >
+                <Pencil aria-hidden="true" className="w-3 h-3" />
               </button>
               <button
                 type="button"
@@ -241,9 +278,12 @@ export default function Configuration() {
               </button>
             </span>,
           ])}
+          loading={loading}
           empty={t("cp.message.no_flags")}
         />
       </Card>
+      </>
+      )}
 
       {editing && (
         <SettingDialog
@@ -268,10 +308,14 @@ export default function Configuration() {
       )}
 
       {history && (
-        <Modal onClose={() => setHistory(null)} label={history.key}>
+        <Modal size="lg" onClose={() => setHistory(null)} label={`${t("cp.section.history")}: ${history.key}`}>
           <div className="p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground font-mono text-sm">{history.key}</h2>
+            <h2 className="font-semibold text-foreground">
+              {t("cp.section.history")}: <span className="font-mono text-sm">{history.key}</span>
+            </h2>
+            {history.failure && <ErrorNote>{history.failure}</ErrorNote>}
             <Table
+              loading={history.loading}
               head={[t("cp.field.when"), t("cp.field.value"), t("cp.field.operator"), t("cp.field.reason"), ""]}
               rows={history.changes.map((change) => [
                 formatMoment(change.changed_at),
@@ -284,12 +328,17 @@ export default function Configuration() {
                   key="r"
                   type="button"
                   onClick={() => {
-                    setHistory(null);
+                    // The history stays open underneath: a cancelled rollback
+                    // returns to the list it was chosen from, and a finished
+                    // one shows the new row at the top of it.
                     action.run({
                       title: t("cp.action.rollback"),
                       detail: `${change.key}: ${change.previous_value ?? "—"}`,
                       perform: (reason) => cp.rollbackSetting(change.id, reason),
-                      onDone: load,
+                      onDone: () => {
+                        void load();
+                        void openHistory(change.key);
+                      },
                     });
                   }}
                   className="text-xs rounded-lg border border-input px-2 py-1 hover:bg-surface-hover inline-flex items-center gap-1"
@@ -298,7 +347,7 @@ export default function Configuration() {
                   {t("cp.action.rollback")}
                 </button>,
               ])}
-              empty={t("cp.message.no_activity")}
+              empty={t("cp.message.no_history")}
             />
             <div className="flex justify-end">
               <button
@@ -306,18 +355,19 @@ export default function Configuration() {
                 onClick={() => setHistory(null)}
                 className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover"
               >
-                {t("cp.action.cancel")}
+                {t("base.action.close")}
               </button>
             </div>
           </div>
         </Modal>
       )}
 
-      {newFlag && (
+      {flagDialog && (
         <FlagDialog
-          onClose={() => setNewFlag(false)}
+          flag={flagDialog === "new" ? null : flagDialog}
+          onClose={() => setFlagDialog(null)}
           onSaved={() => {
-            setNewFlag(false);
+            setFlagDialog(null);
             void load();
           }}
         />
@@ -355,6 +405,7 @@ function CredentialDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setFailure("");
     try {
@@ -362,9 +413,8 @@ function CredentialDialog({
       await cp.setCredential(credential.name, value, reason);
       onSaved();
     } catch (error) {
-      if (error instanceof Error && error.name === "StepUpRequired") {
+      if (error instanceof StepUpRequired) {
         setNeedsCode(true);
-        setFailure(t("cp.message.step_up"));
         return;
       }
       setFailure(error instanceof Error ? error.message : String(error));
@@ -374,7 +424,7 @@ function CredentialDialog({
   }
 
   return (
-    <Modal onClose={onClose} label={credential.name}>
+    <Modal onClose={busy ? undefined : onClose} label={credential.name}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <div>
           <h2 className="font-mono text-sm font-semibold text-foreground">{credential.name}</h2>
@@ -384,7 +434,7 @@ function CredentialDialog({
               href={credential.docs}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-block text-xs text-blue-700 hover:underline"
+              className="mt-1 inline-block text-xs text-accent hover:underline"
             >
               {credential.docs}
             </a>
@@ -393,58 +443,34 @@ function CredentialDialog({
 
         <p className="text-xs text-muted">{t("cp.message.credential_write_only")}</p>
 
-        {failure && (
-          <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2">
-            {failure}
-          </p>
-        )}
+        {needsCode && <Banner tone="warning" message={t("cp.message.step_up")} />}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.value")}</span>
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.value")}</span>
           <input
             type="password"
             autoComplete="off"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             required
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.reason")}</span>
           <input
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             required
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
-        {needsCode && (
-          <label className="block text-sm">
-            <span className="text-muted">{t("cp.field.code")}</span>
-            <input
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              inputMode="numeric"
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono tracking-widest"
-            />
-          </label>
-        )}
+        {needsCode && <CodeField code={code} onChange={setCode} />}
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
-            {t("cp.action.cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-50"
-          >
-            {t("cp.action.set_credential")}
-          </button>
-        </div>
+        <DialogButtons busy={busy} onClose={onClose} label={t("cp.action.set_credential")} />
       </form>
     </Modal>
   );
@@ -469,6 +495,7 @@ function SettingDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setFailure("");
     try {
@@ -476,9 +503,8 @@ function SettingDialog({
       await cp.setSetting(setting.key, value, reason);
       onSaved();
     } catch (error) {
-      if (error instanceof Error && error.name === "StepUpRequired") {
+      if (error instanceof StepUpRequired) {
         setNeedsCode(true);
-        setFailure(t("cp.message.step_up"));
         return;
       }
       setFailure(error instanceof Error ? error.message : String(error));
@@ -488,18 +514,15 @@ function SettingDialog({
   }
 
   return (
-    <Modal onClose={onClose} label={setting.key}>
+    <Modal onClose={busy ? undefined : onClose} label={setting.key}>
       <form onSubmit={submit} className="p-5 space-y-4">
         <div>
           <h2 className="font-mono text-sm font-semibold text-foreground">{setting.key}</h2>
           <p className="mt-1 text-sm text-muted">{setting.description}</p>
         </div>
 
-        {failure && (
-          <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2">
-            {failure}
-          </p>
-        )}
+        {needsCode && <Banner tone="warning" message={t("cp.message.step_up")} />}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
 
         <label className="block text-sm">
           <span className="text-muted">{t("cp.field.value")}</span>
@@ -507,7 +530,7 @@ function SettingDialog({
             <select
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
             >
               {(setting.options ?? []).map((option) => (
                 <option key={option} value={option}>
@@ -519,16 +542,16 @@ function SettingDialog({
             <select
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
             >
-              <option value="false">false</option>
-              <option value="true">true</option>
+              <option value="false">{t("cp.value.false")}</option>
+              <option value="true">{t("cp.value.true")}</option>
             </select>
           ) : (
             <input
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono text-sm"
+              className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono text-sm"
             />
           )}
           <span className="mt-1 block text-xs text-muted">
@@ -538,79 +561,100 @@ function SettingDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="text-muted">{t("cp.field.reason")}</span>
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.reason")}</span>
           <input
             required
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
         </label>
 
-        {needsCode && (
-          <label className="block text-sm">
-            <span className="text-muted">{t("cp.field.code")}</span>
-            <input
-              inputMode="numeric"
-              maxLength={6}
-              required
-              value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-              className="mt-1 w-full rounded-lg border border-input px-3 py-2 font-mono tracking-[0.4em]"
-            />
-          </label>
-        )}
+        {needsCode && <CodeField code={code} onChange={setCode} />}
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
-            {t("cp.action.cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
-          >
-            {t("cp.action.confirm")}
-          </button>
-        </div>
+        <DialogButtons busy={busy} onClose={onClose} label={t("cp.action.confirm")} />
       </form>
     </Modal>
   );
 }
 
-function FlagDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+/**
+ * Creating a flag, or changing one that exists.
+ *
+ * Editing used to mean deleting the flag and creating it again — which loses
+ * its overrides and, for the moment in between, its kill switch — so the
+ * rollout, expiry, owner and description of a live flag could only be changed
+ * by somebody willing to do that. The key is the flag's identity and is fixed
+ * once it exists; the on/off state keeps its own button in the row.
+ */
+function FlagDialog({
+  flag,
+  onClose,
+  onSaved,
+}: {
+  flag: Flag | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { t } = useI18n();
-  const [key, setKey] = useState("");
-  const [description, setDescription] = useState("");
-  const [owner, setOwner] = useState("");
-  const [kind, setKind] = useState<"release" | "kill_switch" | "experiment">("release");
-  const [rollout, setRollout] = useState("100");
-  const [expires, setExpires] = useState("");
+  const [key, setKey] = useState(flag?.key ?? "");
+  const [description, setDescription] = useState(flag?.description ?? "");
+  const [owner, setOwner] = useState(flag?.owner ?? "");
+  const [kind, setKind] = useState<Flag["kind"]>(flag?.kind ?? "release");
+  const [rollout, setRollout] = useState(String(flag?.rollout ?? 100));
+  const [expires, setExpires] = useState(isoToUbDate(flag?.expires_at));
   const [reason, setReason] = useState("");
+  const [code, setCode] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const rolloutNumber = Number(rollout);
+  const rolloutValid = rollout.trim() !== "" && Number.isInteger(rolloutNumber) && rolloutNumber >= 0 && rolloutNumber <= 100;
+  const title = flag ? t("cp.action.edit_flag") : t("cp.action.new_flag");
+  const dirty =
+    key !== (flag?.key ?? "") ||
+    description !== (flag?.description ?? "") ||
+    owner !== (flag?.owner ?? "") ||
+    kind !== (flag?.kind ?? "release") ||
+    rollout !== String(flag?.rollout ?? 100) ||
+    expires !== isoToUbDate(flag?.expires_at) ||
+    reason !== "";
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
+    if (!rolloutValid) {
+      setFailure(t("cp.message.rollout_range"));
+      return;
+    }
     setBusy(true);
     setFailure("");
     try {
+      if (needsCode) await cp.stepUp(code);
       await cp.saveFlag({
         key,
         description,
         owner,
         kind,
-        enabled: false,
-        rollout: Number(rollout),
+        // Editing keeps the flag on or off as it was; that is the row's
+        // toggle, with its own reason, not a side effect of fixing a typo.
+        enabled: flag?.enabled ?? false,
+        rollout: rolloutNumber,
         // A flag with no date is a flag nobody will remember to remove, so the
         // field is offered every time one is created — the console warns about
         // the ones that lapse, and it can only warn about the ones that have a
-        // date to lapse.
-        expires_at: expires ? new Date(expires).toISOString() : null,
+        // date to lapse. The date is a day in Ulaanbaatar: the flag lapses
+        // when that day ends there, wherever the operator's laptop thinks it is.
+        expires_at: expires ? ubDateToISO(expires) : null,
         reason,
       });
       onSaved();
     } catch (error) {
+      if (error instanceof StepUpRequired) {
+        setNeedsCode(true);
+        return;
+      }
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -618,15 +662,21 @@ function FlagDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.action.new_flag")}>
+    <Modal onClose={busy ? undefined : onClose} label={title} dirty={dirty}>
       <form onSubmit={submit} className="p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">{t("cp.action.new_flag")}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
 
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
+        {needsCode && <Banner tone="warning" message={t("cp.message.step_up")} />}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
+
+        {flag ? (
+          <div className="text-sm">
+            <span className="text-muted">{t("cp.field.flag")}</span>
+            <p className="mt-1 font-mono text-sm text-foreground">{flag.key}</p>
+          </div>
+        ) : (
+          <Line label={t("cp.field.flag")} value={key} onChange={setKey} required mono />
         )}
-
-        <Line label={t("cp.field.flag")} value={key} onChange={setKey} required mono />
         <Line label={t("cp.field.description")} value={description} onChange={setDescription} />
         <Line label={t("cp.field.owner")} value={owner} onChange={setOwner} />
 
@@ -635,7 +685,7 @@ function FlagDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           <select
             value={kind}
             onChange={(event) => setKind(event.target.value as typeof kind)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           >
             <option value="release">{t("cp.kind.release")}</option>
             <option value="kill_switch">{t("cp.kind.kill_switch")}</option>
@@ -643,7 +693,25 @@ function FlagDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           </select>
         </label>
 
-        <Line label={t("cp.field.rollout")} value={rollout} onChange={setRollout} />
+        <label className="block text-sm">
+          <span className={`text-muted ${REQUIRED}`}>{t("cp.field.rollout")} (%)</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={100}
+            step={1}
+            required
+            value={rollout}
+            onChange={(event) => setRollout(event.target.value)}
+            aria-invalid={!rolloutValid}
+            aria-describedby="flag-rollout-hint"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 tabular-nums"
+          />
+          <span id="flag-rollout-hint" className={`mt-1 block text-xs ${rolloutValid ? "text-muted" : "text-danger"}`}>
+            {t("cp.message.rollout_range")}
+          </span>
+        </label>
 
         <label className="block text-sm">
           <span className="text-muted">{t("cp.field.expires")}</span>
@@ -651,26 +719,71 @@ function FlagDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             type="date"
             value={expires}
             onChange={(event) => setExpires(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+            aria-describedby="flag-expires-hint"
+            className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
           />
+          <span id="flag-expires-hint" className="mt-1 block text-xs text-muted">
+            {t("cp.hint.ub_date")}
+          </span>
         </label>
 
         <Line label={t("cp.field.reason")} value={reason} onChange={setReason} required />
 
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
-            {t("cp.action.cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
-          >
-            {t("cp.action.create")}
-          </button>
-        </div>
+        {needsCode && <CodeField code={code} onChange={setCode} />}
+
+        <DialogButtons
+          busy={busy}
+          onClose={onClose}
+          label={flag ? t("base.action.save") : t("cp.action.create")}
+        />
       </form>
     </Modal>
+  );
+}
+
+/** The marker on a required field's label — a pseudo-element, so it is not part of the label's text. */
+const REQUIRED = "after:ml-0.5 after:text-danger after:content-['*']";
+
+function CodeField({ code, onChange }: { code: string; onChange: (code: string) => void }) {
+  const { t } = useI18n();
+  return (
+    <label className="block text-sm">
+      <span className={`text-muted ${REQUIRED}`}>{t("cp.field.code")}</span>
+      <input
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        required
+        value={code}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, ""))}
+        className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 font-mono tracking-[0.4em]"
+      />
+    </label>
+  );
+}
+
+function DialogButtons({ busy, onClose, label }: { busy: boolean; onClose: () => void; label: string }) {
+  const { t } = useI18n();
+  return (
+    <div className="flex justify-end gap-2 pt-1">
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={busy}
+        className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
+      >
+        {t("cp.action.cancel")}
+      </button>
+      <button
+        type="submit"
+        disabled={busy}
+        aria-busy={busy}
+        className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-105 disabled:opacity-60"
+      >
+        {busy && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
+        {label}
+      </button>
+    </div>
   );
 }
 
@@ -689,12 +802,12 @@ function Line({
 }) {
   return (
     <label className="block text-sm">
-      <span className="text-muted">{label}</span>
+      <span className={`text-muted${required ? ` ${REQUIRED}` : ""}`}>{label}</span>
       <input
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`mt-1 w-full rounded-lg border border-input px-3 py-2 ${mono ? "font-mono text-sm" : ""}`}
+        className={`mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2 ${mono ? "font-mono text-sm" : ""}`}
       />
     </label>
   );

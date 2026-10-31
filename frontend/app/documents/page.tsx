@@ -5,13 +5,26 @@ import { api } from "@/lib/api";
 import { useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import { useErrorMessage } from "@/lib/useErrorMessage";
+import { formatDay } from "@/lib/datetime";
 import { Banner, LoadingBlock, Modal, TableCard, fieldClass, selectClass } from "@/components/ui";
 import { DocumentRecord, PENDING, RowActions, SignatureCell, SignatureDialog, SignatureHistoryButton, SignatureHistoryDialog, SignatureProgress, StatusBadge, useDocumentActions } from "@/components/documents/shared";
 import { FileText, Pencil, Plus } from "lucide-react";
 
 export default function DocumentsPage() {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const { can } = useAccess();
+  // The category as the reader says it; a type a later workflow adds is shown
+  // as stored rather than dressed up as one of these three.
+  const docTypeLabel = (type: string) =>
+    type === "CONTRACT"
+      ? t("documents.category.legal_contract")
+      : type === "REQUEST"
+        ? t("documents.category.official_request")
+        : type === "APPROVAL"
+          ? t("documents.category.internal_approval")
+          : type;
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -105,7 +118,7 @@ export default function DocumentsPage() {
       // rows were fetched under rather than whatever is in the boxes now.
       loadedFilter.current = { q: filter.q.trim(), doc_type: filter.doc_type, status: filter.status };
       setLoadFailed(false);
-    } catch (err: any) {
+    } catch (err) {
       // A load that has been superseded says nothing: the newer one speaks for the
       // screen, and its own failure would be news about a question nobody is asking.
       if (loadTicket.current !== mine) return;
@@ -115,7 +128,7 @@ export default function DocumentsPage() {
       // overwrite what the action that triggered this refresh had just reported, so a
       // completed signature read as a failure.
       if (documents.length === 0) {
-        setMessage({ type: "error", text: err?.message || t("documents.message.load_failed") });
+        setMessage({ type: "error", text: errorMessage(err, { fallback: "documents.message.load_failed" }) });
       }
     } finally {
       // The spinner belongs to the load that is still running. A superseded one clearing
@@ -152,8 +165,8 @@ export default function DocumentsPage() {
       // Only this row, with what the server stored.
       if (saved?.id) setDocuments((current) => current.map((d) => (d.id === id ? { ...d, ...saved } : d)));
       setMessage({ type: "success", text: t("documents.message.renamed", { title: saved?.title ?? title.trim() }) });
-    } catch (err: any) {
-      fail(`${t("documents.message.rename_failed")}: ${err?.message ?? ""}`);
+    } catch (err) {
+      fail(`${t("documents.message.rename_failed")}: ${errorMessage(err)}`);
     }
   };
 
@@ -183,10 +196,10 @@ export default function DocumentsPage() {
       setForm({ title: "", doc_type: "CONTRACT" });
       await succeed(t("documents.message.create_success", { title }));
       return;
-    } catch (err: any) {
+    } catch (err) {
       // Both: inside the modal, where it is readable now, and on the page banner for
       // after the operator gives up and closes it.
-      const text = `${t("documents.message.create_failed")}: ${err.message}`;
+      const text = `${t("documents.message.create_failed")}: ${errorMessage(err)}`;
       setCreateFailure(text);
       setMessage({ type: "error", text });
     } finally {
@@ -199,15 +212,16 @@ export default function DocumentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground flex items-center space-x-2">
-            <FileText className="w-7 h-7 text-indigo-600" />
+            <FileText aria-hidden="true" className="w-7 h-7 text-accent" />
             <span>{t("documents.view.title")}</span>
           </h1>
           <p className="text-sm text-muted mt-1">{t("documents.view.subtitle")}</p>
         </div>
         {can("documents.manage") && (
           <button
+            type="button"
             onClick={() => setShowModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
+            className="bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
             <span>{t("documents.action.create")}</span>
@@ -221,13 +235,13 @@ export default function DocumentsPage() {
           after an action is exactly when there are none: the news that the list is stale
           — and the way to try again — must not live only inside the table. */}
       {loadFailed && documents.length === 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border border-amber-200 rounded-xl bg-amber-50">
-          <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border border-warning-border rounded-xl bg-warning-soft">
+          <p className="text-2xs text-warning">{t("documents.message.stale_rows")}</p>
           <button
             type="button"
             disabled={loading}
             onClick={() => loadData()}
-            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-warning-border text-warning hover:brightness-95 disabled:opacity-50"
           >
             {t("documents.action.retry")}
           </button>
@@ -239,8 +253,9 @@ export default function DocumentsPage() {
           to what is in these controls and nothing else. */}
       <section className="flex flex-wrap items-center gap-2">
         <input
-          type="text"
+          type="search"
           value={search}
+          aria-label={t("documents.field.search_placeholder")}
           placeholder={t("documents.field.search_placeholder")}
           maxLength={255}
           onChange={(e) => setSearch(e.target.value)}
@@ -254,10 +269,11 @@ export default function DocumentsPage() {
             // was swallowed with it and the action never happened.
             if (search.trim() !== loadedFilter.current.q) loadSpan(PAGE, filterRef.current);
           }}
-          className="flex-1 min-w-[12rem] px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-indigo-500"
+          className="flex-1 min-w-[12rem] px-3 py-2 text-sm border border-input rounded-lg focus:ring-2 focus:ring-ring"
         />
         <select
           value={docType}
+          aria-label={t("base.field.type")}
           onChange={(e) => {
             setDocType(e.target.value);
             filterRef.current = { ...filterRef.current, doc_type: e.target.value };
@@ -272,6 +288,7 @@ export default function DocumentsPage() {
         </select>
         <select
           value={status}
+          aria-label={t("base.field.status")}
           onChange={(e) => {
             setStatus(e.target.value);
             filterRef.current = { ...filterRef.current, status: e.target.value };
@@ -321,13 +338,13 @@ export default function DocumentsPage() {
                 dismissed, and a refresh that failed after an action must not be the only
                 thing that says the rows are old. */}
             {loadFailed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
-                <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-warning-border bg-warning-soft">
+                <p className="text-2xs text-warning">{t("documents.message.stale_rows")}</p>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={() => loadData()}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                  className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-warning-border text-warning hover:brightness-95 disabled:opacity-50"
                 >
                   {t("documents.action.retry")}
                 </button>
@@ -339,14 +356,14 @@ export default function DocumentsPage() {
                 a contract that is simply on the next page. */}
             {hasMore && (
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-line bg-surface-2">
-                <p className="text-[11px] text-muted">
+                <p className="text-2xs text-muted">
                   {t("documents.message.showing_some", { shown: documents.length, total })}
                 </p>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={loadMore}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-surface border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
+                  className="text-2xs font-semibold px-3 py-1.5 rounded-lg bg-surface border border-input text-foreground hover:bg-surface-hover disabled:opacity-50"
                 >
                   {t("documents.action.load_more")}
                 </button>
@@ -369,7 +386,7 @@ export default function DocumentsPage() {
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") setRenaming(null);
                     }}
-                    className="w-full px-2 py-1 text-xs font-semibold border border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2 py-1 text-xs font-semibold border border-line rounded focus:ring-2 focus:ring-ring"
                   />
                 ) : (
                   <span className="flex items-center gap-1.5">
@@ -384,7 +401,7 @@ export default function DocumentsPage() {
                           title={t("documents.action.rename")}
                           aria-label={t("documents.action.rename")}
                           onClick={() => setRenaming({ id: doc.id, title: doc.title })}
-                          className="shrink-0 text-subtle hover:text-indigo-600"
+                          className="shrink-0 text-subtle hover:text-accent"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -392,7 +409,7 @@ export default function DocumentsPage() {
                   </span>
                 )}
               </td>
-              <td className="px-4 py-3 font-mono text-muted">{doc.doc_type}</td>
+              <td className="px-4 py-3 text-muted">{docTypeLabel(doc.doc_type)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <StatusBadge status={doc.status} />
@@ -405,7 +422,7 @@ export default function DocumentsPage() {
                   <SignatureHistoryButton doc={doc} onOpen={setHistoryTarget} />
                 </div>
               </td>
-              <td className="px-4 py-3 text-muted">{new Date(doc.created_at).toLocaleDateString()}</td>
+              <td className="px-4 py-3 text-muted">{formatDay(doc.created_at)}</td>
               <td className="px-4 py-3 text-right">
                 <RowActions
                   doc={doc}
@@ -424,11 +441,18 @@ export default function DocumentsPage() {
 
       {/* Modal */}
       {showModal && (
-        <Modal label={t("documents.view.create_title")}>
+        <Modal
+          label={t("documents.view.create_title")}
+          onClose={() => {
+            setShowModal(false);
+            setCreateFailure(null);
+          }}
+          dismissible={!creating}
+        >
           <h2 className="text-xl font-semibold text-foreground mb-4">{t("documents.view.create_title")}</h2>
 
           {createFailure && (
-            <p className="mb-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            <p role="alert" className="mb-4 text-xs text-danger bg-danger-soft border border-danger-border rounded-lg p-3">
               {createFailure}
             </p>
           )}
@@ -438,10 +462,11 @@ export default function DocumentsPage() {
                 Postgres counts. The server refuses more, so there is no reason to
                 let it be typed and then refused. */}
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">
+              <label htmlFor="document-create-title" className="block text-xs font-semibold text-foreground mb-1">
                 {t("documents.field.title")} *
               </label>
               <input
+                id="document-create-title"
                 type="text"
                 placeholder={t("documents.field.title_placeholder")}
                 value={form.title}
@@ -453,8 +478,9 @@ export default function DocumentsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">{t("documents.field.category")}</label>
+              <label htmlFor="document-create-type" className="block text-xs font-semibold text-foreground mb-1">{t("documents.field.category")}</label>
               <select
+                id="document-create-type"
                 value={form.doc_type}
                 onChange={(e) => setForm({ ...form, doc_type: e.target.value })}
                 className={selectClass}
@@ -472,14 +498,15 @@ export default function DocumentsPage() {
                   setShowModal(false);
                   setCreateFailure(null);
                 }}
-                className="w-1/2 bg-surface-2 hover:bg-slate-200 text-foreground font-medium py-2 rounded-lg text-xs"
+                className="w-1/2 min-h-11 bg-surface-2 hover:bg-surface-hover border border-line text-foreground font-medium py-2 rounded-lg text-xs"
               >
                 {t("base.action.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={creating || !form.title.trim()}
-                className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
+                aria-busy={creating || undefined}
+                className="w-1/2 min-h-11 bg-accent hover:bg-accent-hover text-on-accent font-medium py-2 rounded-lg text-xs disabled:opacity-50"
               >{t("documents.action.create")}</button>
             </div>
           </form>

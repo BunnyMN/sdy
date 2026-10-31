@@ -20,6 +20,7 @@ import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type Person } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote } from "@/components/ui";
 import { useUrlState } from "@/lib/urlState";
 
 export default function Support() {
@@ -31,13 +32,20 @@ export default function Support() {
   const [query, setQuery] = useState(urlState.q);
   const [people, setPeople] = useState<Person[]>([]);
   const [failure, setFailure] = useState("");
+  // Each search is numbered, and only the newest one's answer is drawn: a slow
+  // reply to "bat" must not land after the quick one to "bat@example" and
+  // replace it.
+  const latest = React.useRef(0);
 
   const load = useCallback(async (search: string) => {
+    const ticket = ++latest.current;
     try {
       const result = await cp.people(search);
+      if (ticket !== latest.current) return;
       setPeople(result.people);
       setFailure("");
     } catch (error) {
+      if (ticket !== latest.current) return;
       setFailure(error instanceof Error ? error.message : String(error));
     }
   }, []);
@@ -58,18 +66,18 @@ export default function Support() {
       </div>
 
       <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <Search aria-hidden="true" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          type="search"
+          aria-label={t("cp.hint.search_people")}
           placeholder={t("cp.field.email")}
           className="w-full rounded-xl border border-input bg-surface pl-9 pr-3 py-2.5"
         />
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <div className="space-y-4">
         {people.map((person) => (
@@ -100,7 +108,7 @@ export default function Support() {
                     <Badge tone="emerald">{t("cp.state.active")}</Badge>
                   ),
                 ])}
-                empty={t("cp.message.no_activity")}
+                empty={t("cp.support.no_memberships")}
               />
 
               <div className="flex flex-wrap gap-2">

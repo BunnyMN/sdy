@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCo
 import { useI18n } from "@/lib/i18n";
 import { useBrand } from "@/lib/brandContext";
 import type { api } from "@/lib/api";
+import { memberApi } from "@/lib/api/member";
 import UserMenu from "@/components/UserMenu";
 import "./member.css";
 
@@ -20,6 +21,7 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
   const [announcement, setAnnouncement] = useState("");
   const [offline, setOffline] = useState(false);
   const [keyboard, setKeyboard] = useState(false);
+  const [unread, setUnread] = useState(0);
   const company = user.workspace_kind === "organisation";
   const can = (permission: string) => user.is_admin || user.permissions?.includes(permission);
   const navigation = [
@@ -47,6 +49,14 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
   const sidebarExtra = company ? [{ href: "/member/leaderboard", label: t("events.leaderboard.title"), icon: Trophy, active: pathname === "/member/leaderboard" }] : [];
   const back = pathname.startsWith("/module/events/") ? "/module/events" : "/member";
 
+  // The bell's count: asked again on every navigation, so reading the
+  // notifications screen clears it on the way out. A failure leaves the last
+  // count rather than a badge that flickers to nothing.
+  useEffect(() => {
+    let live = true;
+    memberApi.notifications().then(n => { if (live) setUnread(n.unread ?? 0); }).catch(() => {});
+    return () => { live = false; };
+  }, [pathname]);
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine);
     update(); window.addEventListener("online", update); window.addEventListener("offline", update);
@@ -86,7 +96,8 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
         <span><strong>{brand.name}</strong><small>{t("membership.home")}</small></span>
       </Link>
       <p className="sdy-header-organisation" title={user.tenant_name}><Building2 aria-hidden="true" /><span>{company ? user.tenant_name : t("membership.branch_pick")}</span></p>
-      <Link href="/member/notifications" aria-label={t("membership.record.notifications")} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md"><Bell className="h-5 w-5" aria-hidden="true" /></Link>
+      <Link href="/member/notifications" aria-label={unread > 0 ? t("membership.notifications_unread", { count: unread }) : t("membership.record.notifications")} aria-current={pathname === "/member/notifications" ? "page" : undefined} className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-md"><Bell className="h-5 w-5" aria-hidden="true" />
+        {unread > 0 && <span aria-hidden="true" className="absolute right-1 top-1 grid min-w-5 place-items-center rounded-full bg-accent px-1 text-2xs font-semibold leading-5 text-on-accent tabular-nums">{unread > 99 ? "99+" : unread}</span>}</Link>
       <UserMenu user={user} onLogout={onLogout} />
     </header>
     {offline && <p role="status" className="sdy-offline"><WifiOff aria-hidden="true" />{t("membership.offline")}</p>}

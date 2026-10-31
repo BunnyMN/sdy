@@ -32,6 +32,7 @@ import { useAction } from "@/components/cp/Action";
 import { Badge, Card, formatMoment, Table, type Tone } from "@/components/cp/ui";
 import { cp, type Overview } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { Banner, ErrorNote, LoadingBlock } from "@/components/ui";
 
 export default function Health() {
   const { t } = useI18n();
@@ -59,9 +60,9 @@ export default function Health() {
   }, [load]);
 
   if (failure) {
-    return <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>;
+    return <ErrorNote>{failure}</ErrorNote>;
   }
-  if (!health) return <div className="text-muted">…</div>;
+  if (!health) return <LoadingBlock label={t("base.message.loading")} rows={6} />;
 
   const grafana = (path: string) =>
     health.grafana_url ? `${health.grafana_url}${path}` : "";
@@ -100,9 +101,9 @@ export default function Health() {
       </div>
 
       {health.warnings.map((warning) => (
-        <p key={warning} className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
+        <Banner key={warning} tone="warning">
           {warning}
-        </p>
+        </Banner>
       ))}
 
       {!health.monitoring && (
@@ -210,7 +211,7 @@ export default function Health() {
               {job.pending > 0 ? ` · ${job.pending}` : ""}
             </span>,
           ])}
-          empty={t("cp.message.no_activity")}
+          empty={t("cp.message.no_jobs")}
         />
       </Card>
 
@@ -225,7 +226,7 @@ export default function Health() {
               <span key="c" className="tabular-nums">{row.failures}</span>,
               <span key="s" className="text-xs text-muted font-mono">{row.sample}</span>,
             ])}
-            empty={t("cp.message.no_activity")}
+            empty={t("cp.message.no_trouble")}
           />
         </Card>
       )}
@@ -234,9 +235,9 @@ export default function Health() {
         <Card title={t("cp.section.backups")}>
           <div className="p-4 space-y-2 text-sm">
             {!health.backups.configured ? (
-              <p className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2">
+              <Banner tone="warning">
                 {t("cp.message.no_backups")}
-              </p>
+              </Banner>
             ) : (
               <>
                 <Row
@@ -330,7 +331,7 @@ function Stat({
         {icon}
         {label}
       </p>
-      <p className={`mt-1 text-2xl tabular-nums ${tone === "red" ? "text-red-600" : "text-foreground"}`}>{value}</p>
+      <p className={`mt-1 text-2xl tabular-nums ${tone === "red" ? "text-danger" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }
@@ -339,7 +340,7 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: Tone
   return (
     <div className="flex items-baseline gap-3">
       <span className="text-xs uppercase tracking-wide text-muted w-40 shrink-0">{label}</span>
-      <span className={tone === "red" ? "text-red-700" : tone === "amber" ? "text-amber-700" : "text-foreground"}>
+      <span className={tone === "red" ? "text-danger" : tone === "amber" ? "text-warning" : "text-foreground"}>
         {value}
       </span>
     </div>
@@ -377,11 +378,11 @@ function jobName(name: string, t: Translate): string {
 }
 
 function dot(state: string): string {
-  if (state === "unknown") return "bg-slate-300";
-  return state === "red" ? "bg-red-500" : state === "amber" ? "bg-amber-500" : "bg-emerald-500";
+  if (state === "unknown") return "bg-line-strong";
+  return state === "red" ? "bg-danger-solid" : state === "amber" ? "bg-warning" : "bg-success-solid";
 }
 
 function textFor(state: string): string {
-  if (state === "unknown") return "text-slate-400";
-  return state === "red" ? "text-red-600" : state === "amber" ? "text-amber-700" : "text-foreground";
+  if (state === "unknown") return "text-subtle";
+  return state === "red" ? "text-danger" : state === "amber" ? "text-warning" : "text-foreground";
 }

@@ -9,40 +9,69 @@
  * screen that tries to do both does neither at a glance.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Building2, Plus, Search } from "lucide-react";
 
 import { useConsole } from "@/components/cp/Console";
 import { formatMoment } from "@/components/cp/ui";
-import { cp, type DirectoryOrganisation, type TenantSummary, type VerifiedPerson } from "@/lib/cp";
+import { cp, type DirectoryOrganisation, type TenantSummary } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
-import { Modal } from "@/components/ui";
+import { Banner, Card, ErrorNote, Modal, Table } from "@/components/ui";
 import { useUrlState } from "@/lib/urlState";
+
+import {
+  compareValues,
+  requiredLabel,
+  SortHeader,
+  tenantState,
+  TenantStateBadge,
+  useStepUp,
+  useVerifiedPeople,
+  type SortDirection,
+} from "./shared";
+
+const STATES = ["", "active", "suspended", "deleting"] as const;
+
+/** What each sortable column sorts on. */
+const SORT_KEYS: Record<string, (tenant: TenantSummary) => string | number | null> = {
+  name: (tenant) => tenant.name,
+  registration: (tenant) => tenant.registration_number,
+  users: (tenant) => tenant.user_count,
+  apps: (tenant) => tenant.app_count,
+  activity: (tenant) => tenant.last_activity_at,
+};
 
 export default function Tenants() {
   const { t } = useI18n();
   const { operator } = useConsole();
   const [creating, setCreating] = useState(false);
-  // Хайлт нь хаягт үлдэнэ: refresh, back, линк хуваалцах гурвуулаа ажиллана.
-  // Бичихэд шууд хариу өгөхийн тулд талбар нь локал төлөвтэй, хаяг руу нь
-  // ачаалалттай хамт debounce-оор бичигдэнэ.
-  const [urlState, setUrlState] = useUrlState({ q: "" });
+  // Хайлт, төлөв, эрэмбэ хаягт үлдэнэ: refresh, back, линк хуваалцах
+  // гурвуулаа ажиллана. Бичихэд шууд хариу өгөхийн тулд хайлтын талбар нь
+  // локал төлөвтэй, хаяг руу нь ачаалалттай хамт debounce-оор бичигдэнэ.
+  const [urlState, setUrlState] = useUrlState({ q: "", state: "", sort: "name", dir: "asc" });
   const [search, setSearch] = useState(urlState.q);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState("");
+  // Each request takes a ticket; only the newest one may write. Otherwise a
+  // slow answer to "601" lands after the fast one to "6012345" and the list
+  // shows organisations that do not match what is in the box.
+  const latest = useRef(0);
 
   const load = useCallback(async (query: string) => {
+    const ticket = ++latest.current;
     setLoading(true);
     try {
       const result = await cp.tenants(query);
+      if (ticket !== latest.current) return;
       setTenants(result.tenants);
       setFailure("");
     } catch (error) {
+      if (ticket !== latest.current) return;
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
-      setLoading(false);
+      if (ticket === latest.current) setLoading(false);
     }
   }, []);
 
@@ -55,6 +84,24 @@ export default function Tenants() {
     }, 250);
     return () => clearTimeout(timer);
   }, [search, load, setUrlState]);
+
+  const sort = urlState.sort in SORT_KEYS ? urlState.sort : "name";
+  const direction: SortDirection = urlState.dir === "desc" ? "desc" : "asc";
+  const onSort = (column: string) =>
+    setUrlState({ sort: column, dir: sort === column && direction === "asc" ? "desc" : "asc" });
+
+  // Sorted and filtered here rather than by the server: the list is one page
+  // of organisations, already in hand.
+  const shown = useMemo(() => {
+    const key = SORT_KEYS[sort];
+    return tenants
+      .filter((tenant) => !urlState.state || tenantState(tenant) === urlState.state)
+      .sort((a, b) => compareValues(key(a), key(b), direction));
+  }, [tenants, urlState.state, sort, direction]);
+
+  const header = (column: string, label: string, align?: "right") => (
+    <SortHeader label={label} column={column} sort={sort} direction={direction} onSort={onSort} align={align} />
+  );
 
   return (
     <div className="space-y-6">
@@ -75,86 +122,76 @@ export default function Tenants() {
         )}
       </div>
 
-      <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3">
-        {t("cp.message.read_only")}
-      </p>
+      <Banner tone="warning" message={t("cp.message.read_only")} />
 
-      <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={t("cp.field.search")}
-          className="w-full rounded-xl border border-input bg-surface pl-9 pr-3 py-2.5"
-        />
-      </div>
-
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">
-          {t("cp.message.load_failed")}
-        </p>
-      )}
-
-      <div className="bg-surface rounded-xl border border-line overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-muted">
-              <tr>
-                <th className="text-left font-medium px-4 py-3">{t("cp.field.organisation")}</th>
-                <th className="text-left font-medium px-4 py-3">{t("cp.field.registration")}</th>
-                <th className="text-right font-medium px-4 py-3">{t("cp.field.users")}</th>
-                <th className="text-right font-medium px-4 py-3">{t("cp.field.apps")}</th>
-                <th className="text-left font-medium px-4 py-3">{t("cp.field.last_activity")}</th>
-                <th className="text-left font-medium px-4 py-3">{t("cp.field.state")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {tenants.map((tenant) => (
-                <tr key={tenant.id} className="hover:bg-surface-hover">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/cp/tenants/${tenant.id}`}
-                      className="flex items-center gap-2 font-medium text-foreground hover:underline"
-                    >
-                      <Building2 className="w-4 h-4 text-muted" />
-                      {tenant.name}
-                    </Link>
-                    <span className="text-xs text-muted">{tenant.slug}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{tenant.registration_number || "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{tenant.user_count}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{tenant.app_count}</td>
-                  <td className="px-4 py-3 text-muted">
-                    {formatMoment(tenant.last_activity_at) || t("cp.message.never")}
-                  </td>
-                  <td className="px-4 py-3">
-                    {tenant.deletion_scheduled_at ? (
-                      <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-red-100 text-red-800">
-                        {t("cp.state.deleting")}
-                      </span>
-                    ) : tenant.suspended_at ? (
-                      <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-amber-100 text-amber-900">
-                        {t("cp.state.suspended")}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-800">
-                        {t("cp.state.active")}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!loading && tenants.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted">
-                    {t("cp.message.no_tenants")}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-56">
+          <Search aria-hidden="true" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t("cp.field.search")}
+            aria-label={t("cp.field.search")}
+            className="w-full rounded-xl border border-input bg-surface pl-9 pr-3 py-2.5"
+          />
+        </div>
+        <div role="group" aria-label={t("cp.filter.by_state")} className="flex flex-wrap gap-2">
+          {STATES.map((option) => (
+            <button
+              key={option || "all"}
+              type="button"
+              aria-pressed={urlState.state === option}
+              onClick={() => setUrlState({ state: option })}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                urlState.state === option
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-input text-muted hover:bg-surface-hover"
+              }`}
+            >
+              {option ? t(`cp.state.${option}` as "cp.state.active") : t("cp.filter.all_states")}
+            </button>
+          ))}
         </div>
       </div>
+
+      {failure && <ErrorNote>{t("cp.message.load_failed")}</ErrorNote>}
+
+      <Card>
+        <Table
+          caption={t("cp.section.tenants")}
+          head={[
+            header("name", t("cp.field.organisation")),
+            header("registration", t("cp.field.registration")),
+            header("users", t("cp.field.users")),
+            header("apps", t("cp.field.apps")),
+            header("activity", t("cp.field.last_activity")),
+            t("cp.field.state"),
+          ]}
+          rowKey={(_, index) => shown[index]?.id ?? index}
+          rows={shown.map((tenant) => [
+            <span key="n" className="block min-w-0">
+              <Link
+                href={`/cp/tenants/${tenant.id}`}
+                className="flex items-center gap-2 font-medium text-foreground hover:underline"
+              >
+                <Building2 aria-hidden="true" className="w-4 h-4 text-muted" />
+                {tenant.name}
+              </Link>
+              <span className="text-xs text-muted">{tenant.slug}</span>
+            </span>,
+            <span key="r" className="text-muted">{tenant.registration_number || "—"}</span>,
+            <span key="u" className="tabular-nums">{tenant.user_count}</span>,
+            <span key="a" className="tabular-nums">{tenant.app_count}</span>,
+            <span key="l" className="text-muted">
+              {formatMoment(tenant.last_activity_at) || t("cp.message.never")}
+            </span>,
+            <TenantStateBadge key="s" tenant={tenant} />,
+          ])}
+          loading={loading && tenants.length === 0}
+          empty={t("cp.message.no_tenants")}
+        />
+      </Card>
       {creating && (
         <NewTenantDialog
           onClose={() => setCreating(false)}
@@ -174,11 +211,6 @@ export default function Tenants() {
  * The apps are a comma-separated list of catalogue slugs rather than a picker,
  * because the catalogue a deployment carries is its own and a hard-coded set of
  * checkboxes here would be wrong on the first deployment that adds a module.
- * The first administrator gets an invitation, never a password: see
- * lifecycle.go for why an operator must not be able to choose one.
- */
-/**
- * Opening an organisation.
  *
  * Two things here are read rather than typed. The organisation's details come
  * from the Gerege Core register — a name typed from a form is a name that is
@@ -205,24 +237,9 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
   const [found, setFound] = useState<DirectoryOrganisation | null>(null);
 
   // The administrator.
-  const [people, setPeople] = useState<VerifiedPerson[]>([]);
-  const [directory, setDirectory] = useState(true);
-  const [search, setSearch] = useState("");
-  const [admin, setAdmin] = useState<VerifiedPerson | null>(null);
-
-  const loadPeople = useCallback(async (query: string) => {
-    try {
-      const answer = await cp.verifiedPeople(query);
-      setPeople(answer.people);
-      setDirectory(answer.directory);
-    } catch (error) {
-      setFailure(error instanceof Error ? error.message : String(error));
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadPeople("");
-  }, [loadPeople]);
+  const { search, setSearch, people, loading: peopleLoading } = useVerifiedPeople(setFailure);
+  const [admin, setAdmin] = useState<(typeof people)[number] | null>(null);
+  const stepUp = useStepUp();
 
   async function lookUp() {
     if (!registration.trim()) return;
@@ -248,7 +265,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
     setBusy(true);
     setFailure("");
     try {
-      const created = await cp.createTenant({
+      const created = await stepUp.run(() => cp.createTenant({
         name,
         slug,
         legal_name: legalName,
@@ -256,7 +273,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
         apps: apps.split(",").map((app) => app.trim()).filter(Boolean),
         admin_user_id: admin?.user_id,
         reason,
-      });
+      }));
       // An organisation created with an app that would not install, or an
       // invitation that could not be sent, is still an organisation — and the
       // operator has to be told which parts did not land rather than finding
@@ -276,6 +293,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
       }
       onCreated();
     } catch (error) {
+      if (stepUp.isStepUp(error)) return;
       setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -283,18 +301,15 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <Modal onClose={onClose} label={t("cp.action.new_tenant")}>
+    <Modal onClose={busy ? undefined : onClose} label={t("cp.action.new_tenant")} size="lg">
       <form onSubmit={submit} className="p-5 space-y-4">
         <h2 className="text-lg font-semibold text-foreground">{t("cp.action.new_tenant")}</h2>
 
-        {failure && (
-          <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-        )}
+        {stepUp.prompt}
+        {failure && <ErrorNote>{failure}</ErrorNote>}
         {notice && (
           <div className="space-y-2">
-            <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2">
-              {notice}
-            </p>
+            <Banner tone="warning" message={notice} />
             <button
               type="button"
               onClick={onCreated}
@@ -319,7 +334,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
                 disabled={looking || !registration.trim()}
                 className="inline-flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm text-foreground hover:bg-surface-hover disabled:opacity-50"
               >
-                <Search className={`w-4 h-4 ${looking ? "animate-pulse" : ""}`} />
+                <Search aria-hidden="true" className={`w-4 h-4 ${looking ? "animate-pulse" : ""}`} />
                 {t("cp.action.look_up")}
               </button>
             </div>
@@ -337,7 +352,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
 
             {/* The first administrator, chosen rather than typed. */}
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">{t("cp.field.admin")}</p>
+              <p className={`text-sm font-medium text-foreground ${requiredLabel}`}>{t("cp.field.admin")}</p>
               <p className="text-xs text-muted">{t("cp.hint.admin_is_chosen")}</p>
               {admin ? (
                 <div className="flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-3 py-2">
@@ -359,15 +374,17 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
               ) : (
                 <div className="space-y-2">
                   <input
+                    type="search"
                     value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                      void loadPeople(event.target.value);
-                    }}
+                    onChange={(event) => setSearch(event.target.value)}
                     placeholder={t("cp.field.search_people")}
-                    className="w-full rounded-lg border border-input px-3 py-2 text-sm"
+                    aria-label={t("cp.field.search_people")}
+                    className="w-full rounded-lg border border-input bg-surface px-3 py-2 text-sm"
                   />
-                  <div className="max-h-48 overflow-y-auto divide-y divide-line rounded-lg border border-line">
+                  <div
+                    aria-busy={peopleLoading}
+                    className="max-h-48 overflow-y-auto divide-y divide-line rounded-lg border border-line"
+                  >
                     {people.map((person) => (
                       <button
                         key={person.user_id}
@@ -386,7 +403,7 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
                         </span>
                       </button>
                     ))}
-                    {people.length === 0 && (
+                    {people.length === 0 && !peopleLoading && (
                       <p className="px-3 py-3 text-sm text-muted">{t("cp.message.no_verified_people")}</p>
                     )}
                   </div>
@@ -395,9 +412,15 @@ function NewTenantDialog({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
 
             <TextField label={t("cp.field.reason")} value={reason} onChange={setReason} required />
+            {stepUp.field}
 
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={busy}
+                className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-surface-hover disabled:opacity-60"
+              >
                 {t("cp.action.cancel")}
               </button>
               <button
@@ -431,13 +454,13 @@ function TextField({
 }) {
   return (
     <label className="block text-sm">
-      <span className="text-muted">{label}</span>
+      <span className={`text-muted${required ? ` ${requiredLabel}` : ""}`}>{label}</span>
       <input
         type={type}
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-input px-3 py-2"
+        className="mt-1 w-full rounded-lg border border-input bg-surface px-3 py-2"
       />
     </label>
   );

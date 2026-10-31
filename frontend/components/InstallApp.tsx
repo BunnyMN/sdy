@@ -166,9 +166,11 @@ export default function InstallApp() {
             type="button"
             onClick={dismiss}
             aria-label={t("base.action.close")}
-            className="rounded-md p-1 opacity-60 transition hover:opacity-100"
+            // 44px to press, pulled back into the corner so the card's text
+            // keeps its width.
+            className="-m-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-md opacity-60 transition hover:opacity-100"
           >
-            <X size={15} />
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
 

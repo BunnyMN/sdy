@@ -36,6 +36,12 @@ export const PUBLIC_ROUTES = [
   "/oauth/consent",
   "/kiosk",
   "/impersonate",
+  // The privacy policy and the support page. App Store Connect links to both
+  // as the iOS member app's Privacy Policy URL and Support URL, and Apple's
+  // reviewer opens them signed out — so does anybody deciding whether to sign
+  // up at all.
+  "/privacy",
+  "/support",
 ];
 
 /**

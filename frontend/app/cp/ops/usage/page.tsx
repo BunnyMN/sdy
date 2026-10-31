@@ -20,6 +20,7 @@ import Link from "next/link";
 import { Badge, Card, formatMoment, Table } from "@/components/cp/ui";
 import { cp, type PlatformUsage } from "@/lib/cp";
 import { useI18n } from "@/lib/i18n";
+import { ErrorNote } from "@/components/ui";
 import { formatNumber } from "@/lib/datetime";
 
 export default function Usage() {
@@ -76,9 +77,7 @@ export default function Usage() {
         </button>
       </div>
 
-      {failure && (
-        <p role="alert" className="text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 px-3 py-2">{failure}</p>
-      )}
+      {failure && <ErrorNote>{failure}</ErrorNote>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {(report?.metrics ?? []).map((metric) => (
@@ -117,6 +116,7 @@ export default function Usage() {
               <span key="c" className="text-xs text-muted">{t("cp.state.never_counted")}</span>
             ),
           ])}
+          loading={!report && !failure}
           empty={t("cp.message.no_usage")}
         />
       </Card>

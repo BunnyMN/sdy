@@ -12,6 +12,8 @@ import type { EventInput, EventRecord, EventStatus } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { ErrorNote } from "@/components/module/kit";
 import { fieldClass, selectClass } from "@/components/ui";
+import { formatMoment, fromZonedInput, toZonedInput } from "@/lib/datetime";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 
 export const eventStatusTone: Record<EventStatus, "slate" | "emerald" | "amber" | "rose" | "blue"> = {
   planned: "blue",
@@ -19,23 +21,30 @@ export const eventStatusTone: Record<EventStatus, "slate" | "emerald" | "amber" 
   cancelled: "rose",
 };
 
-/** RFC 3339 → the value a datetime-local input wants (local wall time). */
+/**
+ * RFC 3339 → the value a datetime-local input wants, as Ulaanbaatar wall time.
+ * An event happens at a place in Mongolia, so its time is that place's time
+ * whatever zone the organiser's laptop is set to.
+ */
 export function toLocalInput(value: string | null): string {
-  if (!value) return "";
-  const d = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return toZonedInput(value);
 }
 
-/** datetime-local → RFC 3339 in UTC, or null for blank. */
+/** datetime-local, read as Ulaanbaatar time → RFC 3339 in UTC, or null for blank. */
 export function fromLocalInput(value: string): string | null {
-  return value ? new Date(value).toISOString() : null;
+  return value ? fromZonedInput(value) : null;
 }
 
-export function formatWhen(value: string, locale: string): string {
-  return new Date(value).toLocaleString(locale === "mn" ? "mn-MN" : locale, {
-    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
+/** `2026-09-01 14:20`, Ulaanbaatar time — the platform's one date shape. */
+export function formatWhen(value: string): string {
+  return formatMoment(value);
+}
+
+/** "12/50 бүртгүүлсэн · 0 ирсэн" — the capacity belongs to the registrations, not to who came. */
+export function eventCounts(t: (key: string, vars?: Record<string, string | number>) => string, e: Pick<EventRecord, "registered" | "attended" | "capacity">): string {
+  return e.capacity
+    ? t("events.message.counts_capacity", { registered: e.registered, capacity: e.capacity, attended: e.attended })
+    : t("events.message.counts", { registered: e.registered, attended: e.attended });
 }
 
 export function EventForm({ initial, onSave, onCancel, busy }: {
@@ -45,6 +54,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
   busy: boolean;
 }) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
   const formID = useId();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -69,7 +79,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
         capacity: capacity.trim() ? Number(capacity) : null, status, points_value: Number(points), vote_points: Number(votePoints),
       });
     } catch (err: unknown) {
-      setFailed(err instanceof Error ? err.message : "—");
+      setFailed(errorMessage(err));
     }
   }
 
@@ -87,7 +97,7 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor={`${formID}-starts`} className={label}>{t("events.field.starts_at")}</label>
+          <label htmlFor={`${formID}-starts`} className={label}>{t("events.field.starts_at")} <span className="font-normal">({t("events.field.ub_time")})</span></label>
           <input id={`${formID}-starts`} required type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={fieldClass} />
         </div>
         <div>
@@ -124,10 +134,10 @@ export function EventForm({ initial, onSave, onCancel, busy }: {
       </div>
       {failed && <ErrorNote>{failed}</ErrorNote>}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold text-muted">
+        <button type="button" onClick={onCancel} className="min-h-11 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-muted">
           {t("events.action.cancel")}
         </button>
-        <button disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50">
+        <button disabled={busy} aria-busy={busy || undefined} className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50">
           {t("events.action.save")}
         </button>
       </div>

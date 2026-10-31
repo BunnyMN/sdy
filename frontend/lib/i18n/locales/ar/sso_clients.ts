@@ -93,4 +93,7 @@ export const ar: Record<string, string> = {
   "sso_clients.view.endpoints_title": "عناوين الاتصال",
   "sso_clients.view.subtitle": "عملاء OAuth2 / OIDC للأنظمة التي تُسجّل دخول المستخدمين عبر هذه المنصة",
   "sso_clients.view.title": "عملاء SSO",
+  "sso_clients.hint.redirect_uris": "واحد في كل سطر · https فقط، باستثناء localhost",
+  "sso_clients.view.provider_active": "موفّر SSO نشط",
+  "sso_clients.keys.name_placeholder": "مهمة مزامنة المستودع",
 };

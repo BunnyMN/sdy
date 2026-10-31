@@ -7,13 +7,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Fingerprint, Gavel, MessageSquarePlus, Pencil, Undo2, Vote, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Fingerprint, Gavel, MessageSquarePlus, Pencil, RotateCcw, Undo2, Vote, XCircle } from "lucide-react";
 
 import { participationApi, type Motion, type MotionList, type SignedVote, type VoteChoice } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
-import { Chip, ConfirmDialog, ErrorNote, Panel } from "@/components/module/kit";
-import { Modal, fieldClass } from "@/components/ui";
+import { Chip, ErrorNote, Panel } from "@/components/module/kit";
+import { LoadingBlock, Modal, fieldClass, useConfirm } from "@/components/ui";
 import { memberDate } from "@/lib/memberFormat";
+import { formatCountdown } from "@/lib/datetime";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { browserHint } from "@/components/EIDLogin";
 
 function onPhone() { return typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
@@ -34,30 +36,54 @@ function statusKey(m: Motion) {
 }
 const statusTone = { proposed: "slate", voting: "blue", approved: "emerald", rejected: "rose", withdrawn: "amber" } as const;
 
-type Signing = { motion: Motion; choice: VoteChoice; code: string; phase: "waiting" | "done" | "failed"; message?: string; onPhone?: boolean };
+/**
+ * Where a signature stands. "refused" is eID's answer (the member declined or
+ * entered the wrong PIN); "timeout" is three minutes of no answer at all;
+ * "error" is this page failing to ask. Each says something different to do.
+ */
+type Phase = "waiting" | "done" | "refused" | "timeout" | "error";
+type Signing = { motion: Motion; choice: VoteChoice; code: string; phase: Phase; message?: string; onPhone?: boolean; deadline: number; hidden?: boolean };
 
-export default function EventDiscussion({ eventID }: { eventID: string }) {
+export default function EventDiscussion({ eventID, onSummary }: {
+  eventID: string;
+  /** Told how many issues are open for this member's vote, for the page's banner. */
+  onSummary?: (summary: { voting: number }) => void;
+}) {
   const { t } = useI18n();
+  const errorMessage = useErrorMessage();
+  const confirm = useConfirm();
   const [data, setData] = useState<MotionList | null>(null);
+  const [loadFailed, setLoadFailed] = useState("");
   const [failed, setFailed] = useState("");
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<{ id?: string; title: string; body: string } | null>(null);
-  const [closing, setClosing] = useState<Motion | null>(null);
   const [signing, setSigning] = useState<Signing | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [rolls, setRolls] = useState<Record<string, SignedVote[]>>({});
   const ticket = useRef(0);
 
   const load = useCallback(async () => {
-    try { const r = await participationApi.motions(eventID); setData({ ...r, motions: r.motions ?? [] }); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
-  }, [eventID]);
+    try { const r = await participationApi.motions(eventID); setData({ ...r, motions: r.motions ?? [] }); setLoadFailed(""); }
+    catch (err) { setLoadFailed(errorMessage(err)); }
+  }, [eventID, errorMessage]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => () => { ticket.current++; }, []);
+  useEffect(() => {
+    if (!data || !onSummary) return;
+    onSummary({ voting: data.can_vote && data.signing_ready ? data.motions.filter(m => m.status === "voting" && m.my_vote?.status !== "signed").length : 0 });
+  }, [data, onSummary]);
+  // The countdown in the signing dialog.
+  const waiting = signing?.phase === "waiting";
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true); setFailed("");
     try { await run(); await load(); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
+    catch (err) { setFailed(errorMessage(err)); }
     finally { setBusy(false); }
   }
 
@@ -79,12 +105,21 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
     try {
       const phone = onPhone();
       const started = await participationApi.vote(eventID, motion.id, choice, phone ? voteCallback(eventID) : "");
-      setSigning({ motion, choice, code: started.verification_code, phase: "waiting", onPhone: phone && !!started.app_link });
+      setNow(Date.now());
+      setSigning({ motion, choice, code: started.verification_code, phase: "waiting", onPhone: phone && !!started.app_link, deadline: Date.now() + POLL_FOR });
       if (phone && started.app_link) window.location.href = started.app_link;
       await watchVote(motion, started.session_id, mine);
     } catch (err) {
-      setSigning(null); setFailed(err instanceof Error ? err.message : "—");
+      setSigning(null); setFailed(errorMessage(err));
     }
+  }
+
+  /* Stop waiting here. The eID request itself cannot be withdrawn from this
+     side, so the list is read again: a signature given meanwhile still shows. */
+  function stopWaiting() {
+    ticket.current++;
+    setSigning(null);
+    void load();
   }
 
   /* Ask the API about the vote every two seconds until eID answers or three
@@ -97,13 +132,14 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
       if (ticket.current !== mine) return;
       try {
         const state = await participationApi.pollVote(eventID, motion.id, sessionID);
-        if (state.state === "signed") { setSigning(s => s && { ...s, phase: "done" }); await load(); return; }
-        if (state.state === "failed") { setSigning(s => s && { ...s, phase: "failed" }); await load(); return; }
+        // A dialog the member closed while waiting is shown again for the answer.
+        if (state.state === "signed") { setSigning(s => s && { ...s, phase: "done", hidden: false }); await load(); return; }
+        if (state.state === "failed") { setSigning(s => s && { ...s, phase: "refused", hidden: false }); await load(); return; }
       } catch (err) {
-        setSigning(s => s && { ...s, phase: "failed", message: err instanceof Error ? err.message : "" }); await load(); return;
+        setSigning(s => s && { ...s, phase: "error", message: errorMessage(err), hidden: false }); await load(); return;
       }
     }
-    if (ticket.current === mine) setSigning(s => s && { ...s, phase: "failed" });
+    if (ticket.current === mine) { setSigning(s => s && { ...s, phase: "timeout", hidden: false }); await load(); }
   }
 
   // A vote left signing — the eID app was opened and the page came back —
@@ -115,7 +151,7 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
     if (!pending?.my_vote) return;
     resumed.current = true;
     const mine = ++ticket.current;
-    setSigning({ motion: pending, choice: pending.my_vote.choice, code: "", phase: "waiting" });
+    setSigning({ motion: pending, choice: pending.my_vote.choice, code: "", phase: "waiting", deadline: Date.now() + POLL_FOR });
     void watchVote(pending, "", mine);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
@@ -123,7 +159,17 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
   async function showRoll(motion: Motion) {
     if (rolls[motion.id]) { setRolls(r => { const next = { ...r }; delete next[motion.id]; return next; }); return; }
     try { const { votes } = await participationApi.votes(eventID, motion.id); setRolls(r => ({ ...r, [motion.id]: votes })); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "—"); }
+    catch (err) { setFailed(errorMessage(err)); }
+  }
+
+  async function withdraw(motion: Motion) {
+    if (!(await confirm({ title: t("events.discussion.withdraw_confirm", { title: motion.title }), confirmLabel: t("events.discussion.withdraw"), tone: "danger" }))) return;
+    await act(() => participationApi.motionAction(eventID, motion.id, "withdraw", ""));
+  }
+
+  async function closeVote(motion: Motion) {
+    if (!(await confirm({ title: t("events.discussion.close_vote"), body: t("events.discussion.close_confirm"), confirmLabel: t("events.discussion.close_vote") }))) return;
+    await act(() => participationApi.motionAction(eventID, motion.id, "close"));
   }
 
   const btn = "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:text-foreground disabled:opacity-50";
@@ -142,6 +188,12 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
 
         <div className="space-y-3 p-4">
           {failed && <ErrorNote>{failed}</ErrorNote>}
+          {loadFailed && <div className="flex flex-wrap items-center gap-2"><ErrorNote>{loadFailed}</ErrorNote>
+            <button type="button" onClick={() => void load()} className="min-h-11 rounded-lg border border-input px-4 text-sm">{t("membership.retry")}</button></div>}
+          {!data && !loadFailed && <LoadingBlock rows={2} />}
+          {signing?.hidden && signing.phase === "waiting" && <p role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-info-soft p-3 text-sm text-info">
+            <Clock aria-hidden="true" className="h-4 w-4" />{t("events.discussion.signing_pending")}
+            <button type="button" onClick={() => setSigning({ ...signing, hidden: false })} className="min-h-11 underline">{t("events.discussion.signing_show")}</button></p>}
           {data && <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
             <span>{t("events.discussion.eligible", { count: data.eligible })}</span>
             {!data.signing_ready && <span className="text-warning">{t("events.discussion.signing_off")}</span>}
@@ -183,10 +235,11 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
                 <p className="text-xs tabular-nums text-muted">{t("events.discussion.result", { yes: m.yes, no: m.no, abstain: m.abstain })}</p>
               </div>}
 
-              {m.my_vote && <p className="flex items-center gap-1.5 text-xs">
-                {signedMine ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <XCircle className="h-3.5 w-3.5 text-muted" />}
-                {t("events.discussion.my_vote", { choice: t(`events.discussion.chose.${m.my_vote.choice}`) })}
-                {signedMine && <span className="text-muted">· {t("events.discussion.signed")}</span>}
+              {m.my_vote && <p className={`flex items-center gap-1.5 text-xs ${m.my_vote.status === "failed" ? "text-danger" : ""}`}>
+                {signedMine ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-success" /> : m.my_vote.status === "signing" ? <Clock aria-hidden="true" className="h-3.5 w-3.5 text-muted" /> : <XCircle aria-hidden="true" className="h-3.5 w-3.5" />}
+                {signedMine ? <>{t("events.discussion.my_vote", { choice: t(`events.discussion.chose.${m.my_vote.choice}`) })} <span className="text-muted">· {t("events.discussion.signed")}</span></>
+                  : m.my_vote.status === "signing" ? t("events.discussion.my_vote_signing", { choice: t(`events.discussion.chose.${m.my_vote.choice}`) })
+                  : t("events.discussion.my_vote_failed")}
               </p>}
 
               <div className="flex flex-wrap gap-2">
@@ -196,9 +249,9 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
                     <Vote className="h-4 w-4" />{t(`events.discussion.choice.${choice}`)}
                   </button>)}
                 {data.can_manage && m.status === "proposed" && <button disabled={busy} onClick={() => void act(() => participationApi.motionAction(eventID, m.id, "open"))} className={btn}><Vote className="h-3.5 w-3.5" />{t("events.discussion.open_vote")}</button>}
-                {data.can_manage && m.status === "voting" && <button disabled={busy} onClick={() => setClosing(m)} className={btn}><Gavel className="h-3.5 w-3.5" />{t("events.discussion.close_vote")}</button>}
+                {data.can_manage && m.status === "voting" && <button disabled={busy} onClick={() => void closeVote(m)} className={btn}><Gavel className="h-3.5 w-3.5" />{t("events.discussion.close_vote")}</button>}
                 {mayEdit && <button disabled={busy} onClick={() => setDraft({ id: m.id, title: m.title, body: m.body })} className={btn}><Pencil className="h-3.5 w-3.5" />{t("events.discussion.edit")}</button>}
-                {mayEdit && <button disabled={busy} onClick={() => void act(() => participationApi.motionAction(eventID, m.id, "withdraw", ""))} className={btn}><Undo2 className="h-3.5 w-3.5" />{t("events.discussion.withdraw")}</button>}
+                {mayEdit && <button disabled={busy} onClick={() => void withdraw(m)} className={btn}><Undo2 className="h-3.5 w-3.5" />{t("events.discussion.withdraw")}</button>}
                 {(m.status === "decided" || (m.status === "voting" && data.can_manage)) && counted > 0 &&
                   <button onClick={() => void showRoll(m)} aria-expanded={!!rolls[m.id]} className={btn}><Fingerprint className="h-3.5 w-3.5" />{t("events.discussion.roll")}</button>}
               </div>
@@ -219,23 +272,31 @@ export default function EventDiscussion({ eventID }: { eventID: string }) {
         </div>
       </section>
 
-      {closing && <ConfirmDialog title={t("events.discussion.close_vote")} body={t("events.discussion.close_confirm")} confirmLabel={t("events.discussion.close_vote")}
-        onCancel={() => setClosing(null)} onConfirm={() => { const m = closing; setClosing(null); void act(() => participationApi.motionAction(eventID, m.id, "close")); }} />}
-
-      {signing && <Modal label={t("events.discussion.signing_title")} onClose={() => { ticket.current++; setSigning(null); }}>
-        <div className="space-y-4 text-center" aria-live="polite">
-          <Fingerprint className="mx-auto h-10 w-10 text-accent" />
+      {signing && !signing.hidden && <Modal label={t("events.discussion.signing_title")} onClose={() => signing.phase === "waiting" ? setSigning({ ...signing, hidden: true }) : setSigning(null)}>
+        <div className="space-y-4 text-center">
+          <Fingerprint aria-hidden="true" className="mx-auto h-10 w-10 text-accent" />
           <h2 className="text-lg font-semibold">{t("events.discussion.signing_title")}</h2>
           <p className="text-sm text-muted">{signing.motion.title} · <strong className="text-foreground">{t(`events.discussion.chose.${signing.choice}`)}</strong></p>
           {signing.phase === "waiting" && <>
             <p className="text-sm">{t(signing.onPhone ? "events.discussion.signing_body_phone" : "events.discussion.signing_body")}</p>
             {signing.code && <><p className="text-xs text-muted">{t("events.discussion.signing_code")}</p>
             <p className="text-4xl font-bold tracking-widest tabular-nums">{signing.code}</p></>}
-            <p className="text-xs text-muted">{t("events.discussion.signing_wait")}</p>
+            <p className="text-xs text-muted tabular-nums">{t("events.discussion.signing_wait")} <span aria-hidden="true">{formatCountdown(signing.deadline - now)}</span></p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button type="button" onClick={() => setSigning({ ...signing, hidden: true })} className="min-h-11 rounded-lg border border-input px-4">{t("events.discussion.signing_hide")}</button>
+              <button type="button" onClick={stopWaiting} className="min-h-11 rounded-lg border border-input px-4">{t("events.discussion.signing_stop")}</button>
+            </div>
           </>}
-          {signing.phase === "done" && <p className="flex items-center justify-center gap-2 font-semibold text-success"><CheckCircle2 className="h-5 w-5" />{t("events.discussion.signing_done")}</p>}
-          {signing.phase === "failed" && <p className="text-danger">{signing.message || t("events.discussion.signing_failed")}</p>}
-          {signing.phase !== "waiting" && <button onClick={() => setSigning(null)} className="min-h-11 rounded-lg border border-input px-4">{t("events.discussion.cancel")}</button>}
+          <div aria-live="polite">
+            {signing.phase === "done" && <p className="flex items-center justify-center gap-2 font-semibold text-success"><CheckCircle2 aria-hidden="true" className="h-5 w-5" />{t("events.discussion.signing_done")}</p>}
+            {signing.phase === "refused" && <p role="alert" className="text-danger">{t("events.discussion.signing_failed")}</p>}
+            {signing.phase === "timeout" && <p role="alert" className="text-danger">{t("events.discussion.signing_timeout")}</p>}
+            {signing.phase === "error" && <p role="alert" className="text-danger">{signing.message || t("events.discussion.signing_failed")}</p>}
+          </div>
+          {signing.phase !== "waiting" && <div className="flex flex-wrap justify-center gap-2">
+            {signing.phase !== "done" && <button type="button" onClick={() => { const { motion, choice } = signing; setSigning(null); void vote(motion, choice); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 font-semibold text-on-accent"><RotateCcw aria-hidden="true" className="h-4 w-4" />{t("membership.retry")}</button>}
+            <button type="button" onClick={() => setSigning(null)} className="min-h-11 rounded-lg border border-input px-4">{t("base.action.close")}</button>
+          </div>}
         </div>
       </Modal>}
     </Panel>

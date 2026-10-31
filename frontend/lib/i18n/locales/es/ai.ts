@@ -34,4 +34,8 @@ export const es: Record<string, string> = {
   "ai.view.tab_translate": "Traducir",
   "ai.view.title": "Asistente de IA",
   "ai.view.translate_placeholder": "Texto a traducir…",
+  "ai.message.request_failed": "El asistente no pudo responder. Inténtalo de nuevo.",
+  "ai.action.record": "Grabar un mensaje de voz",
+  "ai.action.send": "Enviar",
+  "ai.field.message": "Mensaje",
 };

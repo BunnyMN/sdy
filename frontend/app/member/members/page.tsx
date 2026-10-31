@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { memberApi, type ManagedMember, type MemberStatus } from "@/lib/api/member";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
-import { Banner, fieldClass, Loading, Modal } from "@/components/ui";
+import { Banner, fieldClass, LoadingBlock, Modal } from "@/components/ui";
+import { useErrorMessage } from "@/lib/useErrorMessage";
 import { memberDate } from "@/lib/memberFormat";
 
 export default function MembersPage() {
   const { t } = useI18n();
   const { allowed, loading, isAdmin } = useAccess("membership.manage");
+  const statusError = useErrorMessage({ codes: { branch_transfer_required: "membership.branch_transfer_required" }, fallback: "membership.record.status_failed" });
   const [data, setData] = useState<Awaited<ReturnType<typeof memberApi.members>> | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -28,7 +30,7 @@ export default function MembersPage() {
     event.preventDefault(); if (!editing) return;
     setBusy(true); setError(""); setNotice("");
     try { await memberApi.status(editing.user_id, status, reason.trim()); setEditing(null); setNotice(t("dues.saved")); await load(); }
-    catch (err) { const message = err instanceof Error ? err.message : ""; setError(message.includes("branch_transfer_required") ? t("membership.branch_transfer_required") : t("membership.record.status_failed")); }
+    catch (err) { setError(statusError(err)); }
     finally { setBusy(false); }
   }
   async function more() {
@@ -37,14 +39,14 @@ export default function MembersPage() {
     catch { setError(t("membership.load_failed")); }
     finally { setBusy(false); }
   }
-  if (loading) return <Loading />;
+  if (loading) return <LoadingBlock />;
   if (!allowed) return <p>{t("membership.no_access")}</p>;
   const transitions: MemberStatus[] = editing?.status === "none" ? ["active"] : editing?.is_primary ? ["active", "suspended", "expired", "left", "alumni"] : ["active", "left", "alumni"];
   return <div className="mx-auto max-w-[720px] space-y-5 pb-6">
     <header><h1>{t("membership.record.members")}</h1><p className="mt-2 text-sm text-muted">{t("membership.record.staff_hint")}</p></header>
     <form onSubmit={e => { e.preventDefault(); setQuery(search.trim()); }} className="flex gap-2"><label className="flex-1"><span className="sr-only">{t("membership.record.search")}</span><input value={search} maxLength={100} onChange={e => setSearch(e.target.value)} placeholder={t("membership.record.search")} className={`${fieldClass} min-h-11 w-full`} /></label><button className="min-h-11 rounded-md border border-input px-4">{t("membership.record.search_button")}</button></form>
     {error && <Banner tone="error" message={error} />}{notice && <p role="status" className="text-success">{notice}</p>}
-    {!data && !error && <Loading />}
+    {!data && (error ? <button onClick={() => void load()} className="min-h-11 rounded-md border border-input px-4">{t("membership.retry")}</button> : <LoadingBlock />)}
     {data?.members.length === 0 && <p className="text-muted">{t("membership.record.no_members")}</p>}
     {data?.members.map(m => <article key={m.user_id} className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <div><h2 className="font-medium">{m.name}</h2><p className="break-all text-sm text-muted">{m.email}</p></div>
