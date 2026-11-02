@@ -132,6 +132,7 @@ var platformTables = map[string]table{
 	// Migrations 00086 and 00093.
 	"person_items":         {"operator", "a person's own requests"},
 	"member_profiles":      {"operator", "a person's own member contact details"},
+	"position_permissions": {"operator", "what each union position may do"},
 	"member_notifications": {"operator", "a person's own in-app inbox"},
 	// What anybody, signed in or not, tells the platform from its front page.
 	// Nobody's organisation: it exists once per deployment. Migration 00114.
@@ -177,6 +178,7 @@ var platformTables = map[string]table{
 	"membership_roles":           {"workspace", "access control"},
 	"memberships":                {"workspace", "access control"},
 	"membership_transfers":       {"workspace", "access control"},
+	"branch_policies":            {"workspace", "a branch's position rules (auditor seats)"},
 	"membership_history":         {"workspace", "primary membership lifecycle history"},
 	"oauth2_access_tokens":       {"workspace", "OAuth2 provider"},
 	"oauth2_authorization_codes": {"workspace", "OAuth2 provider"},

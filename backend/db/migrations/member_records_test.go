@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -223,4 +224,114 @@ func TestABranchAdminDoesNotDecideAboutThemselves(t *testing.T) {
 	assertTransferError(t, err, "42501", "membership_self_decision_forbidden")
 	_, err = f.call(t.Context(), f.source, f.admin, `SELECT registry.set_member_position($1,$2,'chair')::text`, f.source, f.admin)
 	assertTransferError(t, err, "42501", "membership_self_decision_forbidden")
+}
+
+// A position grants its role's permissions; the chair assigns positions, an
+// administrator names the chair, and the committee has a fixed number of seats.
+func TestPositionsGrantAccessAndTheChairAssignsThem(t *testing.T) {
+	f := newTransferFixture(t)
+	ctx := t.Context()
+	extra := []string{uuid.NewString(), uuid.NewString()}
+	t.Cleanup(func() {
+		_, _ = f.pool.Exec(context.Background(), `DELETE FROM registry.users WHERE id=ANY($1::uuid[])`, extra)
+	})
+	for _, user := range extra {
+		f.exec(t, `INSERT INTO registry.users(id,email,name,password_hash) VALUES($1,$2,'Position member','unused')`, user, user+"@position.test")
+		f.exec(t, `INSERT INTO workspace.memberships(tenant_id,user_id,is_primary,member_status,member_since) VALUES($1,$2,true,'active',now())`, f.source, user)
+	}
+	chair, x, y := f.member, extra[0], extra[1]
+	set := func(actor, target, position string) error {
+		_, err := f.call(ctx, f.source, actor, `SELECT registry.set_member_position($1,$2,$3)::text`, f.source, target, position)
+		return err
+	}
+	may := func(user, code string) bool {
+		var ok bool
+		if err := f.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workspace.memberships m
+			JOIN workspace.membership_roles mr ON mr.membership_id=m.id
+			JOIN workspace.roles r ON r.id=mr.role_id AND r.active
+			JOIN workspace.role_permissions rp ON rp.role_id=r.id
+			JOIN registry.permissions p ON p.id=rp.permission_id
+			WHERE m.tenant_id=$1 AND m.user_id=$2 AND p.code=$3)`, f.source, user, code).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+
+	// The branch's manager role no longer manages members: positions do.
+	var managerManages bool
+	if err := f.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workspace.roles r JOIN workspace.role_permissions rp ON rp.role_id=r.id
+		JOIN registry.permissions p ON p.id=rp.permission_id WHERE r.tenant_id=$1 AND r.code='manager' AND p.code='membership.manage')`, f.source).Scan(&managerManages); err != nil {
+		t.Fatal(err)
+	}
+	if managerManages {
+		t.Fatal("a branch's manager role still holds membership.manage")
+	}
+
+	// Only an administrator names the chair; the chair then holds the role.
+	if err := set(x, y, "secretary"); err == nil {
+		t.Fatal("an ordinary member assigned a position")
+	}
+	if err := set(f.admin, chair, "chair"); err != nil {
+		t.Fatalf("admin naming the chair: %v", err)
+	}
+	if !may(chair, "membership.manage") {
+		t.Fatal("the chair's position did not grant membership.manage")
+	}
+	if err := set(f.admin, x, "chair"); err == nil {
+		t.Fatal("a second chair was named")
+	}
+
+	// The chair assigns the other positions, but not the chair's own.
+	if err := set(chair, x, "auditor"); err != nil {
+		t.Fatalf("chair assigning an auditor: %v", err)
+	}
+	var pg *pgconn.PgError
+	if err := set(chair, y, "chair"); !errors.As(err, &pg) || pg.Message != "position_chair_admin_only" {
+		t.Fatalf("chair naming a chair: %v", err)
+	}
+
+	// Seats: the administrator sets them, and the chair cannot exceed them.
+	if _, err := f.call(ctx, f.source, chair, `SELECT registry.set_auditor_seats($1,1)::text`, f.source); err == nil {
+		t.Fatal("the chair set the auditor seats")
+	}
+	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_auditor_seats($1,1)::text`, f.source); err != nil {
+		t.Fatalf("admin setting seats: %v", err)
+	}
+	if err := set(chair, y, "auditor"); !errors.As(err, &pg) || pg.Message != "auditor_seats_full" {
+		t.Fatalf("an auditor past the seats: %v", err)
+	}
+	if err := set(chair, y, "finance"); err != nil {
+		t.Fatalf("chair assigning finance: %v", err)
+	}
+	if err := set(chair, y, "secretary"); err != nil {
+		t.Fatalf("chair moving finance to secretary: %v", err)
+	}
+	var positionRoles int
+	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM workspace.memberships m JOIN workspace.membership_roles mr ON mr.membership_id=m.id
+		JOIN workspace.roles r ON r.id=mr.role_id WHERE m.tenant_id=$1 AND m.user_id=$2 AND r.code LIKE 'pos\_%'`, f.source, y).Scan(&positionRoles); err != nil {
+		t.Fatal(err)
+	}
+	if positionRoles != 1 {
+		t.Fatalf("a member holds %d position roles, want 1", positionRoles)
+	}
+
+	// A suspended chair keeps the title but loses its access, and the session.
+	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_member_status($1,$2,'suspended','Хяналтын шалгалт')::text`, f.source, chair); err != nil {
+		t.Fatalf("suspend the chair: %v", err)
+	}
+	if may(chair, "membership.manage") {
+		t.Fatal("a suspended chair still manages members")
+	}
+	var active bool
+	if err := f.pool.QueryRow(ctx, `SELECT active FROM workspace.memberships WHERE tenant_id=$1 AND user_id=$2`, f.source, chair).Scan(&active); err != nil || active {
+		t.Fatalf("a suspended chair's membership is active=%v (%v)", active, err)
+	}
+	// Leaving ends the position.
+	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_member_status($1,$2,'left','Шилжсэн')::text`, f.source, x); err != nil {
+		t.Fatalf("auditor leaves: %v", err)
+	}
+	var position string
+	if err := f.pool.QueryRow(ctx, `SELECT position FROM workspace.memberships WHERE tenant_id=$1 AND user_id=$2`, f.source, x).Scan(&position); err != nil || position != "member" {
+		t.Fatalf("after leaving the position is %q (%v)", position, err)
+	}
 }

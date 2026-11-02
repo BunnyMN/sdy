@@ -238,6 +238,12 @@ func (h *Handlers) HandleSetRolePermissions(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, 409, "administrator permissions are managed automatically")
 		return
 	}
+	// A position's role (00119) is what the position grants, the same in every
+	// branch; changing it here would make one branch's chair another's.
+	if strings.HasPrefix(code, positionRolePrefix) {
+		httpx.Error(w, 409, "position roles are managed automatically")
+		return
+	}
 	seen := map[string]bool{}
 	clean := make([]string, 0, len(req.Permissions))
 	for _, p := range req.Permissions {
@@ -310,11 +316,17 @@ func (h *Handlers) HandleSetMembershipRoles(w http.ResponseWriter, r *http.Reque
 			clean = append(clean, v)
 		}
 	}
-	var valid int
+	var valid, positional int
 	if len(clean) > 0 {
-		_ = tx.QueryRow(r.Context(), `SELECT count(*) FROM workspace.roles WHERE tenant_id=$1 AND active AND id=ANY($2)`, tenantID, clean).Scan(&valid)
+		_ = tx.QueryRow(r.Context(), `SELECT count(*), count(*) FILTER (WHERE code LIKE 'pos\_%') FROM workspace.roles
+			WHERE tenant_id=$1 AND active AND id=ANY($2)`, tenantID, clean).Scan(&valid, &positional)
 		if valid != len(clean) {
 			httpx.Error(w, 400, "one or more roles are invalid or inactive")
+			return
+		}
+		// Position roles follow memberships.position, set by the chair.
+		if positional > 0 {
+			httpx.Error(w, http.StatusConflict, "position roles follow the member's position")
 			return
 		}
 	}
@@ -341,7 +353,9 @@ func (h *Handlers) HandleSetMembershipRoles(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	if _, err = tx.Exec(r.Context(), `DELETE FROM workspace.membership_roles WHERE membership_id=$1`, id); err == nil && len(clean) > 0 {
+	// The position's role stays: it is not this screen's to take away.
+	if _, err = tx.Exec(r.Context(), `DELETE FROM workspace.membership_roles mr USING workspace.roles r
+		WHERE mr.membership_id=$1 AND r.id=mr.role_id AND r.code NOT LIKE 'pos\_%'`, id); err == nil && len(clean) > 0 {
 		_, err = tx.Exec(r.Context(), `INSERT INTO workspace.membership_roles(membership_id,role_id) SELECT $1,id FROM workspace.roles WHERE tenant_id=$2 AND active AND id=ANY($3)`, id, tenantID, clean)
 	}
 	if err != nil || tx.Commit(r.Context()) != nil {

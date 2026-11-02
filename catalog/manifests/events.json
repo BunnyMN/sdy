@@ -1,7 +1,7 @@
 {
   "id": "mn.sdy.events",
   "name": "Events",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "platform": ">=1.0.0",
   "order": 10,
   "publisher": "sdy",
@@ -32,10 +32,14 @@
     {
       "code": "events.manage",
       "name": "Run events",
-      "description": "Create and edit events, add participants and mark attendance",
-      "default_roles": [
-        "manager"
-      ]
+      "description": "Create and edit events, add participants, mark attendance and confirm its points",
+      "admin_only": true
+    },
+    {
+      "code": "events.discipline",
+      "name": "Deduct points and warn",
+      "description": "Deduct a member's points with a reason and record a warning",
+      "admin_only": true
     }
   ],
   "menus": [

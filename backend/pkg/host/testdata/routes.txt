@@ -81,6 +81,7 @@ GET /api/v1/me/notifications
 GET /api/v1/me/transfers
 GET /api/v1/membership/join-requests
 GET /api/v1/membership/members
+GET /api/v1/membership/positions
 GET /api/v1/membership/summary
 GET /api/v1/membership/transfers
 GET /api/v1/menus
@@ -229,6 +230,7 @@ PUT /api/v1/admin/devices/status
 PUT /api/v1/core/me/preferences
 PUT /api/v1/core/organisation
 PUT /api/v1/me/member-record
+PUT /api/v1/membership/positions/auditor-seats
 PUT /api/v1/profile/photo
 PUT /api/v1/profile/preferences
 PUT /api/v1/tenant/profile
@@ -258,6 +260,8 @@ TRACE /metrics
 [app] GET /api/v1/events/members
 [app] GET /api/v1/events/mine
 [app] GET /api/v1/events/points
+[app] GET /api/v1/events/sanctions
+[app] GET /api/v1/events/sanctions/mine
 [app] GET /api/v1/events/summary
 [app] GET /api/v1/events/{id}/
 [app] GET /api/v1/events/{id}/attendance
@@ -272,6 +276,7 @@ TRACE /metrics
 [app] POST /api/v1/dues/payments/{id}/review
 [app] POST /api/v1/events/
 [app] POST /api/v1/events/blocks/{userID}
+[app] POST /api/v1/events/sanctions
 [app] POST /api/v1/events/{id}/attendance
 [app] POST /api/v1/events/{id}/check-in
 [app] POST /api/v1/events/{id}/check-in-code

@@ -900,8 +900,11 @@ func (s *Service) Routes(r chi.Router) {
 				mr.Post("/join-requests/{id}", s.access.HandleDecideJoinRequest)
 				mr.Get("/members", s.access.HandleMembers)
 				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/status", s.access.HandleMemberStatus)
-				// Албан тушаал — shown, not enforced (migration 00117).
-				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/position", s.access.HandleMemberPosition)
+				// Албан тушаал grants its role (00119): the chair assigns, an
+				// administrator names the chair — both checked in the database.
+				mr.Post("/members/{userID}/position", s.access.HandleMemberPosition)
+				mr.Get("/positions", s.access.HandlePositionPolicy)
+				mr.With(s.authn.RequireAdmin).Put("/positions/auditor-seats", s.access.HandleAuditorSeats)
 				mr.Get("/summary", s.access.HandleMemberSummary)
 			})
 
