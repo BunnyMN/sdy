@@ -15,6 +15,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -85,6 +86,20 @@ func asker(t *testing.T, pool *pgxpool.Pool) (userID, orgID, requestID string) {
 	return userID, orgID, requestID
 }
 
+// decider is the administrator answering: anybody but the asker.
+func decider(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	var id string
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO registry.users (email, password_hash, name) VALUES ($1,'x',$2) RETURNING id::text`,
+		"decider-"+suffix+"@example.mn", "Админ "+suffix).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM registry.users WHERE id=$1`, id) })
+	return id
+}
+
 func handlersFor(pool *pgxpool.Pool) *Handlers {
 	return New(pool, nil, auth.New(auth.Deps{DB: pool}))
 }
@@ -95,7 +110,7 @@ func TestAcceptingAJoinRequestAddsTheMemberAndAnswersThem(t *testing.T) {
 	ctx := context.Background()
 	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, true); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, decider(t, pool), true); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
 
@@ -132,7 +147,7 @@ func TestDecliningAddsNobodyAndStillAnswers(t *testing.T) {
 	ctx := context.Background()
 	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, false); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, decider(t, pool), false); err != nil {
 		t.Fatalf("decline: %v", err)
 	}
 
@@ -164,13 +179,13 @@ func TestDecliningAddsNobodyAndStillAnswers(t *testing.T) {
 func TestARequestIsAnsweredOnlyOnce(t *testing.T) {
 	pool := joinPool(t)
 	ctx := context.Background()
-	userID, orgID, requestID := asker(t, pool)
+	_, orgID, requestID := asker(t, pool)
 	handlers := handlersFor(pool)
 
-	if err := handlers.Decide(ctx, orgID, requestID, userID, true); err != nil {
+	if err := handlers.Decide(ctx, orgID, requestID, decider(t, pool), true); err != nil {
 		t.Fatal(err)
 	}
-	err := handlers.Decide(ctx, orgID, requestID, userID, false)
+	err := handlers.Decide(ctx, orgID, requestID, decider(t, pool), false)
 	if err == nil {
 		t.Fatal("the same request was answered twice")
 	}
@@ -191,7 +206,7 @@ func TestAnApprovedRequestGrantsOnlyTheSmallestRole(t *testing.T) {
 	ctx := context.Background()
 	userID, orgID, requestID := asker(t, pool)
 
-	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, true); err != nil {
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, decider(t, pool), true); err != nil {
 		t.Fatalf("approve the request: %v", err)
 	}
 
@@ -215,5 +230,23 @@ func TestAnApprovedRequestGrantsOnlyTheSmallestRole(t *testing.T) {
 	}
 	if len(codes) != 1 || codes[0] != "user" {
 		t.Fatalf("an approved request granted %v, want exactly the user role", codes)
+	}
+}
+
+// Nobody lets themselves in.
+func TestNobodyAnswersTheirOwnRequest(t *testing.T) {
+	pool := joinPool(t)
+	ctx := context.Background()
+	userID, orgID, requestID := asker(t, pool)
+
+	if err := handlersFor(pool).Decide(ctx, orgID, requestID, userID, true); !errors.Is(err, ErrSelfDecision) {
+		t.Fatalf("answering one's own request: %v, want ErrSelfDecision", err)
+	}
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT status FROM workspace.join_requests WHERE id=$1`, requestID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "PENDING" {
+		t.Errorf("the request is %s, want it still PENDING", status)
 	}
 }

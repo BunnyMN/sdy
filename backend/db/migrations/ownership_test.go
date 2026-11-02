@@ -140,6 +140,9 @@ var platformTables = map[string]table{
 	// The person's, not any organisation's: it outlives every membership it
 	// ends. Written only on the login path. Migration 00115.
 	"account_deletion_requests": {"operator", "a person's own deletion request"},
+	// A person's own profile photo. Like the deletion request it is the
+	// person's and is read and written only on the login path. Migration 00116.
+	"user_photos": {"operator", "a person's own profile photo"},
 	// Who does what, deployment-wide. In registry because it is neither one
 	// workspace's nor one person's: an organisation publishes into it and
 	// everybody reads it. Migration 00090.

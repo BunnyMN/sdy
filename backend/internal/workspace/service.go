@@ -828,6 +828,11 @@ func (s *Service) Routes(r chi.Router) {
 			// profile/deletion.go and migration 00115.
 			pr.Post("/profile/deletion-request", s.profile.HandleRequestDeletion)
 			pr.Get("/profile/deletion-request", s.profile.HandleDeletionStatus)
+			// The caller's own profile photo; no id in the route. See
+			// profile/photo.go and migration 00116.
+			pr.Get("/profile/photo", s.profile.HandleGetPhoto)
+			pr.Put("/profile/photo", s.profile.HandlePutPhoto)
+			pr.Delete("/profile/photo", s.profile.HandleDeletePhoto)
 			// Linking an eID to the account already signed in. The start half
 			// stays on the public /auth/eid/start — starting a session proves
 			// nothing — and only the finish needs to know who is asking.
@@ -895,6 +900,8 @@ func (s *Service) Routes(r chi.Router) {
 				mr.Post("/join-requests/{id}", s.access.HandleDecideJoinRequest)
 				mr.Get("/members", s.access.HandleMembers)
 				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/status", s.access.HandleMemberStatus)
+				// Албан тушаал — shown, not enforced (migration 00117).
+				mr.With(s.authn.RequireAdmin).Post("/members/{userID}/position", s.access.HandleMemberPosition)
 				mr.Get("/summary", s.access.HandleMemberSummary)
 			})
 
