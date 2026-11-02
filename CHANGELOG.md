@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   бүхэлд нь хариуцна; Хяналтын хороо оноо хасаж, сануулга өгнө. Албан тушаалыг Тэргүүн, Тэргүүнийг
   админ томилно; хорооны суудлын тоо салбар бүрт.
 - Салбарын `manager` роль эдгээр эрхээ алдав. Вэб болон iOS-д удирдлагын дэлгэцүүд нэмэгдэв.
+### Security — Next.js 16.4.3, Sentry 10.78 (2026-11-02)
+
+- `next` 16.3.3 → 16.4.3 (next/og RCE, use-cache draft leak), `@sentry/nextjs` → 10.78 (tunnel
+  middleware bypass), `npm audit fix` (brace-expansion, fast-uri, sharp, source-map-js). Үлдсэн
+  5 moderate нь зөвхөн build үеийн Sentry webpack plugin-ийн glob.
 
 ### Removed — нүүр хуудасны нээлттэй санал хүсэлт (2026-11-02)
 
