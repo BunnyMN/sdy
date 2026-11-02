@@ -11,7 +11,6 @@ const links = [
   ["#features", "Боломжууд"],
   ["#how-it-works", "Хэрхэн элсэх вэ"],
   ["#questions", "Түгээмэл асуулт"],
-  ["#feedback", "Санал хүсэлт"],
 ] as const;
 
 /* The stock SDY mark is a 512px, 173 KB picture drawn at 52px. The header
