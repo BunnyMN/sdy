@@ -315,7 +315,8 @@ func TestPositionsGrantAccessAndTheChairAssignsThem(t *testing.T) {
 		t.Fatalf("a member holds %d position roles, want 1", positionRoles)
 	}
 
-	// A suspended chair keeps the title but loses its access, and the session.
+	// A suspended chair loses the position and its access; reinstatement does
+	// not bring it back.
 	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_member_status($1,$2,'suspended','Хяналтын шалгалт')::text`, f.source, chair); err != nil {
 		t.Fatalf("suspend the chair: %v", err)
 	}
@@ -323,8 +324,15 @@ func TestPositionsGrantAccessAndTheChairAssignsThem(t *testing.T) {
 		t.Fatal("a suspended chair still manages members")
 	}
 	var active bool
-	if err := f.pool.QueryRow(ctx, `SELECT active FROM workspace.memberships WHERE tenant_id=$1 AND user_id=$2`, f.source, chair).Scan(&active); err != nil || active {
-		t.Fatalf("a suspended chair's membership is active=%v (%v)", active, err)
+	var chairPosition string
+	if err := f.pool.QueryRow(ctx, `SELECT active, position FROM workspace.memberships WHERE tenant_id=$1 AND user_id=$2`, f.source, chair).Scan(&active, &chairPosition); err != nil || active || chairPosition != "member" {
+		t.Fatalf("a suspended chair's membership is active=%v position=%q (%v)", active, chairPosition, err)
+	}
+	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_member_status($1,$2,'active','Шалгалт дууссан')::text`, f.source, chair); err != nil {
+		t.Fatalf("reinstate: %v", err)
+	}
+	if may(chair, "membership.manage") {
+		t.Fatal("reinstatement brought the chair's access back")
 	}
 	// Leaving ends the position.
 	if _, err := f.call(ctx, f.source, f.admin, `SELECT registry.set_member_status($1,$2,'left','Шилжсэн')::text`, f.source, x); err != nil {

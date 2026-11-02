@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -85,6 +86,14 @@ func (in *sanctionInput) validate() error {
 	}
 	if in.EventID != nil && strings.TrimSpace(*in.EventID) == "" {
 		in.EventID = nil
+	}
+	if _, err := uuid.Parse(in.UserID); err != nil {
+		return errors.New("choose the member")
+	}
+	if in.EventID != nil {
+		if _, err := uuid.Parse(*in.EventID); err != nil {
+			return errors.New("no such event")
+		}
 	}
 	return nil
 }

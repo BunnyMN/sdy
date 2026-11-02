@@ -316,19 +316,32 @@ func (h *Handlers) HandleSetMembershipRoles(w http.ResponseWriter, r *http.Reque
 			clean = append(clean, v)
 		}
 	}
-	var valid, positional int
+	var valid int
 	if len(clean) > 0 {
-		_ = tx.QueryRow(r.Context(), `SELECT count(*), count(*) FILTER (WHERE code LIKE 'pos\_%') FROM workspace.roles
-			WHERE tenant_id=$1 AND active AND id=ANY($2)`, tenantID, clean).Scan(&valid, &positional)
+		_ = tx.QueryRow(r.Context(), `SELECT count(*) FROM workspace.roles WHERE tenant_id=$1 AND active AND id=ANY($2)`, tenantID, clean).Scan(&valid)
 		if valid != len(clean) {
 			httpx.Error(w, 400, "one or more roles are invalid or inactive")
 			return
 		}
-		// Position roles follow memberships.position, set by the chair.
-		if positional > 0 {
-			httpx.Error(w, http.StatusConflict, "position roles follow the member's position")
+		// Position roles follow memberships.position, set by the chair: the
+		// screen sends back what it was shown, so they are left out here, not
+		// refused, and the delete below keeps the one the member holds.
+		positional, err := collectStrings(r.Context(), tx, `SELECT id::text FROM workspace.roles WHERE tenant_id=$1 AND id=ANY($2) AND code LIKE 'pos\_%'`, tenantID, clean)
+		if err != nil {
+			httpx.Error(w, 500, "failed to read the role assignment")
 			return
 		}
+		drop := map[string]bool{}
+		for _, id := range positional {
+			drop[id] = true
+		}
+		kept := clean[:0]
+		for _, id := range clean {
+			if !drop[id] {
+				kept = append(kept, id)
+			}
+		}
+		clean = kept
 	}
 	before, err := collectStrings(r.Context(), tx, `SELECT role_id::text FROM workspace.membership_roles WHERE membership_id=$1 ORDER BY role_id`, id)
 	if err != nil {

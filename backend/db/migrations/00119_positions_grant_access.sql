@@ -15,8 +15,8 @@
 -- зөвхөн админ томилно/чөлөөлнө, нэг салбарт нэг Тэргүүн. Хяналтын хорооны
 -- суудлын тоо салбар бүрт (workspace.branch_policies.auditor_seats, анхдагч 3),
 -- үүнийг админ тохируулна. Роль нь memberships.position-оос триггерээр
--- тохирно; түдгэлзсэн, хугацаа дууссан гишүүнд албан тушаалын роль идэвхгүй,
--- гарсан гишүүний албан тушаал 'member' болно.
+-- тохирно; түдгэлзсэн, хугацаа дууссан, гарсан гишүүний албан тушаал 'member'
+-- болно (сэргээхэд Тэргүүн дахин онооно).
 
 -- +goose Up
 
@@ -111,12 +111,13 @@ REVOKE ALL ON FUNCTION workspace.sync_position_role() FROM PUBLIC;
 CREATE TRIGGER sync_position_role AFTER INSERT OR UPDATE OF position, active, member_status ON workspace.memberships
     FOR EACH ROW EXECUTE FUNCTION workspace.sync_position_role();
 
--- Somebody who left holds no position.
+-- Somebody suspended, expired or gone holds no position: reinstatement never
+-- brings back old privileges (00112), so the chair assigns it again.
 -- +goose StatementBegin
 CREATE FUNCTION workspace.leaving_ends_position() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
 BEGIN
-    IF NEW.member_status IN ('left','alumni') THEN NEW.position := 'member'; END IF;
+    IF NEW.member_status IN ('suspended','expired','left','alumni') THEN NEW.position := 'member'; END IF;
     RETURN NEW;
 END
 $fn$;
@@ -163,8 +164,12 @@ END
 $fn$;
 -- +goose StatementEnd
 REVOKE ALL ON FUNCTION registry.branch_gets_position_roles() FROM PUBLIC;
-CREATE TRIGGER tenant_access_role_seed_positions AFTER INSERT OR UPDATE OF membership_branch ON registry.tenants
-    FOR EACH ROW EXECUTE FUNCTION registry.branch_gets_position_roles();
+CREATE TRIGGER tenant_access_role_seed_positions AFTER INSERT ON registry.tenants
+    FOR EACH ROW WHEN (NEW.membership_branch) EXECUTE FUNCTION registry.branch_gets_position_roles();
+-- Only when the flag turns on: re-running the provisioner must not take back
+-- what an administrator has since given the manager role.
+CREATE TRIGGER tenant_access_role_seed_positions_on_change AFTER UPDATE OF membership_branch ON registry.tenants
+    FOR EACH ROW WHEN (NEW.membership_branch AND NOT OLD.membership_branch) EXECUTE FUNCTION registry.branch_gets_position_roles();
 
 -- Is the caller this branch's chair?
 -- +goose StatementBegin
@@ -189,6 +194,10 @@ BEGIN
     IF p_seats IS NULL OR p_seats NOT BETWEEN 1 AND 15 THEN
         RAISE EXCEPTION 'auditor_seats_invalid' USING ERRCODE='22023';
     END IF;
+    -- The same row set_member_position locks, so a seat count and an
+    -- appointment cannot pass each other.
+    PERFORM id FROM registry.tenants WHERE id=p_tenant AND membership_branch FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'membership_branch_unavailable' USING ERRCODE='55000'; END IF;
     IF p_seats < (SELECT count(*) FROM workspace.memberships WHERE tenant_id=p_tenant AND position='auditor') THEN
         RAISE EXCEPTION 'auditor_seats_below_current' USING ERRCODE='55000';
     END IF;
@@ -336,6 +345,7 @@ BEGIN
 END
 $restore$;
 -- +goose StatementEnd
+DROP TRIGGER IF EXISTS tenant_access_role_seed_positions_on_change ON registry.tenants;
 DROP TRIGGER IF EXISTS tenant_access_role_seed_positions ON registry.tenants;
 DROP FUNCTION IF EXISTS registry.branch_gets_position_roles();
 DROP TRIGGER IF EXISTS grant_new_permission_to_positions ON registry.permissions;

@@ -21,6 +21,7 @@ registerDictionary("membership", source({
   "membership.position.error.seats_full": { mn: "Хяналтын хорооны суудал дүүрсэн байна.", en: "The control committee's seats are full." },
   "membership.position.error.seats_below": { mn: "Одоогийн хорооны гишүүдээс цөөн суудал тохируулах боломжгүй.", en: "Seats cannot be fewer than the current committee members." },
   "membership.position.error.seats_invalid": { mn: "Суудлын тоо 1-ээс 15-ын хооронд байна.", en: "Seats must be between 1 and 15." },
+  "dues.settings_admin_only": { mn: "Хураамжийн дүн, банкны дансыг зөвхөн админ өөрчилнө.", en: "Only an administrator changes the dues amount and bank account." },
   "sanctions.title": { mn: "Хяналтын хороо", en: "Control committee" },
   "sanctions.hint": { mn: "Салбарын аль ч гишүүнд шалтгаантай сануулга өгч, шаардлагатай бол оноо хасна. Шийдвэр түүхэнд үлдэж, тухайн хүнд мэдэгдэл очно. Өөртөө шийдвэр гаргахгүй.", en: "Warn any member of the branch with a reason and, if needed, deduct points. Decisions are kept and the member is notified. Nobody decides about themselves." },
   "sanctions.new": { mn: "Шинэ шийдвэр", en: "New decision" },
