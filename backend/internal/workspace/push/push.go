@@ -6,7 +6,8 @@
  * Push — a member's notifications (registry.member_notifications) delivered to
  * their phone through APNs.
  *
- * Every few seconds registry.claim_pushes (migration 00120) hands over the
+ * Woken by every new notification (LISTEN, migration 00121) and every thirty
+ * seconds besides, registry.claim_pushes (migration 00120) hands over the
  * notifications nobody has sent yet, each with the person's registered device
  * tokens, and marks them sent. A notification is attempted once: one that
  * fails is still in the person's list in the app, which is where it always
@@ -57,8 +58,9 @@ import (
 const (
 	productionHost = "https://api.push.apple.com"
 	sandboxHost    = "https://api.sandbox.push.apple.com"
-	interval       = 5 * time.Second
-	batch          = 100
+	// fallbackInterval is how often delivery runs without being woken.
+	fallbackInterval = 30 * time.Second
+	batch            = 100
 )
 
 // Config is the APNs credential. Zero means push is off.
@@ -122,6 +124,8 @@ type Sender struct {
 	mu       sync.Mutex
 	token    string
 	issuedAt time.Time
+
+	running sync.Mutex
 }
 
 func New(db *pgxpool.Pool, cfg Config) *Sender {
@@ -129,19 +133,27 @@ func New(db *pgxpool.Pool, cfg Config) *Sender {
 		hosts: map[bool]string{false: productionHost, true: sandboxHost}}
 }
 
-// Start runs the delivery loop until ctx ends.
+// Start runs delivery until ctx ends: at once when a notification is written
+// (LISTEN member_notifications, migration 00121), and every thirty seconds too,
+// in case the listening connection is down.
 func (s *Sender) Start(ctx context.Context) {
-	async.Go("push-delivery", func() {
-		ticker := time.NewTicker(interval)
+	async.Go("push-delivery-listen", func() {
+		for ctx.Err() == nil {
+			if err := s.listen(ctx); err != nil && ctx.Err() == nil {
+				slog.Warn("push: listener stopped; retrying", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+		}
+	})
+	async.Go("push-delivery-poll", func() {
+		ticker := time.NewTicker(fallbackInterval)
 		defer ticker.Stop()
 		for {
-			runCtx, cancel := context.WithTimeout(ctx, time.Minute)
-			if sent, err := s.Deliver(runCtx); err != nil {
-				slog.Warn("push: delivery round failed", "error", err)
-			} else if sent > 0 {
-				slog.Info("push: delivered", "count", sent)
-			}
-			cancel()
+			s.round(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -149,6 +161,40 @@ func (s *Sender) Start(ctx context.Context) {
 			}
 		}
 	})
+}
+
+// listen holds one connection on LISTEN and delivers whenever it is woken.
+func (s *Sender) listen(ctx context.Context) error {
+	conn, err := s.db.Acquire(nexus.WithoutWorkspace(ctx))
+	if err != nil {
+		return err
+	}
+	// The connection is not handed back carrying a LISTEN: closed instead.
+	defer func() { _ = conn.Hijack().Close(context.Background()) }()
+	if _, err := conn.Exec(ctx, "LISTEN member_notifications"); err != nil {
+		return err
+	}
+	for {
+		if _, err := conn.Conn().WaitForNotification(ctx); err != nil {
+			return err
+		}
+		s.round(ctx)
+	}
+}
+
+// round delivers one batch; the two loops never run it at the same time.
+func (s *Sender) round(ctx context.Context) {
+	s.running.Lock()
+	defer s.running.Unlock()
+	runCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if sent, err := s.Deliver(runCtx); err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("push: delivery round failed", "error", err)
+		}
+	} else if sent > 0 {
+		slog.Info("push: delivered", "count", sent)
+	}
 }
 
 type due struct {
