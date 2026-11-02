@@ -71,7 +71,7 @@ func TestTheProviderTokenVerifies(t *testing.T) {
 }
 
 func TestThePayloadCarriesTheScreen(t *testing.T) {
-	raw, err := Payload("Хяналтын хороо: 5 оноо хасагдлаа", "Хурал тасалдуулсан", "/member/participation", 3)
+	raw, err := Payload("n-1", "Хяналтын хороо: 5 оноо хасагдлаа", "Хурал тасалдуулсан", "/member/participation", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,11 +81,12 @@ func TestThePayloadCarriesTheScreen(t *testing.T) {
 			Badge int                          `json:"badge"`
 		} `json:"aps"`
 		Path string `json:"path"`
+		ID   string `json:"notification_id"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		t.Fatal(err)
 	}
-	if p.Aps.Alert.Title == "" || p.Aps.Badge != 3 || p.Path != "/member/participation" {
+	if p.Aps.Alert.Title == "" || p.Aps.Badge != 3 || p.Path != "/member/participation" || p.ID != "n-1" {
 		t.Fatalf("payload %s", raw)
 	}
 }
