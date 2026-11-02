@@ -25,7 +25,7 @@ export default function ParticipationPage() {
     setLoadFailed("");
     Promise.all([eventsApi.mine(), eventsApi.points()]).then(([activity, score]) => { setParticipation(activity); setPoints(score); }).catch(err => setLoadFailed(errorMessage(err)));
     // The committee's decisions about this member; a branch without them says nothing.
-    sanctionsApi.mine().then(r => setSanctions(r.sanctions)).catch(() => setSanctions([]));
+    sanctionsApi.mine().then(r => setSanctions(Array.isArray(r?.sanctions) ? r.sanctions : [])).catch(() => setSanctions([]));
   }, [errorMessage]);
   useEffect(() => { load(); }, [load]);
   async function more(kind: "activity" | "points") {

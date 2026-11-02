@@ -180,6 +180,7 @@ enum Labels {
         case "attendance": return "Ирц"
         case "task": return "Ажил үүрэг"
         case "vote": return "Санал"
+        case "sanction": return "Хяналтын хорооны шийдвэр"
         default: return reason
         }
     }

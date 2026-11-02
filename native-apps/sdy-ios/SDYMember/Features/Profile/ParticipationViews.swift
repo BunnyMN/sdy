@@ -4,6 +4,7 @@ struct ParticipationView: View {
     @EnvironmentObject var app: AppModel
     @State private var mine: MyEventsPage?
     @State private var points: PointsPage?
+    @State private var sanctions: [Sanction] = []
     @State private var error: APIError?
     @State private var busy = false
 
@@ -34,6 +35,11 @@ struct ParticipationView: View {
                         }
                         if mine.hasMore {
                             Button("Цааш үзэх") { Task { await moreMine() } }.disabled(busy).frame(minHeight: Theme.minTap)
+                        }
+                    }
+                    if !sanctions.isEmpty {
+                        Section("Хяналтын хорооны шийдвэр") {
+                            ForEach(sanctions) { SanctionRow(sanction: $0) }
                         }
                     }
                     Section("Онооны түүх") {
@@ -74,6 +80,8 @@ struct ParticipationView: View {
             (mine, points) = try await (m, p)
             error = nil
         } catch { self.error = APIError.wrap(error) }
+        // Decisions about this member; a branch without the app says nothing.
+        sanctions = (try? await app.api.mySanctions().sanctions) ?? []
     }
 
     private func moreMine() async {
