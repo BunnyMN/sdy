@@ -49,6 +49,8 @@ struct ProfileView: View {
                     RowDivider()
                     row(.appearance, "Өнгө төрх", "paintbrush.fill")
                     RowDivider()
+                    row(.blocked, "Блоклосон гишүүд", "hand.raised.slash.fill")
+                    RowDivider()
                     row(.about, "Апп-ын тухай", "info")
                 }
                 .rise(2)

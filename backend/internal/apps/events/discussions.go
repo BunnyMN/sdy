@@ -43,6 +43,10 @@ type Motion struct {
 	CreatedAt    string  `json:"created_at"`
 	// MyVote is the caller's own vote: its choice and whether it is signed.
 	MyVote *MyVote `json:"my_vote"`
+	// ReportedByMe: the caller has reported this issue.
+	ReportedByMe bool `json:"reported_by_me"`
+	// ReportCount is the open reports, told to managers only.
+	ReportCount int `json:"report_count"`
 }
 
 type MyVote struct {
@@ -60,7 +64,9 @@ const motionColumns = `
 	       COALESCE(mo.abstain_count, (SELECT count(*) FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.status = 'signed' AND v.choice = 'abstain'))::int,
 	       mo.note, mo.created_at,
 	       COALESCE((SELECT v.choice FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), ''),
-	       COALESCE((SELECT v.status FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), '')
+	       COALESCE((SELECT v.status FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), ''),
+	       EXISTS (SELECT 1 FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.reporter_id = $2::uuid),
+	       (SELECT count(*) FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.resolved_at IS NULL)::int
 	  FROM events_motions mo LEFT JOIN registry.users u ON u.id = mo.proposer_id
 	 WHERE mo.tenant_id = $1::uuid`
 
@@ -71,7 +77,7 @@ func scanMotion(row pgx.Row) (Motion, error) {
 	var choice, voteStatus string
 	if err := row.Scan(&mo.ID, &mo.EventID, &mo.Title, &mo.Body, &mo.ProposerID, &mo.ProposerName,
 		&mo.Status, &mo.ContentHash, &opened, &closed, &mo.Result, &mo.Yes, &mo.No, &mo.Abstain,
-		&mo.Note, &created, &choice, &voteStatus); err != nil {
+		&mo.Note, &created, &choice, &voteStatus, &mo.ReportedByMe, &mo.ReportCount); err != nil {
 		return mo, err
 	}
 	mo.OpenedAt, mo.ClosedAt, mo.CreatedAt = stampPtr(opened), stampPtr(closed), stamp(created)
@@ -130,7 +136,10 @@ func (m *Module) loadMotion(ctx context.Context, q interface {
 	if lock {
 		sql += ` FOR UPDATE OF mo`
 	}
-	return scanMotion(q.QueryRow(ctx, sql, claims.WorkspaceID, claims.UserID, eventID, motionID))
+	mo, err := scanMotion(q.QueryRow(ctx, sql, claims.WorkspaceID, claims.UserID, eventID, motionID))
+	// The report count is for the discussion list, where managers are told it.
+	mo.ReportCount = 0
+	return mo, err
 }
 
 func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +153,16 @@ func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
 		eventError(w, err)
 		return
 	}
-	rows, err := m.db.Query(r.Context(), motionColumns+` AND mo.event_id = $3::uuid ORDER BY mo.created_at, mo.id`,
-		claims.WorkspaceID, claims.UserID, eventID)
+	manager := m.canManage(r.Context(), claims)
+	// An issue not yet under vote is left out for a member who blocked its
+	// author, and — for everyone but managers — once enough members reported
+	// it. The author still sees their own.
+	rows, err := m.db.Query(r.Context(), motionColumns+` AND mo.event_id = $3::uuid
+		AND NOT (mo.status = 'proposed' AND mo.proposer_id <> $2::uuid AND (
+		     EXISTS (SELECT 1 FROM events_member_blocks b WHERE b.tenant_id = mo.tenant_id AND b.user_id = $2::uuid AND b.blocked_id = mo.proposer_id)
+		  OR (NOT $4 AND (SELECT count(*) FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.resolved_at IS NULL) >= $5)))
+		ORDER BY mo.created_at, mo.id`,
+		claims.WorkspaceID, claims.UserID, eventID, manager, hideAfterReports)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not list the motions")
 		return
@@ -157,6 +174,9 @@ func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			nexus.Error(w, http.StatusInternalServerError, "could not read a motion")
 			return
+		}
+		if !manager {
+			mo.ReportCount = 0
 		}
 		list = append(list, mo)
 	}
@@ -172,7 +192,7 @@ func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
 		"can_vote":       event.MyStatus == "attended",
 		"signing_ready":  signErr == nil && signer.Enabled(),
 		"vote_points":    event.VotePoints,
-		"can_manage":     m.canManage(r.Context(), claims),
+		"can_manage":     manager,
 		"event_status":   event.Status,
 		"event_attended": event.MyStatus == "attended",
 		"me":             claims.UserID,

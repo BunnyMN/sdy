@@ -158,6 +158,30 @@ final class DiscussionModel: ObservableObject {
         Task { await load() }
     }
 
+    /// Reports another member's issue to the event's organiser.
+    func report(_ motion: Motion, reason: String) async {
+        actionError = nil
+        do {
+            try await api.reportMotion(eventID, motion: motion.id, reason: reason)
+            Haptics.success()
+            await load()
+        } catch {
+            actionError = APIError.wrap(error).message
+        }
+    }
+
+    /// Stops showing what this member raises; undone from Профайл.
+    func block(_ motion: Motion) async {
+        actionError = nil
+        do {
+            try await api.block(motion.proposerId)
+            Haptics.success()
+            await load()
+        } catch {
+            actionError = APIError.wrap(error).message
+        }
+    }
+
     /// The signing sheet went away, however it was closed: nothing may keep
     /// polling, ticking or opening the eID app behind it.
     func signingSheetDismissed() {

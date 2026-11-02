@@ -245,6 +245,7 @@ TRACE /api/v1/core/organisation
 TRACE /cp/api
 TRACE /cp/api/*
 TRACE /metrics
+[app] DELETE /api/v1/events/blocks/{userID}
 [app] DELETE /api/v1/events/{id}/register
 [app] DELETE /api/v1/events/{id}/tasks/{taskID}
 [app] DELETE /api/v1/events/{id}/tasks/{taskID}/assignments/{userID}
@@ -252,6 +253,7 @@ TRACE /metrics
 [app] GET /api/v1/dues/mine
 [app] GET /api/v1/dues/settings
 [app] GET /api/v1/events/
+[app] GET /api/v1/events/blocks
 [app] GET /api/v1/events/leaderboard
 [app] GET /api/v1/events/members
 [app] GET /api/v1/events/mine
@@ -269,12 +271,14 @@ TRACE /metrics
 [app] POST /api/v1/dues/payments
 [app] POST /api/v1/dues/payments/{id}/review
 [app] POST /api/v1/events/
+[app] POST /api/v1/events/blocks/{userID}
 [app] POST /api/v1/events/{id}/attendance
 [app] POST /api/v1/events/{id}/check-in
 [app] POST /api/v1/events/{id}/check-in-code
 [app] POST /api/v1/events/{id}/motions
 [app] POST /api/v1/events/{id}/motions/{motionID}/close
 [app] POST /api/v1/events/{id}/motions/{motionID}/open
+[app] POST /api/v1/events/{id}/motions/{motionID}/report
 [app] POST /api/v1/events/{id}/motions/{motionID}/vote
 [app] POST /api/v1/events/{id}/motions/{motionID}/vote/poll
 [app] POST /api/v1/events/{id}/motions/{motionID}/withdraw

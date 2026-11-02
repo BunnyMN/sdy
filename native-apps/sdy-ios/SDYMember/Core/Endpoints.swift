@@ -79,6 +79,12 @@ extension APIClient {
     func propose(_ eventID: String, title: String, body: String) async throws {
         try await perform(.post, "/events/\(enc(eventID))/motions", body: ["title": title, "body": body])
     }
+    func reportMotion(_ eventID: String, motion: String, reason: String) async throws {
+        try await perform(.post, "/events/\(enc(eventID))/motions/\(enc(motion))/report", body: ["reason": reason])
+    }
+    func blockedMembers() async throws -> BlockedList { try await get("/events/blocks", cached: false) }
+    func block(_ userID: String) async throws { try await perform(.post, "/events/blocks/\(enc(userID))") }
+    func unblock(_ userID: String) async throws { try await perform(.delete, "/events/blocks/\(enc(userID))") }
     func vote(_ eventID: String, motion: String, choice: String) async throws -> VoteStart {
         let back = "/module/events/\(eventID)"
         return try await send(.post, "/events/\(enc(eventID))/motions/\(enc(motion))/vote",

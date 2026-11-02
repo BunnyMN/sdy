@@ -357,11 +357,26 @@ struct Motion: Decodable, Hashable, Identifiable {
     @DefaultZero var abstain: Double
     @DefaultText var createdAt: String
     var myVote: MyVote?
+    @DefaultFalse var reportedByMe: Bool
+    /// Open reports; the server sends it to managers only.
+    @DefaultZero var reportCount: Double
 
     /// proposed | voting | approved | rejected | withdrawn
     var displayStatus: String { status == "decided" ? result : status }
     var counted: Int { Int(yes + no + abstain) }
     var signedMine: Bool { myVote?.status == "signed" }
+}
+
+/// A member the signed-in person has blocked in the discussion.
+struct BlockedMember: Decodable, Hashable, Identifiable {
+    var id: String { userId }
+    let userId: String
+    @DefaultText var name: String
+    @DefaultText var blockedAt: String
+}
+
+struct BlockedList: Decodable {
+    @DefaultEmpty var blocked: [BlockedMember]
 }
 
 struct MotionList: Decodable {

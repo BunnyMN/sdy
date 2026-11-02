@@ -274,5 +274,5 @@ final class AppModel: ObservableObject {
 
 /// Screens pushed from Нүүр / Профайл.
 enum HomeRoute: String, Hashable {
-    case notifications, transfers, record, participation, leaderboard, history, about, deleteAccount, joinRequest, appearance
+    case notifications, transfers, record, participation, leaderboard, history, about, deleteAccount, joinRequest, appearance, blocked
 }
