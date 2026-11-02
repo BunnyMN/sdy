@@ -116,6 +116,10 @@ export const auth = {
     mn: "Нэвтрэх хүсэлт олдсонгүй. Дахин эхлүүлнэ үү.",
     en: "The sign-in request could not be found. Please start again.",
   },
+  "auth.callback.other_device": {
+    mn: "eID баталгаажлаа. Нэвтрэлтээ эхлүүлсэн төхөөрөмж (компьютер, хөтөч) дээрээ үргэлжлүүлнэ үү.",
+    en: "eID confirmed. Continue on the device (computer, browser) where you started signing in.",
+  },
   "auth.callback.sign_in_again": { mn: "Дахин нэвтрэх", en: "Sign in again" },
 
   "auth.action.retry": { mn: "Дахин оролдох", en: "Try again" },

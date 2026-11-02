@@ -17,8 +17,11 @@ extension APIClient {
         try await send(.post, "/auth/eid/start", body: ["callbackUrl": AppConfig.eidCallbackURL()], signsOutOn401: false)
     }
     /// The server holds this open for up to 25 s.
-    func eidPoll(sessionID: String) async throws -> EIDPoll {
-        try await send(.post, "/auth/eid/poll", body: ["session_id": sessionID], timeout: 35, signsOutOn401: false)
+    /// `binding` proves this app started the session (the server's answer to start).
+    func eidPoll(sessionID: String, binding: String? = nil) async throws -> EIDPoll {
+        var body = ["session_id": sessionID]
+        if let binding, !binding.isEmpty { body["binding"] = binding }
+        return try await send(.post, "/auth/eid/poll", body: body, timeout: 35, signsOutOn401: false)
     }
     func logout() async { _ = try? await raw(.post, "/auth/logout", signsOutOn401: false) }
     func tenants() async throws -> TenantsResponse { try await get("/auth/tenants") }

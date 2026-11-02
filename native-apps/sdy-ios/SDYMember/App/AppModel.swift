@@ -117,6 +117,14 @@ final class AppModel: ObservableObject {
         eidReturnSession = nil
         photo = nil
         UNUserNotificationCenter.current().setBadgeCount(0)
+        // Also when the session ended without us (401): the server may still
+        // hold this phone's token for the person who left. Giving the token
+        // up makes APNs refuse it, and the server forgets it; the next
+        // sign-in registers a fresh one.
+        if pushToken != nil {
+            UIApplication.shared.unregisterForRemoteNotifications()
+            pushToken = nil
+        }
         phase = .signedOut
     }
 

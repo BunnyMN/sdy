@@ -67,6 +67,8 @@ func run(ctx context.Context, path string, apply bool) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	// Branches outside Darkhan-Uul that provisioning keeps as they are.
+	keptBranches := []string{"sdy-app-review"}
 	expected := map[string]bool{
 		"sdy-darkhan-uul": true, "sdy-darkhan-uul-darkhan": true,
 		"sdy-darkhan-uul-orkhon": true, "sdy-darkhan-uul-shariin-gol": true,
@@ -83,7 +85,10 @@ func run(ctx context.Context, path string, apply bool) error {
 		ids = append(ids, b.id)
 	}
 	if apply {
-		if _, err := db.Exec(ctx, `UPDATE registry.tenants SET membership_branch=(id=ANY($1::uuid[])) WHERE kind='organisation'`, ids); err != nil {
+		// The App Store review branch is a branch too, though not one of
+		// Darkhan-Uul's: re-provisioning used to clear its flag and leave the
+		// review account without a branch.
+		if _, err := db.Exec(ctx, `UPDATE registry.tenants SET membership_branch=(id=ANY($1::uuid[]) OR slug=ANY($2::text[])) WHERE kind='organisation'`, ids, keptBranches); err != nil {
 			return err
 		}
 		if err := installer.SyncCatalog(ctx); err != nil {

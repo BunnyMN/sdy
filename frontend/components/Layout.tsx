@@ -239,7 +239,10 @@ export default function Layout({children}:{children:React.ReactNode}){
   // хүн гарсан гэж үзэхгүй. Тиймээс сервер end_session_url буцаавал хөтчийг
   // тийш нь илгээнэ — провайдер өөрийнхөө session-ийг хааж, бүртгэлтэй
   // post-logout хаягаар нь энэ суулгац руу буцаана.
-  async function logout(){let endSession="";try{const res=await api.logout();endSession=res.end_session_url||""}catch{}resetAccess();forgetTenants();if(endSession)window.location.assign(endSession);else router.replace("/")}
+  // Гарч чадаагүй бол (сүлжээ, сервер) гарсан мэт харагдуулахгүй: session cookie
+  // хэвээр тул дундын төхөөрөмж дээр дараагийн хүн нэвтэрсэн хэвээр олно. 401 бол
+  // аль хэдийн гарсан гэсэн үг.
+  async function logout(){let endSession="";try{const res=await api.logout();endSession=res.end_session_url||""}catch(err){if(!(err instanceof ApiError&&err.status===401)){window.alert(t("web.logout_failed"));return}}resetAccess();forgetTenants();if(endSession)window.location.assign(endSession);else router.replace("/")}
   const memberArea=pathname.startsWith("/member")||pathname.startsWith("/module/events")||pathname==="/profile";
   const brandTitle=selected?.name||(memberArea?t("membership.home"):t("web.label.platform"));
   // A home is a workspace and gets this shell, minus the screens that are about

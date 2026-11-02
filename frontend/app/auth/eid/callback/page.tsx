@@ -6,6 +6,7 @@ import { Fingerprint } from "lucide-react";
 import { EID_NEXT_KEY } from "@/lib/signIn";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { safeReturnPath } from "@/lib/safeReturnPath.mjs";
+import { ApiError } from "@/lib/errorMessage";
 
 /**
  * Where the sign-in continues once the eID Mongolia app hands the citizen back.
@@ -55,7 +56,13 @@ export default function EIDCallback() {
         // sends them looking for a problem that is not there.
         else if (res.state === "REFUSED") { stopped = true; setError("auth.message.refused"); }
         else if (res.state === "EXPIRED") { stopped = true; setError("auth.message.expired"); }
-      } catch { /* A temporary failure is retried until the request expires. */ }
+      } catch (err) {
+        // Opened on a device other than the one that started the sign-in (a
+        // phone that scanned the computer's code, or a forwarded link): the
+        // session is not this browser's to finish. Retrying would not change that.
+        if (err instanceof ApiError && err.status === 403) { stopped = true; setError("auth.callback.other_device"); }
+        /* Any other failure is temporary and retried until the request expires. */
+      }
       finally { running = false; }
     };
     const timer = setInterval(() => void tick(), 2000);

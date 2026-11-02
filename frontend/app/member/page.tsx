@@ -111,6 +111,13 @@ export default function MemberHome() {
     return run;
   }, [loadTodo]);
 
+  // After a change the page must show what the server holds now: a load
+  // already running (a focus or timer refresh) began before the change.
+  const reload = useCallback(async () => {
+    if (inFlight.current) await inFlight.current;
+    await load();
+  }, [load]);
+
   useEffect(() => {
     void load();
     const refresh = () => {
@@ -129,7 +136,7 @@ export default function MemberHome() {
     try {
       await api.askToJoinBranch(slug, message.trim());
       setNotice(t("membership.sent")); setMessage(""); setSlug("");
-      await load();
+      await reload();
     } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
@@ -180,7 +187,7 @@ export default function MemberHome() {
       </div></>}
     </section>}
     <div className="sdy-action-list"><Link href="/member/record"><Users aria-hidden="true" /><span>{t("membership.record.title")}</span><ChevronRight aria-hidden="true" /></Link><Link href="/member/notifications"><Bell aria-hidden="true" /><span>{t("membership.record.notifications")}</span><ChevronRight aria-hidden="true" /></Link>{canAdmit && <Link href="/member/overview"><ChartNoAxesCombined aria-hidden="true" /><span>{t("membership.record.overview")}</span><ChevronRight aria-hidden="true" /></Link>}</div>
-    <MembershipTransfers memberships={memberships} branches={branches} requests={data.transfers} reload={load} />
+    <MembershipTransfers memberships={memberships} branches={branches} requests={data.transfers} reload={reload} />
     {items.length > 0 && <section className="space-y-3" aria-label={t("membership.requests")}>{items.map(item => <div key={item.id} className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-medium">{item.provider}</h2><p className="mt-1 text-sm text-muted">{t(`membership.${item.status.toLowerCase()}`)}</p>
       {item.answer && <p className="mt-2 text-sm">{item.answer}</p>}
