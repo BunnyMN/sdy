@@ -9,6 +9,7 @@ package person
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -127,8 +128,11 @@ func (s *Store) handleAsk(w http.ResponseWriter, r *http.Request, branchOnly boo
 		httpx.Error(w, http.StatusNotFound, "no organisation answers to that name")
 	default:
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Message == "branch_transfer_required" {
-			httpx.Error(w, http.StatusConflict, pgErr.Message)
+		if !errors.As(err, &pgErr) {
+			// Not the function refusing — a dropped connection, a cancelled
+			// request. Nothing the person can act on, and not theirs to read.
+			slog.Error("could not ask to join", "user_id", claims.UserID, "error", err)
+			httpx.Error(w, http.StatusInternalServerError, "could not send the request")
 			return
 		}
 		// Everything the function refuses is something the person can act on —
@@ -136,7 +140,7 @@ func (s *Store) handleAsk(w http.ResponseWriter, r *http.Request, branchOnly boo
 		// back rather than a number. They are database messages, which is not
 		// ideal prose; the screen has the room to say it better and the
 		// endpoint should not decide that for it.
-		httpx.Error(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, pgErr.Message)
 	}
 }
 

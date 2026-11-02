@@ -8,11 +8,19 @@ import { Banner, fieldClass, LoadingBlock, Modal } from "@/components/ui";
 import { useErrorMessage } from "@/lib/useErrorMessage";
 import { memberDate } from "@/lib/memberFormat";
 
+// Module-level: a fresh object each render would give useErrorMessage a new
+// callback each render, and the load effect that depends on it would loop.
+const ADMIN_CODES = {
+  branch_transfer_required: "membership.branch_transfer_required",
+  membership_self_decision_forbidden: "membership.self_decision_forbidden",
+  join_request_self_decision_forbidden: "membership.self_decision_forbidden",
+} as const;
+
 export default function MembersPage() {
   const { t } = useI18n();
   const { allowed, loading, isAdmin } = useAccess("membership.manage");
-  const statusError = useErrorMessage({ codes: { branch_transfer_required: "membership.branch_transfer_required" }, fallback: "membership.record.status_failed" });
-  const positionError = useErrorMessage({ fallback: "membership.position.failed" });
+  const statusError = useErrorMessage({ codes: ADMIN_CODES, fallback: "membership.record.status_failed" });
+  const positionError = useErrorMessage({ codes: ADMIN_CODES, fallback: "membership.position.failed" });
   const [data, setData] = useState<Awaited<ReturnType<typeof memberApi.members>> | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");

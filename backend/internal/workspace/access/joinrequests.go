@@ -51,6 +51,10 @@ var ErrNoSuchRequest = errors.New("no open request with that id")
 
 var ErrBranchTransferRequired = errors.New("branch_transfer_required")
 
+// ErrSelfDecision is an administrator answering their own request: a staff
+// member who asks to join cannot also be the one who lets them in.
+var ErrSelfDecision = errors.New("join_request_self_decision_forbidden")
+
 // PendingJoinRequests is the queue, oldest first.
 //
 // The active organisation is explicit even when a multi-workspace session
@@ -122,6 +126,9 @@ func (h *Handlers) Decide(ctx context.Context, tenantID, requestID, actorUserID 
 	}
 	if err != nil {
 		return fmt.Errorf("read the request: %w", err)
+	}
+	if userID == actorUserID {
+		return ErrSelfDecision
 	}
 
 	status := "DECLINED"

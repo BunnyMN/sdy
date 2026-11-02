@@ -45,8 +45,14 @@ const (
 	// MaxPhotoBytes is the largest upload read. A 512×512 JPEG is ~60 KB.
 	MaxPhotoBytes = 2 << 20
 	// MaxPhotoSide refuses images whose pixels alone would be a memory
-	// problem to decode, before decoding them.
-	MaxPhotoSide = 4096
+	// problem to decode, before decoding them. image/jpeg allocates the whole
+	// frame (and, for a progressive file, every coefficient — about 4 bytes
+	// per pixel per component) from the header alone, so a few hundred bytes
+	// claiming 4096×4096 cost ~240 MB. At 2048 the worst case is ~60 MB.
+	MaxPhotoSide = 2048
+	// photoDecoders is how many uploads are decoded at once, so a burst of
+	// them queues instead of adding up.
+	photoDecoders = 2
 	// MinPhotoSide is too small to be a face.
 	MinPhotoSide = 64
 	// StoredPhotoSide is the longest side kept.
@@ -54,6 +60,8 @@ const (
 )
 
 var errNotAPhoto = errors.New("not a usable JPEG photo")
+
+var decodeSlots = make(chan struct{}, photoDecoders)
 
 // normalisePhoto decodes a JPEG, scales it so neither side exceeds
 // StoredPhotoSide, and encodes it again without any metadata.
@@ -129,7 +137,13 @@ func (h *Handlers) HandlePutPhoto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusRequestEntityTooLarge, "Зураг хэт том байна")
 		return
 	}
+	select {
+	case decodeSlots <- struct{}{}:
+	case <-r.Context().Done():
+		return
+	}
 	photo, err := normalisePhoto(raw)
+	<-decodeSlots
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, "Зургийг уншиж чадсангүй. JPEG зураг сонгоно уу.")
 		return

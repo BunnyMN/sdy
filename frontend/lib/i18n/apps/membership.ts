@@ -102,6 +102,7 @@ registerDictionary("membership", source({
   "membership.transfer_review_hint": { mn: "Танай байгууллагад шилжин ирэх хүсэлтүүд. Батлахад өмнөх харьяалал дуусаж, танай байгууллагын энгийн гишүүн болно.", en: "Requests to transfer into your organisation. Approval ends the previous membership and grants ordinary membership here." },
   "membership.transfer_admin_required": { mn: "Зөвхөн очих байгууллагын админ шийдвэр гаргана.", en: "Only the destination administrator can decide." },
   "membership.branch_transfer_required": { mn: "Та өөр салбарт харьяалалтай байна. Шилжих хүсэлт илгээнэ үү.", en: "You already belong to another branch. Submit a transfer request." },
+  "membership.self_decision_forbidden": { mn: "Өөрийнхөө хүсэлт, гишүүнчлэлийн талаар өөр админ шийднэ.", en: "Another administrator has to decide about your own request or membership." },
   "membership.transfer_failed": { mn: "Үйлдлийг гүйцэтгэж чадсангүй. Шинэчлээд дахин оролдоно уу.", en: "Could not complete the action. Refresh and try again." },
   "membership.transfer_reason_required": { mn: "Шилжих шалтгаанаа 1–500 тэмдэгтэд бичнэ үү.", en: "Enter a reason of 1\u2013500 characters." },
   "membership.transfer_source_unavailable": { mn: "Одоогийн харьяалал олдсонгүй. Шинэчилнэ үү.", en: "Your current membership is unavailable. Refresh the page." },
