@@ -125,6 +125,13 @@ services:
       # existed: invalidation stays inside the process and rate limits are
       # counted per replica. That is only correct while there is one replica.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Push to the member app (internal/workspace/push). Empty leaves push off:
+      # notifications still appear in the app's list.
+      PUSH_TOKEN_ENCRYPTION_KEY: ${PUSH_TOKEN_ENCRYPTION_KEY:-}
+      APNS_KEY: ${APNS_KEY:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_TOPIC: ${APNS_TOPIC:-mn.esdy.member}
       PORT: 8080
       ENVIRONMENT: production
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://nexus.gerege.mn}

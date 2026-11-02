@@ -10,6 +10,14 @@ extension APIClient {
         value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? ""
     }
 
+    // MARK: Push
+    func registerPushToken(_ token: String, appID: String) async throws {
+        try await perform(.post, "/push-tokens", body: ["token": token, "provider": "APNS", "app_id": appID])
+    }
+    func unregisterPushToken(_ token: String) async throws {
+        try await perform(.delete, "/push-tokens", body: ["token": token])
+    }
+
     // MARK: Positions
     func managedMembers(query: String = "", offset: Int = 0) async throws -> ManagedMembers {
         try await get("/membership/members?q=\(q(query))&offset=\(offset)", cached: false)
