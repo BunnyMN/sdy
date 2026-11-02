@@ -49,6 +49,9 @@ func TestPushesAreClaimedOnceAndNeverLate(t *testing.T) {
 			}
 			titles = append(titles, title)
 		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
 		return titles
 	}
 	if got := claim(); len(got) != 1 || got[0] != "Шинэ" {

@@ -36,7 +36,8 @@ BEGIN
     )
     SELECT m.id, m.user_id, m.title::text, m.body::text, m.path::text,
            (SELECT count(*) FROM registry.member_notifications x WHERE x.user_id = m.user_id AND x.read_at IS NULL)::integer,
-           t.token_hash, t.token_ciphertext, t.app_id
+           -- RETURN QUERY wants the declared types exactly; 00103 made these varchar.
+           t.token_hash::text, t.token_ciphertext::text, t.app_id::text
       FROM marked m JOIN workspace.push_tokens t ON t.user_id = m.user_id AND t.provider = 'APNS';
 END
 $fn$;
