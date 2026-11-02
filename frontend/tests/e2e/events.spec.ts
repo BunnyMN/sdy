@@ -73,12 +73,15 @@ function origin(baseURL: string) {
   return `http://nexus.localhost:${new URL(baseURL).port}`;
 }
 
-test("үл мэдэгдэх Server Action нь 404 хариулна", async ({ request, baseURL }) => {
+test("үл мэдэгдэх Server Action-ийг 409-өөр татгалзана", async ({ request, baseURL }) => {
   const response = await request.post(`${origin(baseURL!)}/`, {
-    headers: { "Next-Action": "00".repeat(20), "Content-Type": "text/plain;charset=UTF-8" },
+    // Well-formed (Next 16.4: 42 hex characters) but unknown. Next 16.4 answers
+    // 409 "Server Action unavailable" (a deployment skew, not a missing page)
+    // and 400 for a malformed id; either way nothing runs.
+    headers: { "Next-Action": "00".repeat(21), "Content-Type": "text/plain;charset=UTF-8" },
     data: "[]",
   });
-  expect(response.status()).toBe(404);
+  expect(response.status()).toBe(409);
 });
 
 test("гишүүн бүртгүүлж цуцлах бөгөөд хаагдсан арга хэмжээг өөрчлөх үйлдэлгүй", async ({ page, baseURL }) => {
