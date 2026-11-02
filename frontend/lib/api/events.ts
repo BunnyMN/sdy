@@ -107,6 +107,20 @@ export const participationApi = {
     request<{ period: LeaderboardPeriod; standings: Standing[]; me: Standing | null; from?: string; to?: string }>(`/events/leaderboard?period=${period}`),
 };
 
+/** A control committee decision (events 1.5.0): a warning, perhaps with points deducted. */
+export type Sanction = {
+  id: string; user_id: string; user_name: string; actor_id: string; actor_name: string;
+  event_id: string | null; event_title: string; points: number; reason: string; created_at: string;
+};
+
+export const sanctionsApi = {
+  list: (offset = 0) => request<{ sanctions: Sanction[]; has_more: boolean; next_offset: number }>(`/events/sanctions?offset=${offset}`),
+  mine: () => request<{ sanctions: Sanction[] }>("/events/sanctions/mine"),
+  create: (input: { user_id: string; points: number; reason: string; event_id?: string | null }) =>
+    request<Sanction>("/events/sanctions", { method: "POST", body: JSON.stringify(input) }),
+  members: () => request<{ members: Array<{ user_id: string; name: string; email: string }> }>("/events/members"),
+};
+
 export const eventsApi = {
   issueCheckin: (id: string) => request<{ event_id: string; token: string; expires_at: string }>(`/events/${encodeURIComponent(id)}/check-in-code`, { method: "POST" }),
   checkIn: (id: string, token: string) => request<{ status: string; changed: boolean; points?: number }>(`/events/${encodeURIComponent(id)}/check-in`, { method: "POST", body: JSON.stringify({ token }) }),

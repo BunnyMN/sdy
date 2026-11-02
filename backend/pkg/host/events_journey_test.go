@@ -98,6 +98,9 @@ func runSDYMembershipJourney(t *testing.T, transfers bool) {
 			SELECT m.id,role.id FROM workspace.memberships m,role WHERE m.tenant_id=$1 AND m.user_id=$3
 			ON CONFLICT DO NOTHING`, org, entry.role, entry.user)
 	}
+	// In a union branch the organiser's access comes from a position (00119),
+	// not the manager role: this one is the branch's secretary.
+	exec(`UPDATE workspace.memberships SET position='secretary' WHERE tenant_id=$1 AND user_id=$2`, org, manager)
 	// The same administrator belongs to another, uninstalled organisation.
 	exec(`INSERT INTO workspace.memberships (tenant_id,user_id) VALUES ($1,$2)`, other, admin)
 	if transfers {

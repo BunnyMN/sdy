@@ -99,8 +99,9 @@ func TestEveryPlatformMigrationTableLandsOnItsDeclaredSchema(t *testing.T) {
 	// 00114 adds public_feedback.
 	// 00115 adds account_deletion_requests.
 	// 00116 adds user_photos.
-	if counts["workspace"] != 34 || counts["registry"] != 27 || counts["operator"] != 7 {
-		t.Errorf("schema counts: workspace=%d registry=%d operator=%d; want 34, 27 and 7",
+	// 00119 adds branch_policies (workspace) and position_permissions (registry).
+	if counts["workspace"] != 35 || counts["registry"] != 28 || counts["operator"] != 7 {
+		t.Errorf("schema counts: workspace=%d registry=%d operator=%d; want 35, 28 and 7",
 			counts["workspace"], counts["registry"], counts["operator"])
 	}
 }
