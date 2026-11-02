@@ -3,6 +3,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 import Foundation
+import os
 import Security
 
 /// The bearer session token, kept in the Keychain only.
@@ -51,7 +52,12 @@ final class TokenStore {
         var add = query
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(add as CFDictionary, nil)
+        let status = SecItemAdd(add as CFDictionary, nil)
+        // The token still works from memory this run; the next launch would
+        // find no token and sign the member out without saying why.
+        if status != errSecSuccess {
+            Logger(subsystem: "mn.esdy.member", category: "keychain").error("token not saved: \(status, privacy: .public)")
+        }
     }
 
     func clear() {

@@ -93,7 +93,7 @@ struct EditableAvatar: View {
         busy = true
         defer { busy = false; item = nil }
         do {
-            guard let data = try await picked.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+            guard let data = try await picked.loadTransferable(type: Data.self), let image = AppModel.downsampled(data) else {
                 failure = "Энэ зургийг уншиж чадсангүй. Өөр зураг сонгоно уу."
                 return
             }

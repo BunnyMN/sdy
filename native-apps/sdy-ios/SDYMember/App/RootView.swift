@@ -123,7 +123,8 @@ struct MainTabView: View {
                 .tag(AppModel.Tab.profile)
         }
         .id(app.epoch)
-        .sheet(item: $app.pendingCheckin) { code in
+        .sheet(item: Binding(get: { app.hasApprovedBranch ? app.pendingCheckin : nil },
+                             set: { app.pendingCheckin = $0 })) { code in
             CheckInConfirmView(code: code)
                 .environmentObject(app)
         }

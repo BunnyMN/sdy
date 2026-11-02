@@ -37,7 +37,7 @@ struct EventDetailView: View {
             } message: {
                 Text("Дахин бүртгүүлэхэд суудал үлдсэн байх шаардлагатай.")
             }
-            .sheet(item: $discussion.signing) { _ in
+            .sheet(item: $discussion.signing, onDismiss: { discussion.signingSheetDismissed() }) { _ in
                 VoteSigningSheet(model: discussion)
                     .interactiveDismissDisabled(discussion.signing?.phase == .waiting)
             }

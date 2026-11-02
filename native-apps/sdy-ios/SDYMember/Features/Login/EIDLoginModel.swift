@@ -198,7 +198,7 @@ final class EIDLoginModel: ObservableObject {
     private func tick() {
         let left = Int(ceil(deadline.timeIntervalSinceNow))
         secondsLeft = max(0, left)
-        if left <= 0, case .waiting = phase { stop(); phase = .expired }
+        if left <= 0, case .waiting = phase { stop(); PendingEIDSession.forget(); phase = .expired }
     }
 
     static func startMessage(_ error: APIError) -> String {

@@ -105,7 +105,7 @@ struct HeroScaffold<Header: View, Content: View>: View {
         .scrollIndicators(.hidden)
         .background(Theme.canvas.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
-        .refreshable { await onRefresh?() }
+        .modifier(RefreshIfAny(action: onRefresh))
         .onPreferenceChange(HeroOffsetKey.self) { offset = $0 }
         .overlay(alignment: .top) { pinnedRow }
         .overlay(alignment: .top) { compactBar }
@@ -238,5 +238,19 @@ extension View {
                 }
                 .ignoresSafeArea()
             }
+    }
+}
+
+/// Pull to refresh only where there is something to refresh — otherwise the
+/// spinner would turn over nothing.
+private struct RefreshIfAny: ViewModifier {
+    let action: (() async -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.refreshable { await action() }
+        } else {
+            content
+        }
     }
 }

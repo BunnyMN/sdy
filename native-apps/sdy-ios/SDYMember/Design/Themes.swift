@@ -146,6 +146,7 @@ struct ThemePickerView: View {
                             }
                             .onTapGesture { withAnimation(.snappy) { current = theme.id } }
                             .accessibilityLabel("\(theme.title). \(theme.subtitle)")
+                            .accessibilityAddTraits(.isButton)
                     }
                 }
                 .scrollTargetLayout()

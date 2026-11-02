@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 
 /// The signed-in state of the app and everything that moves between screens:
@@ -81,7 +82,10 @@ final class AppModel: ObservableObject {
         signOutReason = nil
         phase = .launching
         await bootstrap()
-        if pendingCheckin != nil, phase == .signedIn { tab = .checkin }
+        guard pendingCheckin != nil, phase == .signedIn else { return }
+        // Check-in is a branch member's tab; without a branch there is
+        // nothing to check in to.
+        if hasApprovedBranch { tab = .checkin } else { pendingCheckin = nil }
     }
 
     func signOut() async {
@@ -134,16 +138,23 @@ final class AppModel: ObservableObject {
 
     private static let photoCachePath = "profile_photo"
 
+    /// Per person, so the next account on this phone never sees the last one's photo.
+    private var photoScope: String? { me.map { "me-\($0.id)" } }
+
     /// Shows the last photo at once from the device, then asks the server.
     func loadPhoto() async {
-        if photo == nil, let cached = api.cache.load(scope: "me", path: Self.photoCachePath) { photo = UIImage(data: cached) }
+        guard let scope = photoScope else { return }
+        if photo == nil, let cached = api.cache.load(scope: scope, path: Self.photoCachePath) { photo = UIImage(data: cached) }
         do {
-            if let data = try await api.profilePhoto() {
+            let data = try await api.profilePhoto()
+            // Signed out (or someone else signed in) while this was in flight.
+            guard photoScope == scope else { return }
+            if let data {
                 photo = UIImage(data: data)
-                api.cache.save(data, scope: "me", path: Self.photoCachePath)
+                api.cache.save(data, scope: scope, path: Self.photoCachePath)
             } else {
                 photo = nil
-                api.cache.save(Data(), scope: "me", path: Self.photoCachePath)
+                api.cache.save(Data(), scope: scope, path: Self.photoCachePath)
             }
         } catch {
             // Offline or a server hiccup: keep what the device had.
@@ -155,14 +166,27 @@ final class AppModel: ObservableObject {
         guard let jpeg = Self.squareJPEG(image) else { throw APIError.decoding }
         try await api.uploadProfilePhoto(jpeg)
         photo = UIImage(data: jpeg)
-        api.cache.save(jpeg, scope: "me", path: Self.photoCachePath)
+        if let scope = photoScope { api.cache.save(jpeg, scope: scope, path: Self.photoCachePath) }
         Haptics.success()
     }
 
     func removePhoto() async throws {
         try await api.deleteProfilePhoto()
         photo = nil
-        api.cache.save(Data(), scope: "me", path: Self.photoCachePath)
+        if let scope = photoScope { api.cache.save(Data(), scope: scope, path: Self.photoCachePath) }
+    }
+
+    /// The picked file decoded at no more than `maxPixel` on its longest side,
+    /// orientation applied — a 48 MP photo decoded whole is ~190 MB.
+    static func downsampled(_ data: Data, maxPixel: Int = 1024) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: cg)
     }
 
     /// A new 512×512 JPEG drawn from the image's pixels — orientation applied,
@@ -197,6 +221,7 @@ final class AppModel: ObservableObject {
         guard let link = LinkParser.deepLink(from: url) else { return }
         switch link {
         case .checkIn(let code):
+            if phase == .signedIn, !hasApprovedBranch { return }
             pendingCheckin = code
             if phase == .signedIn { tab = .checkin }
         case .eidCallback(let session, let returnPath):

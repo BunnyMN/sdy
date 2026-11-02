@@ -235,6 +235,17 @@ final class EIDReturnSessionTests: XCTestCase {
 
 @MainActor
 final class ProfilePhotoTests: XCTestCase {
+    func testAPickedPhotoIsDecodedSmall() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let big = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000), format: format).image { ctx in
+            UIColor.blue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 4000, height: 3000))
+        }
+        let data = try XCTUnwrap(big.jpegData(compressionQuality: 0.8))
+        let small = try XCTUnwrap(AppModel.downsampled(data))
+        XCTAssertEqual(max(small.size.width, small.size.height) * small.scale, 1024)
+        XCTAssertNil(AppModel.downsampled(Data("not an image".utf8)))
+    }
+
     func testAnyPhotoBecomesA512Square() throws {
         let wide = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 800)).image { ctx in
             UIColor.red.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 800))
