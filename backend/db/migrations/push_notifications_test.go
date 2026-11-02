@@ -3,6 +3,7 @@ package migrations_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -70,5 +71,32 @@ func TestPushesAreClaimedOnceAndNeverLate(t *testing.T) {
 	var tokens int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM workspace.push_tokens WHERE user_id=$1`, user).Scan(&tokens); err != nil || tokens != 0 {
 		t.Fatalf("token not forgotten: %d (%v)", tokens, err)
+	}
+}
+
+// Writing a notification wakes the sender at once (00121).
+func TestANewNotificationWakesTheSender(t *testing.T) {
+	pool := migrationsPool(t)
+	ctx := t.Context()
+	user := uuid.NewString()
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM registry.users WHERE id=$1`, user) })
+	if _, err := pool.Exec(ctx, `INSERT INTO registry.users(id,email,name,password_hash) VALUES($1,$2,'Wake member','unused')`, user, user+"@wake.test"); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Hijack().Close(context.Background()) }()
+	if _, err := conn.Exec(ctx, "LISTEN member_notifications"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT registry.notify_member($1,'wake','event','Сэрээх','','/member')`, user); err != nil {
+		t.Fatal(err)
+	}
+	wait, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := conn.Conn().WaitForNotification(wait); err != nil {
+		t.Fatalf("no wake-up within five seconds: %v", err)
 	}
 }

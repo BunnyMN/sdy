@@ -219,7 +219,7 @@ API: `/api/v1/events`, `/api/v1/events/{id}`, `…/register`, `…/attendance`,
 
 Гишүүний мэдэгдэл бүр (`registry.member_notifications` — арга хэмжээ, ирц, оноо, албан тушаал,
 хяналтын хороо, гишүүнчлэл) утсанд APNs-ээр очно (`internal/workspace/push`, migration 00120).
-5 секунд тутам `registry.claim_pushes` илгээгдээгүйг нэг удаа авна; 15 минутаас хуучныг илгээхгүй,
+мэдэгдэл бичигдмэгц (`LISTEN member_notifications`, 00121) шууд, мөн 30 секунд тутам `registry.claim_pushes` илгээгдээгүйг нэг удаа авна; 15 минутаас хуучныг илгээхгүй,
 APNs «token байхгүй» гэвэл token устна. iOS: нэвтэрсний дараа зөвшөөрөл асууж token-ийг
 `POST /api/v1/push-tokens` руу (`app_id` нь `mn.esdy.member`, хөгжүүлэлтийн build-д `…:sandbox`),
 гарахад `DELETE /api/v1/push-tokens`. Мэдэгдэл дээр дарвал холбогдох дэлгэц нээгдэнэ.
