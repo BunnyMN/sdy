@@ -424,6 +424,9 @@ extension HomeRoute {
         case .joinRequest: JoinRequestView()
         case .appearance: ThemePickerView()
         case .blocked: BlockedMembersView()
+        case .manageMembers: MembersAdminView()
+        case .sanctions: SanctionsAdminView()
+        case .finance: FinanceAdminView()
         }
     }
 }

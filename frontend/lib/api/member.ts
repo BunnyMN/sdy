@@ -10,6 +10,8 @@ export interface MemberHistory { id: string; tenant_id: string; branch: string; 
 export interface MemberRecord { memberships: Affiliation[]; profile: MemberProfile; history: MemberHistory[]; has_more: boolean; next_offset: number }
 export interface ManagedMember { user_id: string; name: string; email: string; is_primary: boolean; status: MemberStatus; member_since: string | null; has_access: boolean; roles: string[]; position?: MemberPosition }
 export interface MemberNotification { id: string; kind: string; title: string; body: string; path: string; created_at: string; read_at: string | null }
+/** Who may assign positions in this branch, and the control committee's seats (00119). */
+export interface PositionPolicy { can_assign: boolean; can_assign_chair: boolean; can_set_seats: boolean; auditor_seats: number; auditors: number }
 export interface MemberSummary { active_members: number; suspended_members: number; expired_members: number; former_members: number; access_without_membership: number; pending_applications: number; pending_transfers: number | null }
 export interface PersonalDuesHistory { charges: { id: string; tenant_id: string; branch: string; period: string; amount: number; paid: number; balance: number; waived: boolean }[]; payments: { id: string; branch: string; amount: number; status: string; reference: string; review_note: string; created_at: string }[]; has_more: boolean; next_offset: number }
 export interface PersonalParticipationHistory { items: { id: string; branch: string; title: string; starts_at: string; status: string; points: number }[]; entries: { id: string; branch: string; title: string; delta: number; reason: string; created_at: string }[]; total_points: number; has_more: boolean; next_offset: number }
@@ -23,6 +25,8 @@ export const memberApi = {
   members: (query = "", offset = 0) => request<{ members: ManagedMember[]; has_more: boolean; next_offset: number }>(`/membership/members?q=${encodeURIComponent(query)}&offset=${offset}`),
   status: (userID: string, status: MemberStatus, reason: string) => request(`/membership/members/${encodeURIComponent(userID)}/status`, post({ status, reason })),
   position: (userID: string, position: MemberPosition) => request(`/membership/members/${encodeURIComponent(userID)}/position`, post({ position })),
+  positions: () => request<PositionPolicy>("/membership/positions"),
+  auditorSeats: (seats: number) => request("/membership/positions/auditor-seats", { method: "PUT", body: JSON.stringify({ seats }) }),
   summary: () => request<MemberSummary>("/membership/summary"),
   notifications: (offset = 0) => request<{ items: MemberNotification[]; unread: number; has_more: boolean; next_offset: number }>(`/me/notifications?offset=${offset}`),
   read: (id: string) => request(`/me/notifications/${encodeURIComponent(id)}/read`, post({})),

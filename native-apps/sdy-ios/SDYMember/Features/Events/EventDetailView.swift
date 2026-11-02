@@ -12,6 +12,8 @@ struct EventDetailView: View {
     @State private var participants: [Participant]?
     @State private var participantsError: String?
     @State private var showParticipants = false
+    @State private var editing = false
+    @State private var showingQR = false
 
     init(eventID: String) {
         self.eventID = eventID
@@ -43,6 +45,27 @@ struct EventDetailView: View {
             }
     }
 
+    /// Тэргүүн, Дэд тэргүүн, Нарийн бичиг: edit, confirm attendance (which
+    /// awards the points) and show the check-in code.
+    @ViewBuilder
+    private func organiserSection(_ event: EventRecord) -> some View {
+        Section {
+            Button { editing = true } label: { Label("Засах", systemImage: "pencil") }
+            NavigationLink { AttendanceManageView(event: event) } label: { Label("Ирц ба оноо батлах", systemImage: "checkmark.seal") }
+            if event.isOpen {
+                Button { showingQR = true } label: { Label("Ирцийн QR код", systemImage: "qrcode") }
+            }
+        } header: {
+            Text("Зохион байгуулагч")
+        }
+        .disabled(app.isOffline)
+        .sheet(isPresented: $editing) {
+            EventEditorView(event: event) { _ in Task { await loader.load() } }
+                .environmentObject(app)
+        }
+        .fullScreenCover(isPresented: $showingQR) { CheckinQRView(event: event).environmentObject(app) }
+    }
+
     @ViewBuilder
     private func content(_ event: EventRecord) -> some View {
         List {
@@ -71,6 +94,8 @@ struct EventDetailView: View {
                     LabeledContent { Text(Formatters.points(points)) } label: { Label("Ирцийн оноо", systemImage: "star") }
                 }
             }
+
+            if app.can(Permission.manageEvents) { organiserSection(event) }
 
             registrationSection(event)
 

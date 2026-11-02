@@ -42,8 +42,9 @@ var schema embed.FS
 const ID = "mn.sdy.events"
 
 const (
-	PermRead   = "events.read"
-	PermManage = "events.manage"
+	PermRead       = "events.read"
+	PermManage     = "events.manage"
+	PermDiscipline = "events.discipline"
 )
 
 // Module is the app.
@@ -66,7 +67,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.4.0" }
+func (m *Module) Version() string { return "1.5.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -77,10 +78,19 @@ func (m *Module) Permissions() []nexus.PermissionDefinition {
 			Description:  "See the organisation's events, register for one and see who is coming",
 			DefaultRoles: []string{nexus.DefaultRoleManager, nexus.DefaultRoleUser},
 		},
+		// In a union branch these two come from the member's position
+		// (platform migration 00119): Тэргүүн, Дэд тэргүүн and Нарийн бичиг run
+		// events and confirm their points; Хяналтын хороо deducts points and
+		// issues warnings. No default role is given either.
 		{
 			Code: PermManage, Name: "Run events",
-			Description:  "Create and edit events, add participants and mark attendance",
-			DefaultRoles: []string{nexus.DefaultRoleManager},
+			Description: "Create and edit events, add participants, mark attendance and confirm its points",
+			AdminOnly:   true,
+		},
+		{
+			Code: PermDiscipline, Name: "Deduct points and warn",
+			Description: "Deduct a member's points with a reason and record a warning",
+			AdminOnly:   true,
 		},
 	}
 }
@@ -106,7 +116,12 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.Use(gate)
 		er.With(read).Get("/", m.list)
 		er.With(manage).Post("/", m.create)
-		er.With(manage).Get("/members", m.members)
+		discipline := nexus.RequirePermission(m.permissions, PermDiscipline)
+		// The organiser picks a participant, the committee a member to decide about.
+		er.With(read).Get("/members", m.members)
+		er.With(discipline).Get("/sanctions", m.sanctions)
+		er.With(discipline, nexus.RateLimit(20, 5)).Post("/sanctions", m.sanction)
+		er.With(read).Get("/sanctions/mine", m.mySanctions)
 		er.With(read).Get("/mine", m.myParticipation)
 		er.With(read).Get("/points", m.myPoints)
 		er.With(manage).Get("/summary", m.summary)
@@ -797,6 +812,10 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 func (m *Module) members(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
+		return
+	}
+	if !m.has(r.Context(), claims, PermManage) && !m.has(r.Context(), claims, PermDiscipline) {
+		nexus.Error(w, http.StatusForbidden, "forbidden")
 		return
 	}
 	directory, err := nexus.People()

@@ -70,6 +70,10 @@ func (h *Handlers) HandleDecideTransfer(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+	// The branch being left loses the person's position roles; its cached
+	// grants are dropped below as well as this branch's.
+	var fromTenant string
+	_ = h.db.QueryRow(r.Context(), `SELECT from_tenant_id::text FROM workspace.membership_transfers WHERE id=$1`, id).Scan(&fromTenant)
 	_, err = h.db.Exec(r.Context(), `SELECT registry.decide_membership_transfer($1,$2)`, id, *body.Accept)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -84,5 +88,8 @@ func (h *Handlers) HandleDecideTransfer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.forgetGrants(claims.WorkspaceID)
+	if fromTenant != "" && fromTenant != claims.WorkspaceID {
+		h.forgetGrants(fromTenant)
+	}
 	httpx.JSON(w, 200, map[string]any{"ok": true})
 }

@@ -49,6 +49,13 @@ func (m *Module) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The account members pay into stays the administrator's to change: the
+	// treasurer's position (00119) is assigned by the chair, and a treasurer
+	// who could redirect the dues would make that one person's choice.
+	if !c.IsAdmin {
+		nexus.Error(w, http.StatusForbidden, "dues settings are changed by an administrator")
+		return
+	}
 	var s Settings
 	if !decode(w, r, &s) {
 		return

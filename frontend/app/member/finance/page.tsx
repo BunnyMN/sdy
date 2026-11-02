@@ -15,7 +15,7 @@ import { memberMoney as money } from "@/lib/memberFormat";
 
 export default function DuesFinance() {
   const { t } = useI18n();
-  const { allowed, loading } = useAccess("membership.finance");
+  const { allowed, loading, isAdmin } = useAccess("membership.finance");
   const errorMessage = useErrorMessage();
   const confirm = useConfirm();
   const [period, setPeriod] = useState(() => monthOf());
@@ -73,15 +73,17 @@ export default function DuesFinance() {
     {error && (!data || !settings) && <button type="button" onClick={() => { setError(""); setRound(n => n + 1); }} className={button}>{t("membership.retry")}</button>}
     {settings && <details className="rounded-lg border border-line bg-surface p-4 sm:p-6" open={!settings.enabled}>
       <summary className="cursor-pointer font-semibold">{t("dues.settings")}</summary>
-      <form onSubmit={save} className="mt-4 space-y-4">
+      {/* The account members pay into is the administrator's to change (00119). */}
+      {!isAdmin && <p className="mt-3 text-sm text-muted">{t("dues.settings_admin_only")}</p>}
+      <form onSubmit={save} className="mt-4 space-y-4"><fieldset disabled={!isAdmin} className="space-y-4">
         <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={settings.enabled} onChange={e => setSettings({ ...settings, enabled: e.target.checked })} />{t("dues.enabled")}</label>
         <div className="grid gap-4 sm:grid-cols-2">{([
           ["monthly_amount", "monthly", "number", 1_000_000_000], ["due_day", "due_day", "number", 28],
           ["bank_name", "bank", "text", 100], ["account_number", "account", "text", 64], ["account_holder", "holder", "text", 200],
         ] as const).map(([key, label, type, limit]) => <label key={key} className="block space-y-1"><span className="text-sm">{t(`dues.${label}`)}</span><input required={settings.enabled || type === "number"} type={type} min={key === "monthly_amount" ? 0 : 1} max={type === "number" ? limit : undefined} step={type === "number" ? 1 : undefined} maxLength={type === "text" ? limit : undefined} value={settings[key]} onChange={e => setSettings({ ...settings, [key]: type === "number" ? Number(e.target.value) : e.target.value })} className={`${fieldClass} w-full min-h-11`} /></label>)}</div>
         <label className="block space-y-1"><span className="text-sm">{t("dues.instructions")}</span><textarea maxLength={2000} rows={3} value={settings.instructions} onChange={e => setSettings({ ...settings, instructions: e.target.value })} className={`${fieldClass} w-full`} /></label>
-        <button disabled={busy} className={button}>{t("dues.save")}</button>
-      </form>
+        {isAdmin && <button disabled={busy} className={button}>{t("dues.save")}</button>}
+      </fieldset></form>
     </details>}
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-6">
       <label className="block space-y-1"><span className="text-sm">{t("dues.period")}</span><input required type="month" min="2000-01" max="2100-12" value={period} disabled={busy} onChange={e => { setPeriod(e.target.value); setDecision(null); setNotice(""); }} className={`${fieldClass} block min-h-11`} /></label>

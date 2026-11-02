@@ -201,8 +201,9 @@ func (m *Module) myPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	offset := pageOffset(r)
-	rows, err := m.db.Query(r.Context(), `SELECT p.id::text,p.event_id::text,e.title,p.delta,p.reason,p.created_at
-		FROM events_point_entries p JOIN events_events e ON e.id=p.event_id AND e.tenant_id=p.tenant_id
+	// A sanction (00007) belongs to no event.
+	rows, err := m.db.Query(r.Context(), `SELECT p.id::text,COALESCE(p.event_id::text,''),COALESCE(e.title,'Хяналтын хорооны шийдвэр'),p.delta,p.reason,p.created_at
+		FROM events_point_entries p LEFT JOIN events_events e ON e.id=p.event_id AND e.tenant_id=p.tenant_id
 		WHERE p.tenant_id=$1 AND p.user_id=$2 ORDER BY p.created_at DESC,p.id LIMIT 51 OFFSET $3`, claims.WorkspaceID, claims.UserID, offset)
 	if err != nil {
 		nexus.Error(w, 500, "could not load points")

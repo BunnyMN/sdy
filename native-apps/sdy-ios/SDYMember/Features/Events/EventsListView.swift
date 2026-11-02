@@ -10,11 +10,16 @@ struct EventsListView: View {
     @EnvironmentObject var app: AppModel
     @StateObject private var loader = Loader<[EventRecord]> { try await APIClient.shared.events().events }
     @State private var filter: Filter = .upcoming
+    @State private var creating = false
 
     var body: some View {
         NavigationStack(path: $app.eventsPath) {
             HeroScaffold(heroHeight: 230, onRefresh: { await loader.load() },
-                         compact: AnyView(Text("Арга хэмжээ").font(.headline).foregroundStyle(.white))) {
+                         compact: AnyView(Text("Арга хэмжээ").font(.headline).foregroundStyle(.white)),
+                         pinned: app.can(Permission.manageEvents) ? AnyView(HStack {
+                             Spacer()
+                             GlassCircleButton(systemImage: "plus", label: "Арга хэмжээ нэмэх") { creating = true }
+                         }) : nil) {
                 HeroTitle(title: "Арга хэмжээ", subtitle: app.me?.tenantName)
             } content: {
                 if let events = loader.value {
@@ -28,6 +33,13 @@ struct EventsListView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { id in EventDetailView(eventID: id) }
             .offlineBanner()
+            .sheet(isPresented: $creating) {
+                EventEditorView { saved in
+                    Task { await loader.load() }
+                    app.eventsPath.append(saved.id)
+                }
+                .environmentObject(app)
+            }
         }
         .task { await loader.loadIfNeeded() }
     }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Settings, Trophy, Users, Wallet, WifiOff } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Bell, Building2, CalendarDays, ChartNoAxesCombined, CheckCircle2, Scale, Settings, Trophy, Users, Wallet, WifiOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useBrand } from "@/lib/brandContext";
 import type { api } from "@/lib/api";
@@ -42,6 +42,7 @@ export default function MemberShell({ user, onLogout, children }: { user: Identi
     ...(user.is_admin ? [{ href: "/member/transfers", label: t("membership.transfer_requests"), icon: ArrowRightLeft }] : []),
     ...(can("events.manage") ? [{ href: "/member/activity", label: t("events.activity.title"), icon: ChartNoAxesCombined }] : []),
     ...(can("membership.finance") ? [{ href: "/member/finance", label: t("dues.finance"), icon: Wallet }] : []),
+    ...(can("events.discipline") ? [{ href: "/member/sanctions", label: t("sanctions.title"), icon: Scale }] : []),
     ...(user.is_admin ? [{ href: "/settings/access", label: t("access.view.title"), icon: Settings }] : []),
   ] : [];
   // Sidebar only: the phone's bottom bar keeps its five, and reaches the

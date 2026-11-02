@@ -31,6 +31,13 @@ final class AppModel: ObservableObject {
 
     var hasApprovedBranch: Bool { record?.approvedBranch != nil }
 
+    /// Whether the signed-in person may do this in the current branch. The
+    /// server decides; this only chooses what to show.
+    func can(_ permission: String) -> Bool {
+        guard let me else { return false }
+        return me.isAdmin || me.permissions.contains(permission)
+    }
+
     init(api: APIClient = .shared) {
         self.api = api
         api.onSessionEnded = { [weak self] in self?.sessionEnded() }
@@ -274,5 +281,5 @@ final class AppModel: ObservableObject {
 
 /// Screens pushed from Нүүр / Профайл.
 enum HomeRoute: String, Hashable {
-    case notifications, transfers, record, participation, leaderboard, history, about, deleteAccount, joinRequest, appearance, blocked
+    case notifications, transfers, record, participation, leaderboard, history, about, deleteAccount, joinRequest, appearance, blocked, manageMembers, sanctions, finance
 }

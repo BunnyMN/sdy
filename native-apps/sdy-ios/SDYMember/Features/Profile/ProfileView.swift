@@ -36,6 +36,23 @@ struct ProfileView: View {
                 }
                 .rise(1)
 
+                if app.hasApprovedBranch && (app.can(Permission.manageMembers) || app.can(Permission.discipline) || app.can(Permission.finance)) {
+                    RowGroup {
+                        if app.can(Permission.manageMembers) {
+                            row(.manageMembers, "Гишүүд ба албан тушаал", "person.3.fill")
+                        }
+                        if app.can(Permission.finance) {
+                            if app.can(Permission.manageMembers) { RowDivider() }
+                            row(.finance, "Санхүү", "banknote.fill")
+                        }
+                        if app.can(Permission.discipline) {
+                            if app.can(Permission.manageMembers) || app.can(Permission.finance) { RowDivider() }
+                            row(.sanctions, "Хяналтын хороо", "scale.3d")
+                        }
+                    }
+                    .rise(1)
+                }
+
                 RowGroup {
                     Link(destination: AppConfig.privacyURL) {
                         IconRow(title: "Нууцлалын бодлого", systemImage: "hand.raised.fill")

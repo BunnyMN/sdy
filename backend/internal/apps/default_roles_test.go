@@ -28,10 +28,11 @@ var everyModule = map[string]nexus.Module{
 }
 
 var defaultGrants = map[string]string{
-	// Every member sees the events and registers; running one is the
-	// manager's (and, as always, the administrator's).
+	// Every member sees the events and registers. Running them and
+	// disciplining come from union positions (00119), never a default role.
 	"events.read":        "manager,user",
-	"events.manage":      "manager",
+	"events.manage":      "admin only",
+	"events.discipline":  "admin only",
 	"membership.read":    "manager,user",
 	"membership.finance": "admin only",
 }

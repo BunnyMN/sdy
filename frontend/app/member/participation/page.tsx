@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { eventsApi } from "@/lib/api/events";
+import { eventsApi, sanctionsApi, type Sanction } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { Banner, LoadingBlock } from "@/components/ui";
 import { useErrorMessage } from "@/lib/useErrorMessage";
@@ -20,9 +20,12 @@ export default function ParticipationPage() {
   const [error, setError] = useState("");
   const [loadFailed, setLoadFailed] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sanctions, setSanctions] = useState<Sanction[]>([]);
   const load = useCallback(() => {
     setLoadFailed("");
     Promise.all([eventsApi.mine(), eventsApi.points()]).then(([activity, score]) => { setParticipation(activity); setPoints(score); }).catch(err => setLoadFailed(errorMessage(err)));
+    // The committee's decisions about this member; a branch without them says nothing.
+    sanctionsApi.mine().then(r => setSanctions(Array.isArray(r?.sanctions) ? r.sanctions : [])).catch(() => setSanctions([]));
   }, [errorMessage]);
   useEffect(() => { load(); }, [load]);
   async function more(kind: "activity" | "points") {
@@ -48,6 +51,7 @@ export default function ParticipationPage() {
     {participation?.items.length === 0 && <p className="text-muted">{t("events.points.empty")}</p>}
     {participation?.items.map(item => <Link key={item.event_id} href={`/module/events/${item.event_id}`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4"><span className="min-w-0"><strong className="block">{item.title}</strong><small className="block text-muted tabular-nums">{memberDate(item.starts_at)} · {t(`events.attendance.${item.status}`)}</small></span><strong className="tabular-nums">{item.points}</strong></Link>)}
     {participation?.has_more && <button disabled={busy} onClick={() => void more("activity")} className="min-h-11 rounded-lg border border-line px-4">{t("events.more")}</button>}
+    {sanctions.length > 0 && <section className="space-y-3" aria-labelledby="my-sanctions"><h2 id="my-sanctions" className="text-lg font-semibold">{t("sanctions.mine")}</h2>{sanctions.map(s => <div key={s.id} className="space-y-1 rounded-xl border border-line p-4"><div className="flex justify-between gap-3"><strong>{s.points > 0 ? t("sanctions.deducted", { points: s.points }) : t("sanctions.warning")}</strong><small className="text-muted">{memberDate(s.created_at)}</small></div><p className="whitespace-pre-wrap text-sm">{s.reason}</p></div>)}</section>}
     {points && points.entries.length > 0 && <section className="space-y-3"><h2 className="text-lg font-semibold">{t("events.points.history")}</h2>{points.entries.map(entry => <div key={entry.id} className="flex justify-between gap-3 rounded-xl border border-line p-4"><span>{entry.title}<small className="block text-muted">{memberDate(entry.created_at)}</small></span><strong>{entry.delta > 0 ? "+" : ""}{entry.delta}</strong></div>)}{points.has_more && <button disabled={busy} onClick={() => void more("points")} className="min-h-11 rounded-lg border border-line px-4">{t("events.more")}</button>}</section>}
   </div>;
 }

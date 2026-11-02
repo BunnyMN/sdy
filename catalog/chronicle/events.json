@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.5.0",
+      "released_at": "2026-11-02",
+      "kind": "feature",
+      "summary": {
+        "mn": "Албан тушаалын эрх: арга хэмжээг Тэргүүн, Дэд тэргүүн, Нарийн бичиг удирдана; Хяналтын хороо оноо хасаж, сануулга өгнө.",
+        "en": "Position-based access: the chair, vice chair and secretary run events; the control committee deducts points and issues warnings."
+      },
+      "details": {
+        "mn": "Арга хэмжээ үүсгэх, ирц ба оноо батлах эрхийг гишүүний албан тушаал олгоно. Хяналтын хорооны гишүүн салбарын аль ч гишүүнд шалтгаантай сануулга өгч, оноо хасна; шийдвэр бүр түүхэнд үлдэж, тухайн хүнд мэдэгдэл очно. Хүн өөртөө шийдвэр гаргахгүй.",
+        "en": "Running events and confirming attendance points now come from a member's position. A control committee member can warn any member of the branch and deduct points with a reason; every decision is kept and the member is notified. Nobody decides about themselves."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.4.0",
       "released_at": "2026-11-02",
       "kind": "feature",
