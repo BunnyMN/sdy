@@ -33,8 +33,10 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let path = response.notification.request.content.userInfo["path"] as? String
-        await MainActor.run { self.app?.openPushed(path: path) }
+        let info = response.notification.request.content.userInfo
+        let path = info["path"] as? String
+        let id = info["notification_id"] as? String
+        await MainActor.run { self.app?.openPushed(path: path, notificationID: id) }
     }
 }
 
@@ -77,9 +79,11 @@ extension AppModel {
         try? await api.unregisterPushToken(token)
     }
 
-    func openPushed(path: String?) {
+    func openPushed(path: String?, notificationID: String? = nil) {
         guard phase == .signedIn else { return }
         Task {
+            // Opening a notification is reading it, as on the web.
+            if let notificationID { try? await api.markRead(notificationID) }
             await refreshUnread()
             guard let path, !path.isEmpty else { homePath = [.notifications]; tab = .home; return }
             try? await openNotificationPath(path)
