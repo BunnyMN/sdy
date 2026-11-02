@@ -91,10 +91,13 @@ func TestTheMetricsThatAreNotSumsAreNotSummed(t *testing.T) {
 	tenantID, _ := optest.Tenant(t, pool)
 	ctx := context.Background()
 
+	// Days relative to today: the chart is a ninety-day window, so fixed
+	// dates fall out of it and the test starts failing on its own.
+	day := func(back int) string { return time.Now().UTC().AddDate(0, 0, -back).Format("2006-01-02") }
 	for day, values := range map[string][2]int64{
-		"2026-08-01": {3, 100},
-		"2026-08-02": {5, 120},
-		"2026-08-03": {4, 90},
+		day(3): {3, 100},
+		day(2): {5, 120},
+		day(1): {4, 90},
 	} {
 		for metric, value := range map[string]int64{
 			usagemetric.ActiveUsers: values[0],
@@ -121,7 +124,7 @@ func TestTheMetricsThatAreNotSumsAreNotSummed(t *testing.T) {
 				t.Fatalf("active users totalled %d, want the peak of 5", series.Total)
 			}
 		case usagemetric.StorageMB:
-			// The last day in the window, which is the third of August here.
+			// The last day written, yesterday here.
 			if series.Total != 90 {
 				t.Fatalf("storage totalled %d, want the last reading of 90", series.Total)
 			}
