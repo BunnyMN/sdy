@@ -24,7 +24,11 @@ struct SDYMemberApp: App {
                     // Pattern from native-apps/mobile/ios MobileLoginView: a
                     // long-poll that died in the background restarts the
                     // moment the app is active again.
-                    if phase == .active { app.resumeTick += 1 }
+                    if phase == .active {
+                        app.resumeTick += 1
+                        // Read elsewhere (the web, another phone): the badge catches up.
+                        if app.phase == .signedIn { Task { await app.refreshUnread() } }
+                    }
                 }
         }
     }

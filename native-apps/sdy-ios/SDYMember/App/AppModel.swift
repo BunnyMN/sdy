@@ -20,7 +20,11 @@ final class AppModel: ObservableObject {
     @Published var pendingCheckin: CheckinCode?
     @Published var eventsPath: [String] = []
     @Published var homePath: [HomeRoute] = []
-    @Published var unreadCount = 0
+    /// The icon's badge follows it wherever it changes: reading one, reading
+    /// all, a refresh, signing out.
+    @Published var unreadCount = 0 {
+        didSet { if unreadCount != oldValue { syncBadge() } }
+    }
     /// Bumped whenever the app returns to the foreground or eID returns to it,
     /// so a waiting eID poll can restart at once.
     @Published var resumeTick = 0
@@ -226,6 +230,7 @@ final class AppModel: ObservableObject {
 
     func refreshUnread() async {
         if let page = try? await api.notifications() { unreadCount = page.unread ?? page.items.filter { !$0.isRead }.count }
+        // Also when the count did not change: the badge a push set may differ.
         syncBadge()
     }
 

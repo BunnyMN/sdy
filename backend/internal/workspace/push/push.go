@@ -245,21 +245,23 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 	return sent, nil
 }
 
-// Payload is what the phone receives; path opens the screen it is about.
-func Payload(title, body, path string, badge int) ([]byte, error) {
+// Payload is what the phone receives; path opens the screen it is about and
+// notification_id lets the app count it read when it is tapped.
+func Payload(id, title, body, path string, badge int) ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"aps": map[string]any{
 			"alert": map[string]string{"title": title, "body": body},
 			"sound": "default",
 			"badge": badge,
 		},
-		"path": path,
+		"path":            path,
+		"notification_id": id,
 	})
 }
 
 // send reports gone when APNs says the token will never work again.
 func (s *Sender) send(ctx context.Context, device string, sandbox bool, d due) (gone bool, err error) {
-	payload, err := Payload(d.title, d.body, d.path, d.unread)
+	payload, err := Payload(d.notificationID, d.title, d.body, d.path, d.unread)
 	if err != nil {
 		return false, err
 	}
