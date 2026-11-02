@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — Next.js 16.4.3, Sentry 10.78 (2026-11-02)
+
+- `next` 16.3.3 → 16.4.3 (next/og RCE, use-cache draft leak), `@sentry/nextjs` → 10.78 (tunnel
+  middleware bypass), `npm audit fix` (brace-expansion, fast-uri, sharp, source-map-js). Үлдсэн
+  5 moderate нь зөвхөн build үеийн Sentry webpack plugin-ийн glob.
+
 ### Removed — нүүр хуудасны нээлттэй санал хүсэлт (2026-11-02)
 
 - Нүүр хуудасны «Санал хүсэлт» хэсэг (маягт ба нийтийн жагсаалт), толгой, хөлийн линк,
