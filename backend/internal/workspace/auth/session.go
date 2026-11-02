@@ -226,7 +226,9 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (UserClaims, e
 		   JOIN registry.users u ON u.id = s.user_id
 		   LEFT JOIN workspace.memberships sm
 		          ON sm.tenant_id = s.tenant_id AND sm.user_id = s.user_id AND sm.active
-		  WHERE s.tenant_id IS NULL OR sm.user_id IS NOT NULL`,
+		  -- A deactivated account (an administrator's decision, or an
+		  -- anonymised deletion) has no live session, whatever its rows say.
+		  WHERE u.active AND (s.tenant_id IS NULL OR sm.user_id IS NOT NULL)`,
 		hashToken(token), nullableTime(idleCutoff), touchInterval.String()).
 		Scan(&claims.UserID, &claims.WorkspaceID, &claims.Email, &claims.AllowedWorkspaceIDs,
 			&claims.ImpersonatedBy, &claims.IsAdmin)

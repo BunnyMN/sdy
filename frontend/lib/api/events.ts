@@ -56,6 +56,8 @@ export type Motion = {
   opened_at: string | null; closed_at: string | null; result: "" | "approved" | "rejected";
   yes: number; no: number; abstain: number; note: string; created_at: string;
   my_vote: { choice: VoteChoice; status: "signing" | "signed" | "failed" } | null;
+  /** events 1.4.0: the caller reported it; open reports (managers only). */
+  reported_by_me?: boolean; report_count?: number;
 };
 export type MotionList = {
   motions: Motion[]; eligible: number; can_vote: boolean; signing_ready: boolean;
@@ -80,6 +82,11 @@ export const participationApi = {
   propose: (eventID: string, input: { title: string; body: string }) => request<Motion>(`${one(eventID)}/motions`, post(input)),
   editMotion: (eventID: string, motionID: string, input: { title: string; body: string }) =>
     request<Motion>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}`, { method: "PUT", body: JSON.stringify(input) }),
+  report: (eventID: string, motionID: string, reason: string) =>
+    request(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/report`, post({ reason })),
+  block: (userID: string) => request(`/events/blocks/${encodeURIComponent(userID)}`, post()),
+  unblock: (userID: string) => request(`/events/blocks/${encodeURIComponent(userID)}`, { method: "DELETE" }),
+  blocks: () => request<{ blocked: Array<{ user_id: string; name: string; blocked_at: string }> }>("/events/blocks"),
   motionAction: (eventID: string, motionID: string, action: "open" | "close" | "withdraw", note?: string) =>
     request<Motion>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/${action}`, post(note === undefined ? undefined : { note })),
   /** callbackUrl, from a phone: the answer's app_link opens the eID app, which returns there. */

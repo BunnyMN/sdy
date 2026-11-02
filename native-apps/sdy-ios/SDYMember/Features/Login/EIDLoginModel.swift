@@ -130,7 +130,7 @@ final class EIDLoginModel: ObservableObject {
         while !Task.isCancelled {
             if Date() >= deadline { finish(.expired); return }
             do {
-                let result = try await api.eidPoll(sessionID: started.sessionId)
+                let result = try await api.eidPoll(sessionID: started.sessionId, binding: started.binding)
                 guard !Task.isCancelled else { return }
                 failures = 0
                 switch result.state.uppercased() {

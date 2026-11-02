@@ -7,7 +7,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Clock, Fingerprint, Gavel, MessageSquarePlus, Pencil, RotateCcw, Undo2, Vote, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Fingerprint, Flag, Gavel, MessageSquarePlus, Pencil, RotateCcw, Undo2, Vote, XCircle } from "lucide-react";
+import Link from "next/link";
 
 import { participationApi, type Motion, type MotionList, type SignedVote, type VoteChoice } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
@@ -41,6 +42,9 @@ const statusTone = { proposed: "slate", voting: "blue", approved: "emerald", rej
  * entered the wrong PIN); "timeout" is three minutes of no answer at all;
  * "error" is this page failing to ask. Each says something different to do.
  */
+// The same reasons the iOS app offers; the organiser reads them as written.
+const REPORT_REASONS = ["Доромжилсон, үзэн ядсан", "Худал, төөрөгдүүлсэн", "Спам, сурталчилгаа", "Хувийн мэдээлэл задруулсан", "Бусад"];
+
 type Phase = "waiting" | "done" | "refused" | "timeout" | "error";
 type Signing = { motion: Motion; choice: VoteChoice; code: string; phase: Phase; message?: string; onPhone?: boolean; deadline: number; hidden?: boolean };
 
@@ -60,6 +64,7 @@ export default function EventDiscussion({ eventID, onSummary }: {
   const [signing, setSigning] = useState<Signing | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [rolls, setRolls] = useState<Record<string, SignedVote[]>>({});
+  const [reporting, setReporting] = useState<{ motion: Motion; reason: string } | null>(null);
   const ticket = useRef(0);
 
   const load = useCallback(async () => {
@@ -162,6 +167,18 @@ export default function EventDiscussion({ eventID, onSummary }: {
     catch (err) { setFailed(errorMessage(err)); }
   }
 
+  // Another member's words: report them to the organiser, or stop seeing what
+  // their author raises (events 1.4.0, as in the iOS app).
+  async function submitReport(e: React.FormEvent) {
+    e.preventDefault(); if (!reporting) return;
+    const { motion, reason } = reporting;
+    await act(async () => { await participationApi.report(eventID, motion.id, reason); setReporting(null); });
+  }
+  async function block(motion: Motion) {
+    if (!(await confirm({ title: t("events.discussion.block_confirm", { name: motion.proposer_name || "—" }), body: t("events.discussion.block_hint"), confirmLabel: t("events.discussion.block"), tone: "danger" }))) return;
+    await act(() => participationApi.block(motion.proposer_id));
+  }
+
   async function withdraw(motion: Motion) {
     if (!(await confirm({ title: t("events.discussion.withdraw_confirm", { title: motion.title }), confirmLabel: t("events.discussion.withdraw"), tone: "danger" }))) return;
     await act(() => participationApi.motionAction(eventID, motion.id, "withdraw", ""));
@@ -224,6 +241,7 @@ export default function EventDiscussion({ eventID, onSummary }: {
                 </div>
                 <Chip tone={statusTone[key as keyof typeof statusTone] ?? "slate"}>{t(`events.discussion.status.${key}`)}</Chip>
               </div>
+              {data.can_manage && (m.report_count ?? 0) > 0 && <p className="flex items-center gap-1.5 text-xs font-semibold text-warning"><Flag aria-hidden="true" className="h-3.5 w-3.5" />{t("events.discussion.reported_count", { count: m.report_count ?? 0 })}</p>}
               {m.body && <p className="whitespace-pre-wrap text-sm">{m.body}</p>}
 
               {(m.status === "voting" || m.status === "decided") && <div className="space-y-1.5">
@@ -252,6 +270,10 @@ export default function EventDiscussion({ eventID, onSummary }: {
                 {data.can_manage && m.status === "voting" && <button disabled={busy} onClick={() => void closeVote(m)} className={btn}><Gavel className="h-3.5 w-3.5" />{t("events.discussion.close_vote")}</button>}
                 {mayEdit && <button disabled={busy} onClick={() => setDraft({ id: m.id, title: m.title, body: m.body })} className={btn}><Pencil className="h-3.5 w-3.5" />{t("events.discussion.edit")}</button>}
                 {mayEdit && <button disabled={busy} onClick={() => void withdraw(m)} className={btn}><Undo2 className="h-3.5 w-3.5" />{t("events.discussion.withdraw")}</button>}
+                {m.proposer_id && m.proposer_id !== data.me && <>
+                  <button disabled={busy || m.reported_by_me} onClick={() => setReporting({ motion: m, reason: REPORT_REASONS[0] })} className={btn}><Flag className="h-3.5 w-3.5" />{t(m.reported_by_me ? "events.discussion.reported" : "events.discussion.report")}</button>
+                  <button disabled={busy} onClick={() => void block(m)} className={btn}><Ban className="h-3.5 w-3.5" />{t("events.discussion.block")}</button>
+                </>}
                 {(m.status === "decided" || (m.status === "voting" && data.can_manage)) && counted > 0 &&
                   <button onClick={() => void showRoll(m)} aria-expanded={!!rolls[m.id]} className={btn}><Fingerprint className="h-3.5 w-3.5" />{t("events.discussion.roll")}</button>}
               </div>
@@ -271,6 +293,22 @@ export default function EventDiscussion({ eventID, onSummary }: {
           })}
         </div>
       </section>
+
+      <p className="text-xs text-muted"><Link href="/member/blocked" className="underline">{t("events.discussion.blocked_link")}</Link></p>
+
+      {reporting && <Modal label={t("events.discussion.report")} onClose={() => { if (!busy) setReporting(null); }}>
+        <form onSubmit={submitReport} className="space-y-4">
+          <h2 className="text-lg font-semibold">{t("events.discussion.report")}: {reporting.motion.title}</h2>
+          <p className="text-sm text-muted">{t("events.discussion.report_hint")}</p>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">{t("events.discussion.report_reason")}</legend>
+            {REPORT_REASONS.map(reason => <label key={reason} className="flex min-h-10 items-center gap-2 text-sm">
+              <input type="radio" name="reason" checked={reporting.reason === reason} onChange={() => setReporting({ ...reporting, reason })} />{reason}</label>)}
+          </fieldset>
+          <div className="flex gap-3"><button disabled={busy} className="min-h-11 rounded-md bg-accent px-5 text-on-accent disabled:opacity-50">{t("events.discussion.report_submit")}</button>
+            <button type="button" disabled={busy} onClick={() => setReporting(null)} className="min-h-11 rounded-md border border-input px-4">{t("base.action.close")}</button></div>
+        </form>
+      </Modal>}
 
       {signing && !signing.hidden && <Modal label={t("events.discussion.signing_title")} onClose={() => signing.phase === "waiting" ? setSigning({ ...signing, hidden: true }) : setSigning(null)}>
         <div className="space-y-4 text-center">

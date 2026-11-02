@@ -7,6 +7,10 @@
 package identity
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/config"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/httpx"
@@ -23,6 +28,68 @@ import (
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/dan"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/eid"
 )
+
+// A device-link sign-in belongs to the browser (or app) that started it.
+//
+// Without this, the session id was the whole credential: somebody who started
+// a session with their own eID and sent the callback link to another person
+// signed that person into the sender's account (login CSRF), and anybody who
+// saw a callback URL could finish the sign-in. Start now answers a binding —
+// an HMAC of the session id — as an HttpOnly cookie for a browser and in the
+// body for an app, and poll issues a session only to a caller presenting it.
+// An app that sends X-Session-Transport: bearer without one (the App Store's
+// 1.0, before it learned this) is still served; a browser never is.
+const eidBindingCookie = "eid_binding"
+
+var (
+	eidBindingKeyOnce sync.Once
+	eidBindingKey     []byte
+)
+
+func eidBinding(sessionID string) string {
+	eidBindingKeyOnce.Do(func() {
+		secret := os.Getenv("EID_RP_SECRET")
+		if secret == "" {
+			// Mock mode and tests: random per process, which is all a
+			// single replica needs.
+			eidBindingKey = make([]byte, 32)
+			_, _ = rand.Read(eidBindingKey)
+			return
+		}
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte("eid-session-binding"))
+		eidBindingKey = mac.Sum(nil)
+	})
+	mac := hmac.New(sha256.New, eidBindingKey)
+	mac.Write([]byte(strings.TrimSpace(sessionID)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// answerStarted sends a started session with its binding, as a cookie too.
+func answerStarted(w http.ResponseWriter, started *eid.StartResult) {
+	binding := eidBinding(started.SessionID)
+	http.SetCookie(w, &http.Cookie{
+		Name: eidBindingCookie, Value: binding, Path: "/api/v1/auth/eid",
+		MaxAge: 20 * 60, HttpOnly: true, Secure: config.IsProduction(), SameSite: http.SameSiteLaxMode,
+	})
+	httpx.JSON(w, http.StatusOK, struct {
+		*eid.StartResult
+		Binding string `json:"binding"`
+	}{started, binding})
+}
+
+// boundToCaller reports whether the poll comes from whoever started the session.
+func boundToCaller(r *http.Request, sessionID, presented string) bool {
+	if presented == "" {
+		if cookie, err := r.Cookie(eidBindingCookie); err == nil {
+			presented = cookie.Value
+		}
+	}
+	if presented == "" {
+		return auth.WantsBearerSession(r)
+	}
+	return hmac.Equal([]byte(presented), []byte(eidBinding(sessionID)))
+}
 
 func (h *Handlers) HandleEIDStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -46,7 +113,7 @@ func (h *Handlers) HandleEIDStart(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadGateway, "eID Mongolia session could not be started")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, started)
+	answerStarted(w, started)
 }
 
 func (h *Handlers) HandleEIDStartByNationalID(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +136,7 @@ func (h *Handlers) HandleEIDStartByNationalID(w http.ResponseWriter, r *http.Req
 		httpx.Error(w, http.StatusBadRequest, "Регистрийн дугаар олдсонгүй эсвэл eID апп-д бүртгэлгүй байна")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, started)
+	answerStarted(w, started)
 }
 
 func validEIDCallback(raw string) (string, error) {
@@ -134,9 +201,16 @@ func (h *Handlers) HandleEIDQR(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleEIDPoll(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`
+		Binding   string `json:"binding"`
 	}
 	if httpx.DecodeLimited(r, &req, 8<<10) != nil || strings.TrimSpace(req.SessionID) == "" {
 		httpx.Error(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+	// Checked before the provider is asked, so a refused poll does not use
+	// up the session the rightful browser is still waiting on.
+	if !boundToCaller(r, req.SessionID, strings.TrimSpace(req.Binding)) {
+		httpx.Error(w, http.StatusForbidden, "eid_session_other_device")
 		return
 	}
 	result, err := h.eidSvc.Poll(r.Context(), req.SessionID)

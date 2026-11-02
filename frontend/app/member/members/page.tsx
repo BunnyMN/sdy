@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MEMBER_POSITIONS, memberApi, type ManagedMember, type MemberPosition, type MemberStatus, type PositionPolicy } from "@/lib/api/member";
 import { useAccess } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
@@ -39,12 +39,16 @@ export default function MembersPage() {
   const [busy, setBusy] = useState(false);
   const [policy, setPolicy] = useState<PositionPolicy | null>(null);
   const [seats, setSeats] = useState("");
+  // A search answered after a newer one, or a page of an old search, is dropped.
+  const ticket = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++ticket.current;
     try {
       const [members, rules] = await Promise.all([memberApi.members(query), memberApi.positions()]);
+      if (mine !== ticket.current) return;
       setData(members); setPolicy(rules); setSeats(String(rules.auditor_seats)); setError("");
     }
-    catch { setError(t("membership.load_failed")); }
+    catch { if (mine === ticket.current) setError(t("membership.load_failed")); }
   }, [query, t]);
   useEffect(() => { if (allowed && !loading) void load(); }, [allowed, loading, load]);
   async function save(event: React.FormEvent) {
@@ -69,8 +73,13 @@ export default function MembersPage() {
   }
   async function more() {
     if (!data) return; setBusy(true);
-    try { const next = await memberApi.members(query, data.next_offset); setData({ ...next, members: [...data.members, ...next.members] }); }
-    catch { setError(t("membership.load_failed")); }
+    const mine = ticket.current;
+    try {
+      const next = await memberApi.members(query, data.next_offset);
+      if (mine !== ticket.current) return;
+      setData(current => current ? { ...next, members: [...current.members, ...next.members] } : next);
+    }
+    catch { if (mine === ticket.current) setError(t("membership.load_failed")); }
     finally { setBusy(false); }
   }
   if (loading) return <LoadingBlock />;

@@ -70,6 +70,8 @@ struct EIDStart: Decodable, Hashable {
     var appLink: String?
     @DefaultText var verificationCode: String
     var expiresAt: String?
+    /// Ties the session to this app; sent back with every poll.
+    var binding: String?
 }
 
 extension EIDStart {
