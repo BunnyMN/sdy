@@ -3,7 +3,6 @@ import { ArrowDown, ArrowRight, Building2, CalendarDays, CheckCircle2, ChevronRi
 import type { Brand } from "@/lib/brand";
 import SdyLandingHeader from "./SdyLandingHeader";
 import SdyEventSlides from "./SdyEventSlides";
-import SdyFeedback from "./SdyFeedback";
 import SdyHashOpen from "./SdyHashOpen";
 import styles from "./sdy-landing.module.css";
 
@@ -102,8 +101,6 @@ export default function SdyLanding({ brand }: { brand: Brand }) {
           </div>
         </section>
 
-        <SdyFeedback />
-
         <section className={`${styles.container} ${styles.finalCta}`} aria-labelledby="start-title">
           <div><p className={styles.eyebrow}>SDY · Гишүүний цахим систем</p><h2 id="start-title">Салбарынхаа үйл ажиллагаанд нэгдээрэй</h2><p>Гишүүнчлэл, оролцоо, хувийн бүртгэл — нэг дор.</p></div><SignInLink />
         </section>
@@ -111,7 +108,7 @@ export default function SdyLanding({ brand }: { brand: Brand }) {
       <footer className={styles.footer}>
         <div className={styles.container}>
           <div className={styles.footerMain}><span>{brand.name}</span>
-            <nav aria-label="Хуудасны холбоос"><a href="#how-it-works">Элсэх заавар</a><a href="#data-access">Мэдээлэл ба эрх</a><a href="#questions">Түгээмэл асуулт</a><a href="#feedback">Санал хүсэлт</a></nav>
+            <nav aria-label="Хуудасны холбоос"><a href="#how-it-works">Элсэх заавар</a><a href="#data-access">Мэдээлэл ба эрх</a><a href="#questions">Түгээмэл асуулт</a></nav>
             <nav aria-label="Тусламж ба бодлого"><Link href="/support">Тусламж</Link><Link href="/privacy">Нууцлалын бодлого</Link><Link href="/support#contact">Холбоо барих</Link></nav>
           </div>
           <div className={styles.footerBottom}><span>© {new Date().getFullYear()} {brand.shortName}</span><span>Gerege технологид суурилав</span></div>
