@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — iOS push мэдэгдэл (00120, 2026-11-02)
+
+- Гишүүний мэдэгдэл бүр APNs-ээр утсанд очно; iOS зөвшөөрөл асууж token бүртгүүлнэ, дарвал холбогдох
+  дэлгэц нээгдэнэ, гарахад token устна. Тохиргоо: `PUSH_TOKEN_ENCRYPTION_KEY`, `APNS_KEY`, `APNS_KEY_ID`.
+
 ### Added — албан тушаал эрх олгоно (00119, events 1.5.0, 2026-11-02)
 
 - Тэргүүн, Дэд тэргүүн, Нарийн бичиг арга хэмжээ үүсгэж, ирц ба оноог батална; Санхүүч санхүүг

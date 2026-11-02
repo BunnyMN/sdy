@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct SDYMemberApp: App {
+    @UIApplicationDelegateAdaptor(PushDelegate.self) private var push
     @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -11,7 +12,10 @@ struct SDYMemberApp: App {
                 .environmentObject(app)
                 .tint(Theme.accent)
                 .preferredColorScheme(.dark)
-                .task { await app.bootstrap() }
+                .task {
+                    push.app = app
+                    await app.bootstrap()
+                }
                 .onOpenURL { app.handle(url: $0) }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL { app.handle(url: url) }

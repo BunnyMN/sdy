@@ -13,6 +13,7 @@ DELETE /api/v1/admin/access/roles/{id}
 DELETE /api/v1/core/me/preferences
 DELETE /api/v1/core/organisation
 DELETE /api/v1/profile/photo
+DELETE /api/v1/push-tokens
 DELETE /api/v1/tenant/services/{id}
 DELETE /cp/api
 DELETE /cp/api/*

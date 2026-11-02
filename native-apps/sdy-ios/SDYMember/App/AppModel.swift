@@ -1,5 +1,6 @@
 import ImageIO
 import SwiftUI
+import UserNotifications
 
 /// The signed-in state of the app and everything that moves between screens:
 /// which tab is open, which event a link points at, a pending check-in.
@@ -26,6 +27,8 @@ final class AppModel: ObservableObject {
     @Published var eidReturnSession: String?
     /// The signed-in person's profile photo, shown on Home and Profile.
     @Published var photo: UIImage?
+    /// This phone's APNs token, once iOS has given one.
+    var pushToken: String?
 
     let api: APIClient
 
@@ -59,6 +62,7 @@ final class AppModel: ObservableObject {
             phase = .signedIn
             applyLaunchArguments()
             Task { await loadPhoto() }
+            Task { await enablePush() }
             await refreshUnread()
         } catch let error as APIError where error.kind == .unauthorized {
             clearLocal()
@@ -96,6 +100,7 @@ final class AppModel: ObservableObject {
     }
 
     func signOut() async {
+        await disablePush()
         await api.logout()
         clearLocal()
     }
@@ -111,6 +116,7 @@ final class AppModel: ObservableObject {
         unreadCount = 0
         eidReturnSession = nil
         photo = nil
+        UNUserNotificationCenter.current().setBadgeCount(0)
         phase = .signedOut
     }
 
@@ -220,6 +226,7 @@ final class AppModel: ObservableObject {
 
     func refreshUnread() async {
         if let page = try? await api.notifications() { unreadCount = page.unread ?? page.items.filter { !$0.isRead }.count }
+        syncBadge()
     }
 
     // MARK: - Links
@@ -258,6 +265,12 @@ final class AppModel: ObservableObject {
             tab = .dues
         } else if path.hasPrefix("/member/check-in"), hasApprovedBranch {
             tab = .checkin
+        } else if path.hasPrefix("/member/participation"), hasApprovedBranch {
+            tab = .home
+            homePath = [.participation]
+        } else {
+            tab = .home
+            homePath = [.notifications]
         }
     }
 

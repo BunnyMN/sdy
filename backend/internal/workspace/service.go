@@ -55,6 +55,7 @@ import (
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/eidmongolia"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/gerege"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/profile"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/push"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/reporting"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/signing"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/ssoclient"
@@ -120,7 +121,10 @@ type Service struct {
 	profile *profile.Handlers
 	// devices is the terminals an organisation enrols, and the sign-in a till
 	// offers whoever is standing at it.
-	devices     *devices.Handlers
+	devices *devices.Handlers
+	// push sends members' notifications to their phones; nil when no APNs
+	// key is configured.
+	push        *push.Sender
 	permissions *access.SQLPermissionStore
 	appGate     *memo.Cache[bool]
 	// settings and featureFlags are the two things the console can change
@@ -446,6 +450,11 @@ func New(deps Deps) (*Service, error) {
 
 	// After the sign-in package: both of these ask it for a session.
 	s.devices = devices.New(db, s.staffPIN, s.authn)
+	if cfg, ok, err := push.ConfigFromEnv(); err != nil {
+		slog.Error("push: the APNs key is unusable; notifications stay in the app", "error", err)
+	} else if ok {
+		s.push = push.New(db, cfg)
+	}
 	s.identity = identity.New(identity.Deps{
 		DB: db, Sessions: s.sessions, EID: eidSvc, DAN: danSvc,
 		Google: googleLogin, SSO: federatedSignIn, Authn: s.authn,
@@ -526,6 +535,10 @@ func (s *Service) StartBackgroundJobs(ctx context.Context) {
 	// Accounts whose owners asked for deletion and did not come back within
 	// the grace period lose their personal details — see profile/deletion.go.
 	s.profile.StartDeletionHousekeeping(ctx)
+	// Members' notifications reach their phones (APNs), when configured.
+	if s.push != nil {
+		s.push.Start(ctx)
+	}
 	// An impersonation whose session has expired is over; the row that says so
 	// is what both the console and the organisation read.
 	async.Go("impersonation-sweep", func() {
@@ -883,6 +896,7 @@ func (s *Service) Routes(r chi.Router) {
 			pr.With(s.authn.RequireAdmin).Put("/admin/devices/staff-pin", s.staffPIN.HandleSetPIN)
 			pr.With(s.authn.RequireAdmin).Put("/admin/devices/status", s.devices.HandleUpdateDeviceStatus)
 			pr.Post("/push-tokens", s.devices.HandleRegisterPushToken)
+			pr.Delete("/push-tokens", s.devices.HandleUnregisterPushToken)
 
 			// Consent screen. The browser endpoint at /oauth2/auth redirects
 			// here; these two describe the pending grant and record the

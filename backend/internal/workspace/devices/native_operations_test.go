@@ -28,3 +28,22 @@ func TestPushTokenEncryptionRequiresKey(t *testing.T) {
 		t.Fatal("missing encryption key accepted")
 	}
 }
+
+func TestPushTokenRoundTrips(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 7)
+	}
+	t.Setenv("PUSH_TOKEN_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(key))
+	sealed, err := encryptPushToken("apns-device-token-0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := DecryptPushToken(sealed)
+	if err != nil || opened != "apns-device-token-0123456789abcdef" {
+		t.Fatalf("opened %q, %v", opened, err)
+	}
+	if _, err := DecryptPushToken("bm90IGEgdG9rZW4="); err == nil {
+		t.Fatal("garbage decrypted")
+	}
+}

@@ -78,6 +78,42 @@ func encryptPushToken(token string) (string, error) {
 	return base64.StdEncoding.EncodeToString(append(nonce, aead.Seal(nil, nonce, []byte(token), nil)...)), nil
 }
 
+// DecryptPushToken reverses encryptPushToken, for the sender (internal/workspace/push).
+func DecryptPushToken(ciphertext string) (string, error) {
+	keyText := os.Getenv("PUSH_TOKEN_ENCRYPTION_KEY")
+	key, err := base64.StdEncoding.DecodeString(keyText)
+	if keyText == "" || err != nil || len(key) != chacha20poly1305.KeySize {
+		return "", errors.New("push token encryption key is missing or invalid")
+	}
+	raw, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		return "", err
+	}
+	aead, _ := chacha20poly1305.NewX(key)
+	if len(raw) < aead.NonceSize() {
+		return "", errors.New("push token ciphertext is too short")
+	}
+	plain, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], nil)
+	return string(plain), err
+}
+
+// HandleUnregisterPushToken is DELETE /api/v1/push-tokens: signing out on a
+// phone stops it receiving this person's notifications.
+func (h *Handlers) HandleUnregisterPushToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if httpx.DecodeLimited(r, &req, 16<<10) != nil || len(req.Token) < 16 {
+		httpx.Error(w, 400, "invalid push token")
+		return
+	}
+	if _, err := h.db.Exec(r.Context(), `SELECT registry.forget_my_push_token($1)`, caseSensitiveSecretHash(req.Token)); err != nil {
+		httpx.Error(w, 503, "push unregistration failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handlers) HandleRegisterPushToken(w http.ResponseWriter, r *http.Request) {
 	claims, _ := auth.UserFromContext(r.Context())
 	var req struct {
