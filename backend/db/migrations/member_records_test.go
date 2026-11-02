@@ -215,3 +215,12 @@ func TestAMemberPositionIsSetByTheBranchAdminAndReadByTheMember(t *testing.T) {
 		t.Fatalf("the tenant role wrote a position directly: %v", err)
 	}
 }
+
+// An administrator neither lifts their own suspension nor names themselves chair.
+func TestABranchAdminDoesNotDecideAboutThemselves(t *testing.T) {
+	f := newTransferFixture(t)
+	_, err := f.call(t.Context(), f.source, f.admin, `SELECT registry.set_member_status($1,$2,'active','Reinstate myself')::text`, f.source, f.admin)
+	assertTransferError(t, err, "42501", "membership_self_decision_forbidden")
+	_, err = f.call(t.Context(), f.source, f.admin, `SELECT registry.set_member_position($1,$2,'chair')::text`, f.source, f.admin)
+	assertTransferError(t, err, "42501", "membership_self_decision_forbidden")
+}

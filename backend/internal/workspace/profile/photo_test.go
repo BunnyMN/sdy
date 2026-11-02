@@ -70,6 +70,7 @@ func TestWhatIsNotAPhotoIsRefused(t *testing.T) {
 	for name, raw := range map[string][]byte{
 		"png":       pngBuf.Bytes(),
 		"too small": testJPEG(t, 32, 32),
+		"too large": testJPEG(t, MaxPhotoSide+1, 100),
 		"text":      []byte("<?php echo 'hi'; ?>"),
 		"truncated": testJPEG(t, 300, 300)[:200],
 		"empty":     nil,

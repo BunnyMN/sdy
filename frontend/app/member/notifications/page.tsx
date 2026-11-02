@@ -7,6 +7,7 @@ import { memberApi, type MemberNotification } from "@/lib/api/member";
 import { useI18n } from "@/lib/i18n";
 import { formatMoment, formatRelative } from "@/lib/datetime";
 import { Banner, LoadingBlock } from "@/components/ui";
+import { safeReturnPath } from "@/lib/safeReturnPath.mjs";
 
 export default function NotificationsPage() {
   const { t, locale } = useI18n();
@@ -34,7 +35,7 @@ export default function NotificationsPage() {
   async function openEvent(event: React.MouseEvent<HTMLAnchorElement>, n: MemberNotification) {
     // Opening a notification is reading it.
     const reading = n.read_at ? Promise.resolve() : memberApi.read(n.id).then(() => undefined, () => undefined);
-    const target = new URL(n.path, window.location.origin);
+    const target = new URL(safeReturnPath(n.path, "/member"), window.location.origin);
     const workspace = target.searchParams.get("workspace");
     if (!workspace || !target.pathname.startsWith("/module/events/")) return;
     event.preventDefault();
@@ -58,7 +59,7 @@ export default function NotificationsPage() {
       <div className="flex items-start justify-between gap-3"><h2 className="font-medium">{n.title}</h2>{!n.read_at && <span className="text-xs text-accent">{t("membership.record.unread")}</span>}</div>
       {n.body && <p className="break-words text-sm text-muted">{n.body}</p>}
       <p className="text-xs text-muted"><time dateTime={n.created_at} title={formatMoment(n.created_at)}>{formatRelative(n.created_at, locale)}</time></p>
-      <div className="flex flex-wrap gap-4"><Link href={n.path.startsWith("/") && !n.path.startsWith("//") ? n.path : "/member"} onClick={e => { void openEvent(e, n); }} aria-label={`${t("membership.record.open")}: ${n.title}`} className="inline-flex min-h-11 items-center text-accent underline">{t("membership.record.open")}</Link>
+      <div className="flex flex-wrap gap-4"><Link href={safeReturnPath(n.path, "/member")} onClick={e => { void openEvent(e, n); }} aria-label={`${t("membership.record.open")}: ${n.title}`} className="inline-flex min-h-11 items-center text-accent underline">{t("membership.record.open")}</Link>
         {!n.read_at && <button disabled={busy} onClick={() => void mark(n.id)} aria-label={`${t("membership.record.read")}: ${n.title}`} className="min-h-11 text-sm">{t("membership.record.read")}</button>}
       </div>
     </li>)}</ul>

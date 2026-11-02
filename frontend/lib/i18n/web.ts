@@ -28,6 +28,7 @@ export const web = {
   "web.action.close_menu": { mn: "Цэс хаах", en: "Close menu" },
   "web.action.toggle_menu": { mn: "Цэс нээх, хаах", en: "Toggle menu" },
   "web.action.more": { mn: "Бусад", en: "More" },
+  "web.action.reload": { mn: "Дахин ачаалах", en: "Reload" },
   "web.action.close_more": { mn: "Бусад аппыг хаах", en: "Close more apps" },
   "web.action.expand_all": { mn: "Бүгдийг нээх", en: "Expand all" },
   "web.action.collapse_all": { mn: "Бүгдийг хаах", en: "Collapse all" },

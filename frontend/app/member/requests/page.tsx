@@ -9,10 +9,18 @@ import { useErrorMessage } from "@/lib/useErrorMessage";
 
 type Request = Awaited<ReturnType<typeof api.getAdmissionRequests>>["requests"][number];
 
+// Module-level: a fresh object each render would give useErrorMessage a new
+// callback each render, and the load effect that depends on it would loop.
+const ADMIN_CODES = {
+  branch_transfer_required: "membership.branch_transfer_required",
+  membership_self_decision_forbidden: "membership.self_decision_forbidden",
+  join_request_self_decision_forbidden: "membership.self_decision_forbidden",
+} as const;
+
 export default function AdmissionRequests() {
   const { t } = useI18n();
   const { allowed, loading } = useAccess("membership.manage");
-  const errorMessage = useErrorMessage({ codes: { branch_transfer_required: "membership.branch_transfer_required" } });
+  const errorMessage = useErrorMessage({ codes: ADMIN_CODES });
   const confirm = useConfirm();
   const [requests, setRequests] = useState<Request[] | null>(null);
   const [busy, setBusy] = useState(false);

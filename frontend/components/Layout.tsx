@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api, APP_MENU_CHANGED_EVENT } from "@/lib/api";
+import { ApiError } from "@/lib/errorMessage";
 import { resetAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
@@ -96,14 +97,22 @@ export default function Layout({children}:{children:React.ReactNode}){
   useEffect(()=>{
     if(isPublic){setLoading(false);return}
     let cancelled=false;
+    let retry:ReturnType<typeof setTimeout>|undefined;
     void(async()=>{
       try{
-        const [u,m]=await Promise.all([api.getMe(),api.getMenus()]);
+        // Цэс ачаалагдаагүй нь гарах шалтгаан биш — хоосон цэстэй үлдэнэ.
+        const [u,m]=await Promise.all([api.getMe(),api.getMenus().catch(()=>[])]);
         if(cancelled)return;
         reLoginTried.current=false;
         setUser(u);setMenus(m||[]);
-      }catch{
+      }catch(err){
         if(cancelled)return;
+        // Сүлжээ тасарсан, сервер түр унасан (status 0 / 5xx) нь session
+        // дууссан гэсэн үг биш: нэвтрэх хуудас руу шидэхгүй, дахин оролдоно.
+        if(err instanceof ApiError&&(err.status===0||err.status>=500)){
+          retry=setTimeout(()=>setAuthNonce(n=>n+1),3000);
+          return;
+        }
         // Бүрхүүл дотор /login гэдэг web хуудас байхгүй — нэвтрэлтийг native тал
         // эзэмшдэг. Тэр барьж авч чадвал өгөгдлөө дахин татна. reLoginTried нь
         // дахин нэвтэрсэн ч session хүчингүй хэвээр байх үед мөчлөг үүсгэхээс
@@ -120,12 +129,12 @@ export default function Layout({children}:{children:React.ReactNode}){
         if(pathname==="/member/check-in"&&location.hash){
           try{sessionStorage.setItem("sdy.checkin",JSON.stringify({fragment:location.hash,expires:Date.now()+5*60*1000}))}catch{/* Storage may be disabled. */}
         }
-        router.push(`/login?next=${encodeURIComponent(pathname)}`);
+        router.push(`/login?next=${encodeURIComponent(pathname+location.search)}`);
       }finally{
-        if(!cancelled)setLoading(false);
+        if(!cancelled&&!retry)setLoading(false);
       }
     })();
-    return()=>{cancelled=true};
+    return()=>{cancelled=true;clearTimeout(retry)};
   },[pathname,router,isPublic,locale,authNonce]);
   // Бүрхүүлийн цэс, toolbar, deep link нь ижил гэрээгээр ажлын мужтай ярина.
   useEffect(()=>{
