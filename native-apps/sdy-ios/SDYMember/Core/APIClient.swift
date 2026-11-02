@@ -107,6 +107,7 @@ final class APIClient {
     // MARK: - Transport
 
     func raw(_ method: HTTPMethod, _ path: String, body: [String: Any]? = nil,
+             upload: (data: Data, type: String)? = nil,
              timeout: TimeInterval = 30, signsOutOn401: Bool = true) async throws -> Data {
         #if DEBUG
         if let fixtures {
@@ -126,7 +127,10 @@ final class APIClient {
         if let token = tokens.token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        if let body {
+        if let upload {
+            request.setValue(upload.type, forHTTPHeaderField: "Content-Type")
+            request.httpBody = upload.data
+        } else if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         } else if method != .get {

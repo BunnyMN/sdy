@@ -71,7 +71,8 @@ final class DiscussionModel: ObservableObject {
             guard let self else { return }
             do {
                 let started = try await api.vote(eventID, motion: motion.id, choice: choice)
-                guard !Task.isCancelled else { return }
+                // The sheet may have been swiped away while this was in flight.
+                guard !Task.isCancelled, signing != nil else { return }
                 signing?.code = started.verificationCode
                 signing?.sessionID = started.sessionId
                 signing?.appLink = started.appLink
@@ -155,6 +156,14 @@ final class DiscussionModel: ObservableObject {
         stopTimer()
         signing = nil
         Task { await load() }
+    }
+
+    /// The signing sheet went away, however it was closed: nothing may keep
+    /// polling, ticking or opening the eID app behind it.
+    func signingSheetDismissed() {
+        watchTask?.cancel()
+        watchTask = nil
+        stopTimer()
     }
 
     func propose(title: String, body: String) async -> Bool {

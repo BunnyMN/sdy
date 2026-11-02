@@ -10,6 +10,7 @@ struct SDYMemberApp: App {
             RootView()
                 .environmentObject(app)
                 .tint(Theme.accent)
+                .preferredColorScheme(.dark)
                 .task { await app.bootstrap() }
                 .onOpenURL { app.handle(url: $0) }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in

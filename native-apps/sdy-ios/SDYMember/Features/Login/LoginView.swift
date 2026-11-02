@@ -3,58 +3,82 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var app: AppModel
     @StateObject private var model = EIDLoginModel()
+    @StateObject private var reel = PosterReel()
     @State private var showPassword = false
     @FocusState private var regFocused: Bool
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
                 header
-                if let reason = app.signOutReason {
-                    NoticeView(text: reason, kind: .info)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 12))
+                VStack(spacing: 16) {
+                    if let reason = app.signOutReason {
+                        NoticeView(text: reason, kind: .info)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(Theme.cardRaised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    card
+                    footer
                 }
-                card
-                footer
+                .padding(.horizontal, 16)
+                .padding(.top, 22)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity)
+                .background(
+                    UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32, style: .continuous)
+                        .fill(Color(red: 0.05, green: 0.055, blue: 0.075))
+                        .ignoresSafeArea(edges: .bottom)
+                )
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
-            .frame(maxWidth: 520)
+            .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Theme.groupedBackground.ignoresSafeArea())
+        .scrollIndicators(.hidden)
+        .background(alignment: .top) {
+            PosterBackdrop(reel: reel, height: 640).ignoresSafeArea()
+        }
+        .background(Color(red: 0.05, green: 0.055, blue: 0.075).ignoresSafeArea())
         .sheet(isPresented: $showPassword) {
             PasswordLoginSheet { await app.signedIn() }
         }
         .onAppear {
+            reel.start()
             let appRef = app
             model.onSignedIn = { [weak appRef] in await appRef?.signedIn() }
             // A cold launch from eID's link can bump resumeTick before this view exists.
             model.resume(sessionFromLink: app.takeEIDReturnSession())
         }
         .onChange(of: app.resumeTick) { _, _ in model.resume(sessionFromLink: app.takeEIDReturnSession()) }
+        .onDisappear { reel.stop() }
     }
 
     private var header: some View {
-        VStack(spacing: 12) {
-            Image("Logo")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 112, height: 112)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                .accessibilityLabel("SDY лого")
-            Text("E-sdy")
-                .font(.largeTitle.bold())
-            Text("Ирц, арга хэмжээ, хураамжаа нэг дороос.\neID Mongolia-аар аюулгүй нэвтэрнэ үү.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image("Logo")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityLabel("SDY лого")
+                Text("Монголын залуучуудын тэргүүлэгч дэвшилтэт дуу хоолой")
+                    .font(.subheadline.weight(.medium).italic())
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 24)
+
+            PosterStage(reel: reel)
+                .frame(height: 440)
+                .padding(.top, 14)
+
+            PosterCaption(reel: reel)
+                .padding(.top, 8)
+                .padding(.bottom, 30)
         }
-        .padding(.top, 8)
+        .padding(.horizontal, 20)
     }
 
     @ViewBuilder
@@ -70,8 +94,9 @@ struct LoginView: View {
                 chooser
             }
         }
-        .padding(20)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(18)
+        .background(Color(red: 0.11, green: 0.12, blue: 0.15), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.06), lineWidth: 1))
     }
 
     @ViewBuilder
@@ -104,7 +129,7 @@ struct LoginView: View {
                     .font(.title3.monospaced())
                     .padding(.horizontal, 14)
                     .frame(minHeight: 50)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .focused($regFocused)
                     .submitLabel(.go)
                     .onSubmit { if model.canStart { model.start() } }
@@ -133,9 +158,11 @@ struct LoginView: View {
                 Text(model.method == .registerNumber ? "eID-ээр нэвтрэх" : "eID апп нээх")
             }
             .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(Theme.brandRed.opacity(model.canStart ? 1 : 0.4), in: Capsule())
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(PressableStyle())
         .disabled(!model.canStart)
     }
 
@@ -211,17 +238,23 @@ struct LoginView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 12) {
-            Button("Нууц үгээр нэвтрэх") { showPassword = true }
-                .font(.footnote)
-                .frame(minHeight: Theme.minTap)
-                .disabled(model.isBusy)
-            HStack(spacing: 20) {
-                Link("Нууцлалын бодлого", destination: AppConfig.privacyURL)
-                Link("Тусламж", destination: AppConfig.supportURL)
+        VStack(spacing: 22) {
+            Button { showPassword = true } label: {
+                Text("Нууц үгээр нэвтрэх")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(Color(red: 0.11, green: 0.12, blue: 0.15), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.06), lineWidth: 1))
             }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            .buttonStyle(PressableStyle())
+            .disabled(model.isBusy)
+
+            HStack(spacing: 8) {
+                QuickLink(title: "Вэбсайт", systemImage: "globe", url: AppConfig.websiteURL)
+                QuickLink(title: "Нууцлал", systemImage: "hand.raised.fill", url: AppConfig.privacyURL)
+                QuickLink(title: "Тусламж", systemImage: "questionmark", url: AppConfig.supportURL)
+            }
         }
     }
 }
@@ -289,5 +322,27 @@ struct PasswordLoginSheet: View {
             let api = APIError.wrap(error)
             self.error = api.status == 401 || api.status == 400 ? "Имэйл эсвэл нууц үг буруу байна." : api.message
         }
+    }
+}
+
+/// A round-cornered square link with its label below, under the sign-in sheet.
+private struct QuickLink: View {
+    let title: String
+    let systemImage: String
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            VStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 64, height: 64)
+                    .background(Color(red: 0.11, green: 0.12, blue: 0.15), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Text(title).font(.subheadline).foregroundStyle(.white.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(PressableStyle(scale: 0.9))
     }
 }

@@ -20,6 +20,8 @@ final class FixtureRouter {
         case (.get, ["auth", "me"]): return try file("me")
         case (.get, ["profile"]): return try file("profile")
         case (.get, ["profile", "deletion-request"]): return Data(#"{"status":"none"}"#.utf8)
+        case (.get, ["profile", "photo"]): throw APIError(kind: .server(status: 404), serverMessage: "no photo", code: nil)
+        case (.put, ["profile", "photo"]), (.delete, ["profile", "photo"]): return Data("{}".utf8)
         case (.get, ["me", "branches"]): return try file("branches")
         case (.get, ["me", "member-record"]): return try file(variant == "nobranch" ? "member_record_none" : "member_record")
         case (.get, ["auth", "tenants"]): return try file("tenants")

@@ -1,4 +1,4 @@
-{"memberships":[{"tenant_id":"t-1","name":"СДЯ Дархан-Уул салбар","slug":"darkhan-uul","is_primary":true,"status":"active","member_since":"2025-03-12T09:00:00Z","has_access":true},{"tenant_id":"t-2","name":"СДЯ Улаанбаатар хотын хороо","slug":"ulaanbaatar","is_primary":false,"status":"none","member_since":null,"has_access":true}],
+{"memberships":[{"tenant_id":"t-1","name":"СДЯ Дархан-Уул салбар","slug":"darkhan-uul","is_primary":true,"status":"active","member_since":"2025-03-12T09:00:00Z","has_access":true,"position":"board"},{"tenant_id":"t-2","name":"СДЯ Улаанбаатар хотын хороо","slug":"ulaanbaatar","is_primary":false,"status":"none","member_since":null,"has_access":true}],
  "profile":{"phone":"99112233","residence":"Дархан-Уул, Дархан сум","notifications_enabled":true},
  "history":[{"id":"h1","tenant_id":"t-1","branch":"СДЯ Дархан-Уул салбар","from_status":"none","status":"active","reason":"Элсэх хүсэлт батлагдсан","created_at":"2025-03-12T09:00:00Z"}],
  "has_more":false,"next_offset":1}
