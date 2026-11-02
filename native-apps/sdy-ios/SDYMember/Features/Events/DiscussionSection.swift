@@ -5,6 +5,8 @@ struct DiscussionSection: View {
     @EnvironmentObject var app: AppModel
     @State private var confirm: (motion: Motion, choice: String)?
     @State private var proposing = false
+    @State private var reporting: Motion?
+    @State private var blocking: Motion?
 
     var body: some View {
         Section {
@@ -25,6 +27,10 @@ struct DiscussionSection: View {
                         confirm = (motion, choice)
                     } onCheck: {
                         model.vote(motion, choice: motion.myVote?.choice ?? "yes")
+                    } onReport: {
+                        reporting = motion
+                    } onBlock: {
+                        blocking = motion
                     }
                 }
                 if data.eventStatus != "cancelled" {
@@ -51,6 +57,31 @@ struct DiscussionSection: View {
             Text("eID Mongolia апп нээгдэж, PIN2-оор баталгаажуулна. Зурсан саналыг өөрчлөх боломжгүй.")
         }
         .sheet(isPresented: $proposing) { ProposeSheet(model: model) }
+        .confirmationDialog("Яагаад мэдээлэх вэ?", isPresented: Binding(get: { reporting != nil }, set: { if !$0 { reporting = nil } }), titleVisibility: .visible) {
+            ForEach(Self.reportReasons, id: \.self) { reason in
+                Button(reason) {
+                    if let motion = reporting { Task { await model.report(motion, reason: reason) } }
+                }
+            }
+            Button("Болих", role: .cancel) {}
+        } message: {
+            Text("Зохион байгуулагчид мэдэгдэл очно. Олон гишүүн мэдээлсэн асуудал хянагдах хүртэл нуугдана.")
+        }
+        .confirmationDialog(blockTitle, isPresented: Binding(get: { blocking != nil }, set: { if !$0 { blocking = nil } }), titleVisibility: .visible) {
+            Button("Блоклох", role: .destructive) {
+                if let motion = blocking { Task { await model.block(motion) } }
+            }
+            Button("Болих", role: .cancel) {}
+        } message: {
+            Text("Энэ гишүүний дэвшүүлсэн, санал хураалтад ороогүй асуудлууд танд харагдахгүй болно. Профайл → Блоклосон гишүүд хэсгээс буцаана.")
+        }
+    }
+
+    static let reportReasons = ["Доромжилсон, үзэн ядсан", "Худал, төөрөгдүүлсэн", "Спам, сурталчилгаа", "Хувийн мэдээлэл задруулсан", "Бусад"]
+
+    private var blockTitle: String {
+        guard let blocking else { return "" }
+        return "\(blocking.proposerName.isEmpty ? "Энэ гишүүн" : blocking.proposerName)-ийг блоклох уу?"
     }
 
     private var confirmTitle: String {
@@ -85,6 +116,11 @@ struct MotionRow: View {
     let offline: Bool
     let onVote: (String) -> Void
     let onCheck: () -> Void
+    var onReport: () -> Void = {}
+    var onBlock: () -> Void = {}
+
+    /// Somebody else's words: the reader can report them or block their author.
+    private var othersWords: Bool { !motion.proposerId.isEmpty && motion.proposerId != data.me }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -95,8 +131,30 @@ struct MotionRow: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
+                if othersWords {
+                    Menu {
+                        Button { onReport() } label: {
+                            Label(motion.reportedByMe ? "Мэдээлсэн" : "Мэдээлэх", systemImage: "flag")
+                        }
+                        .disabled(motion.reportedByMe)
+                        Button(role: .destructive) { onBlock() } label: {
+                            Label("Гишүүнийг блоклох", systemImage: "hand.raised.slash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.body.weight(.semibold))
+                            .frame(width: Theme.minTap, height: Theme.minTap)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(offline)
+                    .accessibilityLabel("Асуудлын үйлдэл: мэдээлэх, блоклох")
+                }
             }
             statusChip
+            if data.canManage, motion.reportCount > 0 {
+                Label("\(Int(motion.reportCount)) гишүүн мэдээлсэн", systemImage: "flag.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.orange)
+            }
             if !motion.body.isEmpty { Text(motion.body).font(.subheadline) }
             if motion.status == "voting" || motion.status == "decided" { tally }
             myVote

@@ -66,7 +66,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.3.0" }
+func (m *Module) Version() string { return "1.4.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -111,6 +111,10 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.With(read).Get("/points", m.myPoints)
 		er.With(manage).Get("/summary", m.summary)
 		er.With(read).Get("/leaderboard", m.leaderboard)
+		// Blocking: a member stops seeing the issues one person raises.
+		er.With(read).Get("/blocks", m.blocks)
+		er.With(read).Post("/blocks/{userID}", m.block)
+		er.With(read).Delete("/blocks/{userID}", m.unblock)
 		er.Route("/{id}", func(one chi.Router) {
 			one.With(read).Get("/", m.get)
 			one.With(manage).Put("/", m.update)
@@ -134,6 +138,7 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/vote", m.vote)
 			one.With(read).Post("/motions/{motionID}/vote/poll", m.pollVote)
 			one.With(read).Get("/motions/{motionID}/votes", m.votes)
+			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/report", m.report)
 
 			// Tasks: managers create and assign; members accept, decline or
 			// volunteer; a manager confirms the work, which awards its points.

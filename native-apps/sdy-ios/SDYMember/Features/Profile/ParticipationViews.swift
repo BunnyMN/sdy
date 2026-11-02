@@ -251,3 +251,60 @@ struct PersonalHistoryView: View {
         } catch { self.error = APIError.wrap(error) }
     }
 }
+
+/// Members blocked in the discussion, with a way back.
+struct BlockedMembersView: View {
+    @EnvironmentObject var app: AppModel
+    @State private var data: BlockedList?
+    @State private var error: APIError?
+    @State private var busy: String?
+
+    var body: some View {
+        List {
+            Section {
+                if let data {
+                    if data.blocked.isEmpty {
+                        Text("Та хэнийг ч блоклоогүй байна.").foregroundStyle(.secondary)
+                    }
+                    ForEach(data.blocked) { member in
+                        HStack {
+                            Text(member.name.isEmpty ? "—" : member.name)
+                            Spacer()
+                            Button("Блок цуцлах") { Task { await unblock(member) } }
+                                .buttonStyle(.bordered)
+                                .disabled(busy != nil || app.isOffline)
+                        }
+                        .frame(minHeight: Theme.minTap)
+                    }
+                } else if let error {
+                    ErrorStateView(error: error) { Task { await load() } }
+                } else {
+                    ProgressView()
+                }
+            } footer: {
+                Text("Блоклосон гишүүний дэвшүүлсэн, санал хураалтад ороогүй асуудлууд танд харагдахгүй. Зүй бус контентыг асуудлын «…» цэсээр мэдээлнэ үү.")
+            }
+        }
+        .navigationTitle("Блоклосон гишүүд")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+        .offlineBanner()
+    }
+
+    private func load() async {
+        do { data = try await app.api.blockedMembers(); error = nil }
+        catch { self.error = APIError.wrap(error) }
+    }
+
+    private func unblock(_ member: BlockedMember) async {
+        busy = member.userId
+        defer { busy = nil }
+        do {
+            try await app.api.unblock(member.userId)
+            data?.blocked.removeAll { $0.userId == member.userId }
+        } catch {
+            self.error = APIError.wrap(error)
+        }
+    }
+}

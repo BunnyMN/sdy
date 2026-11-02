@@ -423,6 +423,7 @@ extension HomeRoute {
         case .deleteAccount: DeleteAccountView()
         case .joinRequest: JoinRequestView()
         case .appearance: ThemePickerView()
+        case .blocked: BlockedMembersView()
         }
     }
 }

@@ -34,6 +34,8 @@ final class FixtureRouter {
         case (.get, ["events", "mine"]): return try file("events_mine")
         case (.get, ["events", "points"]): return try file("points")
         case (.get, ["events", "leaderboard"]): return try file("leaderboard")
+        case (.get, ["events", "blocks"]):
+            return Data(#"{"blocked":[{"user_id":"u-9","name":"Жишээ Гишүүн","blocked_at":"2026-11-01T10:00:00Z"}]}"#.utf8)
         case (.get, let p) where p.count == 2 && p[0] == "events": return try event(p[1])
         case (.get, let p) where p.count == 3 && p[0] == "events" && p[2] == "motions": return try file("motions")
         case (.get, let p) where p.count == 3 && p[0] == "events" && p[2] == "tasks": return try file("tasks")
