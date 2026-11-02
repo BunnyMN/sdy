@@ -234,7 +234,7 @@ func (s *Sender) send(ctx context.Context, device string, sandbox bool, d due) (
 	if err != nil {
 		return false, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode == http.StatusOK {
 		return false, nil
 	}

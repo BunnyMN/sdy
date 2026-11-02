@@ -31,6 +31,11 @@ func TestPushesAreClaimedOnceAndNeverLate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The test database holds other tests' notifications; claim_pushes takes
+	// the oldest first, so those are settled before this one is asked about.
+	if _, err := pool.Exec(ctx, `UPDATE registry.member_notifications SET pushed_at=now() WHERE pushed_at IS NULL AND user_id<>$1`, user); err != nil {
+		t.Fatal(err)
+	}
 	claim := func() (titles []string) {
 		rows, err := pool.Query(ctx, `SELECT title FROM registry.claim_pushes(500) WHERE user_id=$1`, user)
 		if err != nil {
