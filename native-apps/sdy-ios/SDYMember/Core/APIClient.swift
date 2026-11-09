@@ -109,6 +109,26 @@ final class APIClient {
     func raw(_ method: HTTPMethod, _ path: String, body: [String: Any]? = nil,
              upload: (data: Data, type: String)? = nil,
              timeout: TimeInterval = 30, signsOutOn401: Bool = true) async throws -> Data {
+        do {
+            return try await transmit(method, path, body: body, upload: upload, timeout: timeout, signsOutOn401: signsOutOn401)
+        } catch StaleToken.rejected {
+            // The token this request carried was replaced while it was in
+            // flight (a branch switch revokes the old one at once). The server
+            // turned it away before acting, so once more with the current one.
+            do {
+                return try await transmit(method, path, body: body, upload: upload, timeout: timeout, signsOutOn401: signsOutOn401)
+            } catch StaleToken.rejected {
+                throw APIError(kind: .unauthorized, serverMessage: "", code: nil)
+            }
+        }
+    }
+
+    /// A 401 for a token that is no longer the current one.
+    private enum StaleToken: Error { case rejected }
+
+    private func transmit(_ method: HTTPMethod, _ path: String, body: [String: Any]?,
+                          upload: (data: Data, type: String)?,
+                          timeout: TimeInterval, signsOutOn401: Bool) async throws -> Data {
         #if DEBUG
         if let fixtures {
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -123,9 +143,12 @@ final class APIClient {
         request.setValue("mn", forHTTPHeaderField: "Accept-Language")
         request.setValue("bearer", forHTTPHeaderField: "X-Session-Transport")
         request.setValue("SDYMember-iOS/\(AppConfig.appVersion)", forHTTPHeaderField: "X-Client")
-        let hadToken = tokens.hasToken
-        if let token = tokens.token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // The token this request goes out with: whatever the answer says about
+        // the session is about this token, which may be stale by then.
+        let sentToken = tokens.token.flatMap { $0.isEmpty ? nil : $0 }
+        let hadToken = sentToken != nil
+        if let sentToken {
+            request.setValue("Bearer \(sentToken)", forHTTPHeaderField: "Authorization")
         }
         if let upload {
             request.setValue(upload.type, forHTTPHeaderField: "Content-Type")
@@ -150,11 +173,13 @@ final class APIClient {
         notifyReachability(true)
         guard let http = response as? HTTPURLResponse else { throw APIError.network }
 
-        captureToken(from: http, data: data, hadToken: hadToken)
+        captureToken(from: http, data: data, sentToken: sentToken)
 
         if http.statusCode == 401 {
-            if signsOutOn401 && hadToken {
-                tokens.clear()
+            if hadToken, tokens.token != sentToken {
+                throw StaleToken.rejected
+            }
+            if signsOutOn401 && hadToken && tokens.clear(ifStill: sentToken) {
                 notifySessionEnded()
             }
             let (message, code) = Self.errorBody(data)
@@ -168,13 +193,15 @@ final class APIClient {
     }
 
     /// Reads a new token from the answer: the JSON field wins over the cookie.
-    func captureToken(from http: HTTPURLResponse, data: Data, hadToken: Bool) {
+    /// A cookie that rotates or clears the session only counts while the token
+    /// the request carried is still the current one — a late answer from
+    /// before a branch switch must not drop or overwrite the new token.
+    func captureToken(from http: HTTPURLResponse, data: Data, sentToken: String?) {
         let header = http.value(forHTTPHeaderField: "Set-Cookie")
         switch SessionCookieParser.parse(header) {
-        case .set(let token): tokens.save(token)
+        case .set(let token): tokens.save(token, ifStill: sentToken)
         case .cleared:
-            if hadToken {
-                tokens.clear()
+            if sentToken != nil, tokens.clear(ifStill: sentToken) {
                 // A cleared cookie on a successful answer ends the session;
                 // a logout call expects it and handles sign-out itself.
                 if (200..<300).contains(http.statusCode), !(http.url?.path.hasSuffix("/auth/logout") ?? false) {

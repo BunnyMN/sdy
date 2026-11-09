@@ -227,6 +227,7 @@ APNs «token байхгүй» гэвэл token устна. iOS: нэвтэрсн
 Тохиргоо (GitHub secrets → хостын `.env`): `PUSH_TOKEN_ENCRYPTION_KEY` (32 байт base64),
 `APNS_KEY` (.p8 файлын base64, нэг мөр), `APNS_KEY_ID`. `APNS_TEAM_ID` = `APPLE_TEAM_ID`.
 Түлхүүргүй бол push унтарсан, мэдэгдэл аппын жагсаалтад л харагдана.
+Android апп push-гүй (FCM илгээгч хараахан алга) — мэдэгдэл аппын жагсаалт, Нүүрийн badge-д л харагдана.
 
 ## Гишүүний PWA
 
@@ -267,6 +268,9 @@ GitHub secret/variable-д орно ([Ажиллагаа](OPERATIONS.md)).
 Жишээ нь esdy iOS аппын universal link-д хэрэгтэй `APPLE_TEAM_ID`
 (`T65Z28HF29`) нь GitHub variable → `deploy.yml` → хостын `.env` →
 frontend-ийн `/.well-known/apple-app-site-association` гэж дамжина; хоосон бол 404.
+Android апп (`native-apps/sdy-android`)-ын App Link-д хэрэгтэй `ANDROID_CERT_SHA256`
+(Play Console-ийн app signing key-ийн SHA-256, таслалаар) ч мөн адил GitHub variable →
+`deploy.yml` → `.env` → `/.well-known/assetlinks.json`; хоосон бол 404.
 
 **Хост дээр гараар хийгдсэн, CI хүрдэггүй зүйлс:**
 

@@ -63,9 +63,6 @@ targets:
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Арга хэмжээний ирцийн QR кодыг уншихад камер ашиглана.
-        LSApplicationQueriesSchemes:
-          - eidmongolia
-          - geregesmartid
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchMark

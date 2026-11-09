@@ -63,6 +63,30 @@ enum LinkParser {
         return .eidCallback(sessionId: session, returnPath: back)
     }
 
+    /// A notification's `path` (registry.member_notifications, the same links
+    /// the web opens) → the screen in this app. The server sends:
+    /// `/module/events/<uuid>?workspace=<tenant>[#discussion|#tasks]`,
+    /// `/member/history` (dues, payments, attendance), `/member/record`
+    /// (membership status, positions), `/member/participation` (points) and
+    /// `/member` (join and transfer decisions).
+    static func notificationTarget(_ path: String) -> NotificationTarget {
+        if let target = eventPath(path) { return .event(id: target.eventId, workspace: target.workspace) }
+        let bare = path.split(whereSeparator: { $0 == "?" || $0 == "#" }).first.map(String.init) ?? ""
+        var trimmed = bare
+        while trimmed.count > 1 && trimmed.hasSuffix("/") { trimmed.removeLast() }
+        switch trimmed {
+        case "/member", "/member/overview": return .home
+        case "/member/history": return .route(.history)
+        case "/member/record": return .route(.record)
+        case "/member/participation": return .route(.participation)
+        case "/member/leaderboard": return .route(.leaderboard)
+        case "/member/transfers": return .route(.transfers)
+        case "/member/dues": return .tab(.dues)
+        case "/member/check-in": return .tab(.checkin)
+        default: return .none
+        }
+    }
+
     /// `/module/events/<uuid>` (optionally `?workspace=<tenant>`) → (event, tenant).
     static func eventPath(_ path: String) -> (eventId: String, workspace: String?)? {
         guard let components = URLComponents(string: path) else { return nil }

@@ -40,6 +40,10 @@ final class TokenStore {
 
     func save(_ token: String) {
         lock.lock(); defer { lock.unlock() }
+        saveLocked(token)
+    }
+
+    private func saveLocked(_ token: String) {
         cached = token
         loaded = true
         guard !inMemory, let data = token.data(using: .utf8) else { return }
@@ -62,6 +66,39 @@ final class TokenStore {
 
     func clear() {
         lock.lock(); defer { lock.unlock() }
+        clearLocked()
+    }
+
+    /// Clears the token only while it is still `expected`: the answer that
+    /// ended a session speaks for the token it was sent with, not for one a
+    /// branch switch or sign-in saved while it was in flight. True if cleared.
+    @discardableResult
+    func clear(ifStill expected: String?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if !loaded && !inMemory {
+            cached = readKeychain()
+            loaded = true
+        }
+        guard let expected, !expected.isEmpty, cached == expected else { return false }
+        clearLocked()
+        return true
+    }
+
+    /// Saves a token only while `expected` is still the current one (a cookie
+    /// on a late answer must not undo a newer token). True if saved.
+    @discardableResult
+    func save(_ token: String, ifStill expected: String?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if !loaded && !inMemory {
+            cached = readKeychain()
+            loaded = true
+        }
+        guard cached == expected else { return false }
+        saveLocked(token)
+        return true
+    }
+
+    private func clearLocked() {
         cached = nil
         loaded = true
         guard !inMemory else { return }

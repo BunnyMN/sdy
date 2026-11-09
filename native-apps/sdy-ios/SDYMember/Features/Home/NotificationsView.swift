@@ -10,6 +10,8 @@ struct NotificationsView: View {
     @State private var error: APIError?
     @State private var busy = false
     @State private var actionError: String?
+    /// A screen a notification names, opened on top of this list.
+    @State private var pushed: HomeRoute?
 
     var body: some View {
         Group {
@@ -37,6 +39,7 @@ struct NotificationsView: View {
             }
         }
         .navigationTitle("Мэдэгдэл")
+        .navigationDestination(item: $pushed) { $0.destination }
         .toolbar {
             if unread > 0 {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -109,7 +112,17 @@ struct NotificationsView: View {
                 app.unreadCount = unread
             }
         }
-        do { try await app.openNotificationPath(item.path) } catch { actionError = APIError.wrap(error).message }
+        do {
+            // From the list, a screen opens on top of it (in Нүүр or Профайл,
+            // wherever the list is); tabs and events switch as a push would.
+            switch try await app.resolveNotification(item.path) {
+            case .route(let route): pushed = route
+            case .event(let id, _): app.openEvent(id)
+            case .tab(let tab): app.tab = tab
+            case .home: app.tab = .home; app.homePath = []
+            case .none: break
+            }
+        } catch { actionError = APIError.wrap(error).message }
     }
 
     private func readAll() async {

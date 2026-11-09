@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Бүхэлдээ харанхуй (iOS: .preferredColorScheme(.dark)). -->
+    <style name="Theme.SDY" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <!-- Эхлүүлэх дэлгэц: хар дэвсгэр, мөнгөлөг wordmark (iOS LaunchMark). -->
+    <style name="Theme.SDY.Starting" parent="Theme.SDY">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+</resources>

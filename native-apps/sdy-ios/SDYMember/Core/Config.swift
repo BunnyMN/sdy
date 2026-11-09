@@ -10,8 +10,6 @@ enum AppConfig {
     static let privacyURL = URL(string: "https://e-sdy.mn/privacy")!
     static let supportURL = URL(string: "https://e-sdy.mn/support")!
     static let eidAppStoreURL = URL(string: "https://apps.apple.com/mn/search?term=eID%20Mongolia")!
-    /// Schemes the eID Mongolia app answers to (also in LSApplicationQueriesSchemes).
-    static let eidSchemes = ["eidmongolia", "geregesmartid"]
     static let sessionCookieName = "session_token"
 
     /// Where eID returns the citizen after approving in the eID app. The path is
