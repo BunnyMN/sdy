@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Ирцийн QR уншихад л (iOS NSCameraUsageDescription-тэй ижил). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- eID Mongolia-ийн https device link-ийг ямар апп нээхийг шалгах (Android 11+ package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".SDYApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.SDY"
+        android:localeConfig="@xml/locales_config"
+        tools:targetApi="36">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.SDY.Starting"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!--
+              Android App Links (iOS-ийн universal links): e-sdy.mn/.well-known/assetlinks.json
+              энэ аппын гарын үсгийн SHA-256-г нэрлэсэн байх ёстой (frontend/app/.well-known/assetlinks.json).
+                /auth/eid/callback?app=android  eID апп-аас буцах
+                /member/check-in#event=…&token=…  ирцийн QR
+              Android 15-аас доош query-ээр шүүх боломжгүй тул вэбийн eID буцалт (app=android-гүй)
+              ч энд ирж болно — MainActivity түүнийг хөтөч рүү нь буцааж өгнө.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="e-sdy.mn" />
+                <data android:path="/auth/eid/callback" />
+                <data android:path="/member/check-in" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

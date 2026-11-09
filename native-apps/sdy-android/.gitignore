@@ -1,0 +1,15 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.kotlin/
+# Upload keystore and its passwords never enter git (see README)
+*.jks
+*.keystore
+keystore.properties
+# Play Console service-account key
+play-service-account.json

@@ -1,0 +1,10 @@
+{"charges":[
+ {"id":"c3","user_id":"u-1","name":"Батболд Ганзориг","period":"2026-10","amount":10000,"paid":0,"balance":10000,"due_date":"@D(-6,00:00)","waived":false,"waiver_reason":"","pending":0},
+ {"id":"c2","user_id":"u-1","name":"Батболд Ганзориг","period":"2026-09","amount":10000,"paid":5000,"balance":5000,"due_date":"@D(-36,00:00)","waived":false,"waiver_reason":"","pending":5000},
+ {"id":"c1","user_id":"u-1","name":"Батболд Ганзориг","period":"2026-08","amount":10000,"paid":10000,"balance":0,"due_date":"@D(-67,00:00)","waived":false,"waiver_reason":"","pending":0}
+],"payments":[
+ {"id":"pay3","charge_id":"c2","user_id":"u-1","name":"","amount":5000,"reference":"УБ90010112 2026-09 2","status":"pending","review_note":"","created_at":"@D(-2,12:10)"},
+ {"id":"pay2","charge_id":"c2","user_id":"u-1","name":"","amount":5000,"reference":"УБ90010112 2026-09","status":"approved","review_note":"","created_at":"@D(-30,12:10)"},
+ {"id":"pay1","charge_id":"c1","user_id":"u-1","name":"","amount":10000,"reference":"УБ90010112 2026-08","status":"approved","review_note":"","created_at":"@D(-60,09:00)"}
+],"has_more":true,"next_offset":3,
+ "totals":{"charged":30000,"paid":15000,"pending":5000,"outstanding":15000,"waived":0}}

@@ -1,0 +1,2 @@
+{"items":[{"id":"7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","branch":"СДЯ Дархан-Уул салбар","title":"Салбарын ээлжит хурал","starts_at":"@D(0,18:30)","status":"attended","points":10},{"id":"c3d4e5f6-a7b8-4c9d-8e0f-2a3b4c5d6e7f","branch":"СДЯ Дархан-Уул салбар","title":"Гишүүдийн уулзалт","starts_at":"@D(-14,18:00)","status":"attended","points":10}],
+ "entries":[{"id":"p1","branch":"СДЯ Дархан-Уул салбар","title":"Салбарын ээлжит хурал","delta":10,"reason":"attendance","created_at":"@D(0,18:41)"}],"total_points":45,"has_more":false,"next_offset":2}
