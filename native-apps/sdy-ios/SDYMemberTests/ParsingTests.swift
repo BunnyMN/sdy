@@ -88,13 +88,102 @@ final class SessionCookieTests: XCTestCase {
         let client = APIClient(tokens: store, cache: OfflineCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         let url = URL(string: "https://e-sdy.mn/api/v1/auth/switch-tenant")!
         let rotated = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Set-Cookie": "session_token=fromcookie; Path=/"])!
-        client.captureToken(from: rotated, data: Data("{}".utf8), hadToken: false)
+        client.captureToken(from: rotated, data: Data("{}".utf8), sentToken: nil)
         XCTAssertEqual(store.token, "fromcookie")
         // JSON wins over the cookie.
-        client.captureToken(from: rotated, data: Data(#"{"session_token":"fromjson"}"#.utf8), hadToken: true)
+        client.captureToken(from: rotated, data: Data(#"{"session_token":"fromjson"}"#.utf8), sentToken: "fromcookie")
         XCTAssertEqual(store.token, "fromjson")
         let cleared = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Set-Cookie": "session_token=; Max-Age=0"])!
-        client.captureToken(from: cleared, data: Data(), hadToken: true)
+        // A late answer cleared for an older token leaves the current one alone.
+        client.captureToken(from: cleared, data: Data(), sentToken: "older")
+        XCTAssertEqual(store.token, "fromjson")
+        // …and a late cookie does not overwrite it either.
+        client.captureToken(from: rotated, data: Data("{}".utf8), sentToken: "older")
+        XCTAssertEqual(store.token, "fromjson")
+        client.captureToken(from: cleared, data: Data(), sentToken: "fromjson")
+        XCTAssertNil(store.token)
+    }
+
+    func testTokenStoreCompareAndClear() {
+        let store = TokenStore(inMemory: true)
+        store.save("new")
+        XCTAssertFalse(store.clear(ifStill: "old"))
+        XCTAssertEqual(store.token, "new")
+        XCTAssertFalse(store.clear(ifStill: nil))
+        XCTAssertTrue(store.clear(ifStill: "new"))
+        XCTAssertNil(store.token)
+    }
+}
+
+/// Answers every request from a closure, so a test can play the server.
+final class StubProtocol: URLProtocol {
+    static var handler: ((URLRequest) -> (Int, [String: String], Data))?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let handler = Self.handler else { return }
+        let (status, headers, data) = handler(request)
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+final class StaleTokenTests: XCTestCase {
+    private func client(_ store: TokenStore) -> APIClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubProtocol.self]
+        return APIClient(tokens: store,
+                         cache: OfflineCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                         session: URLSession(configuration: config))
+    }
+
+    override func tearDown() { StubProtocol.handler = nil }
+
+    /// A branch switch revokes the old token at once. A request that went out
+    /// with it and comes back 401 must not sign the member out of the new
+    /// session: it is sent again with the new token.
+    func testRequestWithReplacedTokenRetriesInsteadOfSigningOut() async throws {
+        let store = TokenStore(inMemory: true)
+        store.save("old")
+        let api = client(store)
+        var ended = false
+        api.onSessionEnded = { ended = true }
+        var seen: [String] = []
+        StubProtocol.handler = { request in
+            let auth = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            seen.append(auth)
+            if auth == "Bearer old" {
+                // The switch lands while this request is on the wire.
+                store.save("new")
+                return (401, [:], Data(#"{"error":"session revoked"}"#.utf8))
+            }
+            return (200, [:], Data(#"{"ok":true}"#.utf8))
+        }
+        _ = try await api.raw(.get, "/me/notifications")
+        XCTAssertEqual(seen, ["Bearer old", "Bearer new"])
+        XCTAssertEqual(store.token, "new")
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(ended)
+    }
+
+    /// A 401 for the token still in use is a real end of the session.
+    func testRequestWithCurrentTokenSignsOutOn401() async {
+        let store = TokenStore(inMemory: true)
+        store.save("only")
+        let api = client(store)
+        let ended = expectation(description: "session ended")
+        api.onSessionEnded = { ended.fulfill() }
+        StubProtocol.handler = { _ in (401, [:], Data()) }
+        do {
+            _ = try await api.raw(.get, "/me/notifications")
+            XCTFail("expected 401")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.kind, .unauthorized)
+        }
+        await fulfillment(of: [ended], timeout: 1)
         XCTAssertNil(store.token)
     }
 }
@@ -263,5 +352,31 @@ final class ProfilePhotoTests: XCTestCase {
 
     func testAnEmptyImageIsRefused() {
         XCTAssertNil(AppModel.squareJPEG(UIImage()))
+    }
+}
+
+/// Every path the server writes into registry.member_notifications
+/// (migrations 00112, 00113, 00119; membership 00002; events 00002–00004)
+/// leads somewhere real in the app.
+final class NotificationTargetTests: XCTestCase {
+    func testServerPaths() {
+        let event = "3f6c2a10-8b1e-4c55-9a8e-1d2f3a4b5c61", tenant = "9a8b7c6d-0000-4000-8000-000000000001"
+        XCTAssertEqual(LinkParser.notificationTarget("/module/events/\(event)?workspace=\(tenant)"), .event(id: event, workspace: tenant))
+        XCTAssertEqual(LinkParser.notificationTarget("/module/events/\(event)?workspace=\(tenant)#discussion"), .event(id: event, workspace: tenant))
+        XCTAssertEqual(LinkParser.notificationTarget("/module/events/\(event)?workspace=\(tenant)#tasks"), .event(id: event, workspace: tenant))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/history"), .route(.history))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/record"), .route(.record))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/participation"), .route(.participation))
+        XCTAssertEqual(LinkParser.notificationTarget("/member"), .home)
+    }
+
+    func testOtherPaths() {
+        XCTAssertEqual(LinkParser.notificationTarget("/member/dues"), .tab(.dues))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/check-in"), .tab(.checkin))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/history/"), .route(.history))
+        XCTAssertEqual(LinkParser.notificationTarget("/member/record?x=1#top"), .route(.record))
+        XCTAssertEqual(LinkParser.notificationTarget(""), .none)
+        XCTAssertEqual(LinkParser.notificationTarget("/settings"), .none)
+        XCTAssertEqual(LinkParser.notificationTarget("https://evil.example/member"), .none)
     }
 }

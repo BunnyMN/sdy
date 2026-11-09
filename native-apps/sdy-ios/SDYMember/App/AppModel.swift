@@ -53,7 +53,10 @@ final class AppModel: ObservableObject {
             self.isOffline = !reachable
         }
         #if DEBUG
-        if AppConfig.fixturesEnabled { api.tokens.save("fixture-token") }
+        // `-SDYSignedOut` keeps the fixtures but starts at the sign-in screen.
+        if AppConfig.fixturesEnabled && !ProcessInfo.processInfo.arguments.contains("-SDYSignedOut") {
+            api.tokens.save("fixture-token")
+        }
         #endif
     }
 
@@ -266,24 +269,34 @@ final class AppModel: ObservableObject {
         eventsPath = [id]
     }
 
-    /// Opens a notification's link inside the app: events (switching branch
-    /// first when the notification names another one), dues, or nothing.
+    /// Where a notification's link leads, for a push tapped anywhere: the
+    /// screen it names, or the notification list when it names none.
     func openNotificationPath(_ path: String) async throws {
-        if let target = LinkParser.eventPath(path) {
-            if let workspace = target.workspace, workspace != me?.tenantId {
+        switch try await resolveNotification(path) {
+        case .event(let id, _): openEvent(id)
+        case .tab(let t): tab = t
+        case .route(let route): tab = .home; homePath = [route]
+        case .home: tab = .home; homePath = []
+        case .none: tab = .home; homePath = [.notifications]
+        }
+    }
+
+    /// Makes a notification's target reachable (switching branch for an event
+    /// in another one) and says where it is. Screens that need an approved
+    /// branch fall back to `.none` without one.
+    func resolveNotification(_ path: String) async throws -> NotificationTarget {
+        let target = LinkParser.notificationTarget(path)
+        switch target {
+        case .event(let id, let workspace):
+            guard hasApprovedBranch || workspace != nil else { return .none }
+            if let workspace, workspace != me?.tenantId {
                 try await switchBranch(to: workspace)
             }
-            openEvent(target.eventId)
-        } else if path.hasPrefix("/member/dues"), hasApprovedBranch {
-            tab = .dues
-        } else if path.hasPrefix("/member/check-in"), hasApprovedBranch {
-            tab = .checkin
-        } else if path.hasPrefix("/member/participation"), hasApprovedBranch {
-            tab = .home
-            homePath = [.participation]
-        } else {
-            tab = .home
-            homePath = [.notifications]
+            return hasApprovedBranch ? .event(id: id, workspace: nil) : .none
+        case .tab, .route(.participation), .route(.leaderboard):
+            return hasApprovedBranch ? target : .none
+        default:
+            return target
         }
     }
 
@@ -303,6 +316,18 @@ final class AppModel: ObservableObject {
         }
         #endif
     }
+}
+
+/// Where a notification leads inside the app.
+enum NotificationTarget: Equatable {
+    /// An event (in `workspace`, when the link names a branch).
+    case event(id: String, workspace: String?)
+    case tab(AppModel.Tab)
+    case route(HomeRoute)
+    /// Нүүр itself — where join and transfer decisions show.
+    case home
+    /// Nothing more to open than the notification itself.
+    case none
 }
 
 /// Screens pushed from Нүүр / Профайл.

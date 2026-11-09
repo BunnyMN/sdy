@@ -5,8 +5,15 @@ SDY-ийн гишүүдэд зориулсан native SwiftUI апп (WebView а
 
 - Bundle ID: `mn.esdy.member` · Нэр: **E-sdy** · iOS 17+ · зөвхөн iPhone, босоо
 - Таб: Нүүр · Арга хэмжээ · Ирц · Хураамж · Профайл (салбар батлагдаагүй гишүүнд зөвхөн Нүүр, Профайл)
-- Нэвтрэлт: eID Mongolia (регистрийн дугаараар push, эсвэл энэ утсан дээрх eID апп), нэмэлтээр имэйл/нууц үг (App Review-д)
+- Нэвтрэлт: eID Mongolia — ганц «e-ID | Нэвтрэх» товч; энэ утсан дээрх eID апп руу шууд, апп байхгүй бол регистрийн дугаараар. Имэйл/нууц үг нь доод талын жижиг холбоос (App Review-ийн демо бүртгэл)
 - Session: bearer token (`Authorization: Bearer`, `X-Session-Transport: bearer`), Keychain-д хадгална; cookie хэрэглэхгүй
+  - Салбар солиход сервер хуучин token-ыг шууд цуцалдаг. Хүсэлт бүр ямар token-оор явснаа санаж, 401 / цэвэрлэсэн
+    cookie нь зөвхөн тэр token одоо ч хүчинтэй бол session-ийг дуусгана; хооронд нь солигдсон бол шинэ token-оор
+    нэг удаа дахин илгээнэ (`APIClient.raw`, `TokenStore.clear(ifStill:)`, `StaleTokenTests`).
+- Мэдэгдлийн линк (`registry.member_notifications.path`) → дэлгэц: `LinkParser.notificationTarget` —
+  `/module/events/…` арга хэмжээ (өөр салбарынх бол салбар солино), `/member/history` Түүх, `/member/record`
+  Гишүүнчлэл, `/member/participation` Оролцоо, `/member` Нүүр. Жагсаалтаас дарвал тухайн стек дээр (Нүүр эсвэл
+  Профайл) нээгдэнэ; push-ээс Нүүр таб дээр.
 
 ## Бүтэц
 
@@ -50,7 +57,8 @@ xcodebuild test -project SDYMember.xcodeproj -scheme SDYMember \
 Scheme → Run → Arguments дээр `-SDYFixtures` нэмбэл `Resources/Fixtures/*.json`-оос
 уншиж, нэвтрэлтгүйгээр бүх таб ажиллана. Нэмэлт: `-SDYTab events|checkin|dues|profile`,
 `-SDYEvent <uuid>`, `-SDYHomeRoute notifications`, `-SDYProfileRoute leaderboard|record|deleteAccount`,
-`-SDYCheckin 1`, `-SDYFixtureVariant nobranch`. Release build-д fixture файлууд ордоггүй.
+`-SDYCheckin 1`, `-SDYFixtureVariant nobranch`, `-SDYSignedOut` (нэвтрэх дэлгэцээс эхэлнэ), `-SDYLoginSheet register`
+(eID sheet регистрийн хэлбэрээр). Release build-д fixture файлууд ордоггүй.
 
 ## Дизайн
 
@@ -60,9 +68,17 @@ Scheme → Run → Arguments дээр `-SDYFixtures` нэмбэл `Resources/Fix
 
 - Эхлүүлэх дэлгэц: хар дэвсгэр дээр мөнгөлөг wordmark (`LaunchMark`); `LaunchView` яг тэр байрлалаас үргэлжилж
   гэрлийн туяа, нарийн loader-оор хар→хар шилжинэ.
-- Нэвтрэх: `Wordmark` (SDY Darkhan-Uul) дээгүүр гэрлийн туяа, утас хазайхад parallax (CoreMotion, зөвшөөрөлгүй);
-  ард нь `Resources/EventPosters/*.webp` (вэбийн `frontend/public/sdy/events/`-ийн 960px хувилбар) Ken Burns-аар
-  солигдоно. Шинэ poster нэмэхдээ файлыг энд хуулж `EventPoster.all`-д нэмнэ.
+- Нэвтрэх (`Features/Login`): Gerege Nexus-ийн утасны нэвтрэх дэлгэцийн бүтэц (`gerege-systems/nexus`
+  `native-apps/mobile/ios/Features/Login/MobileLoginView.swift`) SDY-ийн өнгөөр — шөнийн тэнгэр (анивчих одод, «амьсгалах» гэрэл),
+  улаан тойрог зам дээр эргэлдэх мөнгөлөг гарагууд (`TimelineView` + `Canvas`, Reduce Motion-д зогсоно), төвд нь 3D нар болсон лого (`SunLogo`: бөмбөрцгийн сүүдэр, титэм, эргэх туяа; бөмбөрцөг шиг тасралтгүй эргэж (16 с-д нэг
+  эргэлт, нүүр урд ирэхдээ удаашрана) SDY Mongolia ба SDY Darkhan-Uul ээлжлэн гарна — гадаргууг 64 босоо зурвасаар
+  x = sin λ проекцоор `Canvas`-д зурдаг;
+  тойргийн хойд хагас нарны ард, урд хагас урд нь зурагдана), тор, уриа (бүгд зургийн 390×560 координатад байрладаг тул утас бүрт ижил), ганц «e-ID | Нэвтрэх» товч (`EIDWordmark` — eID Mongolia-ийн тэмдэг).
+  Товч `EIDLoginSheet`-ийг нээж session-ийг шууд эхлүүлнэ: backend-ийн `app_link` (eID-ийн v3 https device link)-ийг
+  `universalLinksOnly`-оор нээнэ; eID апп суугаагүй бол session-ийг орхиж регистрийн дугаарын хэлбэрт шилжинэ
+  (хүсэлт аль ч утсан дээрх eID апп руу очно). Баталгаажуулах код, хугацааны зурвас, алхмуудыг харуулна; eID-ийн
+  universal link-ээр апп дахин нээгдвэл sheet өөрөө гарч poll үргэлжилнэ. «Нууц үгээр нэвтрэх» нь доод талын
+  жижиг текст дэх холбоос (`sdy-login:password`, `openURL`-оор барина).
 
 ## Профайлын зураг
 

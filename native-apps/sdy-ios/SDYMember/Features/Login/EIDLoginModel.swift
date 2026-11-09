@@ -7,12 +7,17 @@ import SwiftUI
 /// tolerated, and the server's EXPIRED/REFUSED as the only real ends. On iOS
 /// the poll also restarts the moment the app returns to the foreground or
 /// eID's universal link reopens it.
+///
+/// The sign-in begins on this phone, as Gerege Nexus's mobile app does: the
+/// session is handed to the eID Mongolia app through eID's own https device
+/// link (`app_link`). When no installed app claims that link, the session is
+/// dropped and the member is offered the registration number instead — the
+/// request then goes to the eID app on whichever phone holds it.
 @MainActor
 final class EIDLoginModel: ObservableObject {
     enum Method: String, CaseIterable, Identifiable {
-        case registerNumber, samePhone
+        case samePhone, registerNumber
         var id: String { rawValue }
-        var title: String { self == .registerNumber ? "Регистрийн дугаар" : "Энэ утсаар" }
     }
 
     enum Phase: Equatable {
@@ -28,8 +33,9 @@ final class EIDLoginModel: ObservableObject {
     static let gap: UInt64 = 400_000_000
     static let toleratedFailures = 3
     static let backstop: TimeInterval = 15 * 60
+    static let appMissingNotice = "eID Mongolia апп энэ утсанд олдсонгүй. Регистрийн дугаараа оруулбал хүсэлт таны eID апп руу очно — өөр утсан дээр байсан ч болно."
 
-    @Published var method: Method = .registerNumber
+    @Published var method: Method = .samePhone
     @Published var registerNumber = "" {
         didSet {
             let normalized = RegisterNumber.normalize(registerNumber)
@@ -38,7 +44,10 @@ final class EIDLoginModel: ObservableObject {
     }
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var secondsLeft: Int?
-    @Published var eidAppMissing = false
+    /// The whole of the session's life, for the draining bar.
+    @Published private(set) var totalSeconds: Int = 1
+    /// Why the registration form is showing (the eID app was not found).
+    @Published var notice: String?
 
     private var pollTask: Task<Void, Never>?
     private var countdown: Timer?
@@ -55,23 +64,25 @@ final class EIDLoginModel: ObservableObject {
         return method == .samePhone || RegisterNumber.isValid(registerNumber)
     }
     var isBusy: Bool {
-        switch phase { case .starting, .waiting: return true; default: return false }
+        switch phase { case .starting, .waiting, .success: return true; default: return false }
     }
 
-    static func eidAppInstalled() -> Bool {
-        AppConfig.eidSchemes.contains { scheme in
-            guard let url = URL(string: "\(scheme)://") else { return false }
-            return UIApplication.shared.canOpenURL(url)
-        }
+    /// Back to the form for a registration number, nothing in flight.
+    func showRegistration(notice: String? = nil) {
+        cancel()
+        method = .registerNumber
+        self.notice = notice
+    }
+
+    /// Sign in on this phone: start a session and hand it to the eID app.
+    func startHere() {
+        method = .samePhone
+        start()
     }
 
     func start() {
         stop()
-        eidAppMissing = false
-        if method == .samePhone && !AppConfig.fixturesEnabled && !Self.eidAppInstalled() {
-            eidAppMissing = true
-            return
-        }
+        notice = nil
         phase = .starting
         let method = self.method
         let regno = registerNumber
@@ -84,8 +95,11 @@ final class EIDLoginModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 self.begin(started)
                 PendingEIDSession.remember(started.sessionId)
-                if method == .samePhone, let link = started.appLink, let url = URL(string: link) {
-                    await UIApplication.shared.open(url)
+                if method == .samePhone, !AppConfig.fixturesEnabled {
+                    guard await Self.openApp(started) else {
+                        self.showRegistration(notice: Self.appMissingNotice)
+                        return
+                    }
                 }
                 await self.pollLoop(started)
             } catch {
@@ -95,10 +109,20 @@ final class EIDLoginModel: ObservableObject {
         }
     }
 
+    /// Opens the eID app with the session's device link. Universal links only:
+    /// with no eID app to claim the link, Safari would open eID's web page
+    /// instead — false then, and the caller offers the registration number.
+    @discardableResult
+    static func openApp(_ started: EIDStart) async -> Bool {
+        guard let link = started.appLink, let url = URL(string: link) else { return false }
+        return await UIApplication.shared.open(url, options: [.universalLinksOnly: true])
+    }
+
     private func begin(_ started: EIDStart) {
         if let at = Formatters.parseDate(started.expiresAt) {
             deadline = at
             hasDeadline = true
+            totalSeconds = max(1, Int(ceil(at.timeIntervalSinceNow)))
         } else {
             deadline = Date().addingTimeInterval(Self.backstop)
             hasDeadline = false

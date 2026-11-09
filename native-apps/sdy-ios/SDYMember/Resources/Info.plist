@@ -24,11 +24,6 @@
 	<false/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.social-networking</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>eidmongolia</string>
-		<string>geregesmartid</string>
-	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
