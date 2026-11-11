@@ -1,4 +1,23 @@
-# Android апп — үргэлжлүүлэх тэмдэглэл (2026-11-09)
+# Android апп — үргэлжлүүлэх тэмдэглэл (2026-11-09, шинэчилсэн 2026-11-11)
+
+## 2026-11-11: iOS-тэй нарийн тулгалт
+
+- iOS 1.1.1 (build 12) хүртэлх бүх өөрчлөлт тусгагдсан; Android versionName 1.1.1.
+- 5 хөндлөнгийн аудит (core, login+design, home+profile, events, check-in+dues+admin) + iOS симулятор / Android
+  эмулятор дээр дэлгэц дэлгэцээр нь харьцуулж засав. Гол засварууд:
+  - timeout-ыг «цуцлагдсан» биш «сүлжээ» гэж үзнэ (офлайн кэш, баннер, eID poll дахин оролдлого iOS шиг);
+    эхний bootstrap app scope-д (activity дахин үүсэхэд тасрахгүй); eID нэвтрэлтийн model activity дахин үүсэхэд хадгалагдана.
+  - iOS 26 харагдац: хөвөгч шилэн tab bar, шилэн буцах/toolbar товч, inline гарчиг (Мэдэгдэл, Шилжүүлэх, Элсэх,
+    удирдлагын 3 дэлгэц), жагсаалтын мөр 52 / булан 26 / том section гарчиг, LabeledContent багтахгүй бол доош шилжинэ,
+    capsule segmented control, Өнгө төрх дээр tab bar нуугдана.
+  - Фонт: **Inter** (OFL, `third_party/Inter-LICENSE.txt`) — SF Pro-той өргөн нь ойр тул мөр таслалт iOS-тэй таарна.
+  - Нэвтрэх: улаан туяа эллипс, 24 цацраг, бөмбөрцөг subpixel, таймер шугаман, sheet бүтэн өндөр.
+  - Жижиг логик: мэдэгдэл уншсан болгох optimistic, «Буцах» цуцлах товч, QR-ийн зөвшөөрөл Settings-ээс буцахад
+    шалгагдана, амжилтын оноо `toInt`, Төлбөр мэдэгдэх / Асуудал дэвшүүлэх дээр busy үед «Болих» идэвхтэй.
+- Санаатай үлдсэн ялгаа: pull-to-stretch (Android overscroll), push байхгүй, SF Symbols → Material icons.
+- Харьцуулах арга: түр симулятор `xcrun simctl create sdy-compare "iPhone 16e"` + тусдаа DerivedData,
+  iOS `-SDYFixtures …`, Android `--ez SDYFixtures true …`, хоёуланг нь зэрэг screenshot хийж зэрэгцүүлнэ.
+
 
 ## Хийгдсэн
 
@@ -12,9 +31,7 @@
 
 ## Үлдсэн ажил (дарааллаар)
 
-1. **iOS-тэй дахин тулгах.** iOS-ийг өөр сесс зэрэгцээ өөрчилж байсан. Эхлээд:
-   `find native-apps/sdy-ios/SDYMember native-apps/sdy-ios/SDYMemberTests -newermt "2026-11-09 21:00" -type f`
-   гарсан файл бүрийн өөрчлөлтийг Android-д тусгана (iOS commit хийгдсэн бол `git log -p` -ээр).
+1. **iOS-тэй дахин тулгах.** `git log --oneline b6f42826..HEAD -- native-apps/sdy-ios` (1.1.1 build 12-оос хойш) гарсан өөрчлөлтийг Android-д тусгана.
 2. **Бодит backend дээр турших.** Fixture-гүй debug build-ийг утсан дээр суулгаж
    App Review-ийн демо бүртгэлээр («Нууц үгээр нэвтрэх») бүх табыг үзэх; eID-ээр жинхэнэ нэвтрэлт;
    камераар ирцийн QR уншуулах; профайлын зураг солих.

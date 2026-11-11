@@ -91,6 +91,18 @@ fun QRScannerScreen(onDismiss: () -> Unit, onCheckin: (CheckinCode) -> Unit) {
         status = if (granted) CameraStatus.Authorized else CameraStatus.Denied
     }
     LaunchedEffect(Unit) { if (status == CameraStatus.Unknown) launcher.launch(Manifest.permission.CAMERA) }
+    // Back from Settings with the camera allowed: scan at once (iOS restarts
+    // the app when a privacy setting changes, so it never sees the old state).
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && status == CameraStatus.Denied &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            ) status = CameraStatus.Authorized
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     var torch by remember { mutableStateOf(false) }
     var invalid by remember { mutableStateOf<String?>(null) }

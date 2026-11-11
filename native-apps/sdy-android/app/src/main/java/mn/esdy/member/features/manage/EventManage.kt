@@ -365,7 +365,7 @@ fun AttendanceManageScreen(event: EventRecord) {
                     }
                 }
             }
-            err != null -> item { ErrorStateView(err) { scope.launch { load() } } }
+            err != null -> item { ListSection { ErrorStateView(err) { scope.launch { load() } } } }
             else -> item {
                 ListSection {
                     Box(Modifier.fillMaxWidth().padding(vertical = 11.dp), contentAlignment = Alignment.Center) {

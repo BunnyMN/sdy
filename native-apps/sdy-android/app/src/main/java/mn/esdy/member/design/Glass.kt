@@ -72,10 +72,10 @@ fun Modifier.pressable(
 ): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) scale else 1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow), label = "press")
+    val s by animateFloatAsState(if (pressed) scale else 1f, spring(dampingRatio = 0.62f, stiffness = 500f), label = "press")
     LaunchedEffect(pressed) { if (pressed) Haptics.tap() }
     this
-        .graphicsLayer { scaleX = s; scaleY = s; alpha = if (pressed) 0.92f else 1f }
+        .graphicsLayer { scaleX = s; scaleY = s; alpha = if (pressed) 0.96f else 1f }
         .clickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = onClick)
 }
 
@@ -105,7 +105,7 @@ fun GlassTile(title: String, icon: ImageVector, modifier: Modifier = Modifier, b
                 )
             }
         }
-        Text(title, style = SdyType.subheadline.copy(fontWeight = FontWeight.Medium), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        ShrinkText(title, SdyType.subheadline.copy(fontWeight = FontWeight.Medium), Color.White, minScale = 0.8f)
     }
 }
 
@@ -225,7 +225,7 @@ fun Modifier.rise(index: Int): Modifier = composed {
     LaunchedEffect(Unit) {
         if (!shown) { delay(50L + index * 60L); shown = true }
     }
-    val progress by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.82f, stiffness = 180f), label = "rise")
+    val progress by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.82f, stiffness = 130f), label = "rise")
     graphicsLayer { alpha = progress; translationY = (1 - progress) * 18 * density }
 }
 
@@ -254,12 +254,14 @@ fun SkeletonCards(count: Int = 3, modifier: Modifier = Modifier) {
 fun PrimaryNightButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** iOS dims only the buttons that ask for it (the custom button style does not). */
+    dimWhenDisabled: Boolean = false,
     onClick: () -> Unit,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .graphicsLayer { alpha = if (enabled || !dimWhenDisabled) 1f else 0.45f }
             .pressable(enabled = enabled, onClick = onClick)
             .shadow(15.dp, RoundedCornerShape(16.dp), ambientColor = Night.glow, spotColor = Night.glow.copy(alpha = 0.45f))
             .background(Night.accent, RoundedCornerShape(16.dp)),

@@ -123,7 +123,7 @@ fun TransfersScreen() {
 
     LaunchedEffect(Unit) { if (!loaded) load() }
 
-    SdyListScreen(title = "Харьяалал шилжүүлэх", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Харьяалал шилжүүлэх", silk = false, inline = true, onRefresh = { load() }) {
         val err = loadError
         when {
             !loaded && err != null -> item { ErrorStateView(err) { scope.launch { load() } } }
@@ -180,7 +180,7 @@ fun TransfersScreen() {
                         ListDivider()
                         RowButton(
                             "Шилжих хүсэлт илгээх", center = true, busy = busy,
-                            enabled = destination.isNotEmpty() && message.isNotBlank() && !app.isOffline,
+                            enabled = destination.isNotEmpty() && message.trim(' ', '\t').isNotEmpty() && !app.isOffline,
                         ) { submit() }
                     }
                 } else if (source == null) item {
@@ -200,6 +200,7 @@ fun TransfersScreen() {
             title = "Шилжих хүсэлтээ цуцлах уу?",
             actions = listOf(SheetAction("Хүсэлтээ цуцлах", destructive = true) { cancel(target) }),
             onDismiss = { cancelTarget = null },
+            cancelTitle = "Буцах",
         )
     }
 }
@@ -251,7 +252,7 @@ fun JoinRequestScreen() {
 
     LaunchedEffect(Unit) { if (!loaded) load() }
 
-    SdyListScreen(title = "Салбарт элсэх", silk = false) {
+    SdyListScreen(title = "Салбарт элсэх", silk = false, inline = true) {
         val err = loadError
         when {
             !loaded && err != null -> item { ErrorStateView(err) { scope.launch { load() } } }

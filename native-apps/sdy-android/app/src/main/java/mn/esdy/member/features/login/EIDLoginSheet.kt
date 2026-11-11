@@ -95,10 +95,10 @@ private val Ok = Color(0xFF4CD29A)
 @Composable
 fun EIDLoginSheet(model: EIDLoginModel, onClose: () -> Unit) {
     val success = model.phase == EIDLoginModel.Phase.Success
-    SdySheet(onDismiss = onClose, dismissible = !success, containerColor = SheetColor) {
+    SdySheet(onDismiss = onClose, dismissible = !success, containerColor = SheetColor, fullHeight = true) {
         Head(onClose, closeEnabled = !success)
         Box(Modifier.fillMaxWidth().height(1.dp).background(Night.line.copy(alpha = 0.12f)))
-        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(20.dp)) {
             Content(model)
         }
         Foot(model)
@@ -136,19 +136,18 @@ private fun Content(model: EIDLoginModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-            Text("Хүсэлт үүсгэж байна…", color = Night.muted)
+            Text("Хүсэлт үүсгэж байна…", fontSize = 17.sp, color = Night.muted)
         }
         is EIDLoginModel.Phase.Waiting -> Waiting(model, phase.started)
         EIDLoginModel.Phase.Success -> Column(
             Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 12.dp).semantics(mergeDescendants = true) {},
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(Modifier.background(Color(0xFF173A2F).copy(alpha = 0.5f), CircleShape).padding(10.dp)) {
+            Box(Modifier.padding(bottom = 4.dp).background(Color(0xFF173A2F).copy(alpha = 0.5f), CircleShape).padding(10.dp)) {
                 Box(Modifier.size(72.dp).background(Color(0xFF173A2F), CircleShape), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Check, null, tint = Ok, modifier = Modifier.size(34.dp))
                 }
             }
-            Spacer(Modifier.height(4.dp))
             Text("Амжилттай нэвтэрлээ", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.White)
             Text("Түр хүлээнэ үү…", fontSize = 13.5.sp, color = Night.muted)
         }
@@ -219,7 +218,7 @@ private fun Timer(model: EIDLoginModel) {
     val left = model.secondsLeft
     if (left != null) {
         val low = left <= 30
-        val fraction by animateFloatAsState((left.toFloat() / model.totalSeconds).coerceIn(0f, 1f), tween(1000), label = "timer")
+        val fraction by animateFloatAsState((left.toFloat() / model.totalSeconds).coerceIn(0f, 1f), tween(1000, easing = androidx.compose.animation.core.LinearEasing), label = "timer")
         Column(Modifier.clearAndSetSemantics { contentDescription = "Хүчинтэй хугацаа ${Formatters.clock(left)}" }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row {
                 Text("Хүчинтэй", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Night.muted)
@@ -349,7 +348,7 @@ private fun Registration(model: EIDLoginModel) {
                 Text("2 үсэг, 8 тоо. Латинаар бичсэн ч кирилл рүү хөрвүүлнэ.", fontSize = 13.sp, color = Night.muted)
             }
         }
-        PrimaryNightButton(enabled = model.canStart, onClick = { focusManager.clearFocus(); model.start() }) {
+        PrimaryNightButton(enabled = model.canStart, dimWhenDisabled = true, onClick = { focusManager.clearFocus(); model.start() }) {
             Text("Апп руу хүсэлт илгээх")
         }
     }

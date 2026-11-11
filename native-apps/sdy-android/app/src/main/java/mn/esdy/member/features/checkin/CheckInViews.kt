@@ -44,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -86,9 +85,10 @@ fun CheckInTabScreen() {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 64.dp)
                         .graphicsLayer { alpha = if (app.isOffline) 0.45f else 1f }
-                        .background(Theme.brandRed, RoundedCornerShape(12.dp))
+                        .background(Theme.brandRed, RoundedCornerShape(26.dp))
                         .pressable(0.98f, enabled = !app.isOffline) { scanning = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        // The row's own 12 plus the inset iOS gives every List row.
+                        .padding(horizontal = 16.dp, vertical = 27.dp)
                         .semantics(mergeDescendants = true) {},
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -310,7 +310,7 @@ private fun Success(result: ActionResult, event: EventRecord?, close: () -> Unit
     if (event != null) Text(event.title, style = SdyType.body, color = Theme.secondaryText, textAlign = TextAlign.Center)
     val points = result.points ?: event?.pointsValue
     if (points != null && points > 0) {
-        Text("+${points.roundToInt()} оноо", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Theme.accent)
+        Text("+${points.toInt()} оноо", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Theme.accent)
     }
     PrimaryButton("Болсон", onClick = close)
 }

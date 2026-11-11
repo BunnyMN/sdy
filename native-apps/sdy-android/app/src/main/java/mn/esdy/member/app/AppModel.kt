@@ -70,6 +70,12 @@ class AppModel(val api: APIClient, private val context: Context) {
     var eidReturnSession by mutableStateOf<String?>(null)
     /** The signed-in person's profile photo, shown on Home and Profile. */
     var photo by mutableStateOf<ImageBitmap?>(null)
+    /** Screens that cover the tab bar (Өнгө төрх) while they are open. */
+    var tabBarHidden by mutableIntStateOf(0)
+    /** The sign-in screen's eID model, kept across activity recreation (see LoginScreen). */
+    var eidLogin: Any? = null
+    /** The first session check has been started (once per process). */
+    var bootstrapStarted = false
 
     val hasApprovedBranch: Boolean get() = record?.approvedBranch != null
 
@@ -111,6 +117,8 @@ class AppModel(val api: APIClient, private val context: Context) {
             applyLaunchArguments()
             scope.launch { loadPhoto() }
             refreshUnread()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Throwable) {
             val error = APIError.wrap(e)
             if (error.kind == APIError.Kind.Unauthorized) clearLocal() else phase = Phase.Failed(error)
@@ -130,7 +138,7 @@ class AppModel(val api: APIClient, private val context: Context) {
         if (approved != null && approved.hasAccess &&
             record.memberships.none { it.tenantId == identity.tenantId && it.hasAccess }
         ) {
-            val switched = try { api.switchTenant(approved.tenantId); true } catch (e: Exception) { false }
+            val switched = try { api.switchTenant(approved.tenantId); true } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { false }
             if (switched) identity = api.me()
         }
         api.cacheScope = identity.tenantId
@@ -321,7 +329,7 @@ class AppModel(val api: APIClient, private val context: Context) {
         }
         AppConfig.launchArgument("SDYEvent")?.let { openEvent(it) }
         HomeRoute.from(AppConfig.launchArgument("SDYHomeRoute"))?.let { setHomePath(it) }
-        HomeRoute.from(AppConfig.launchArgument("SDYProfileRoute"))?.let { tab = Tab.Profile; setPath(Tab.Profile, listOf(Route.Home(it))) }
+        HomeRoute.from(AppConfig.launchArgument("SDYProfileRoute"))?.let { setPath(Tab.Profile, listOf(Route.Home(it))) }
         if (AppConfig.launchArgument("SDYCheckin") != null) {
             pendingCheckin = CheckinCode("7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "ab".repeat(24))
         }

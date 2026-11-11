@@ -25,7 +25,7 @@ android {
         targetSdk = 36
         // Same marketing version as the iOS app; the build number is Android's own.
         versionCode = 1
-        versionName = "1.1.0"
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

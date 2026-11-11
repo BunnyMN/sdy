@@ -107,7 +107,7 @@ fun SanctionsAdminScreen() {
 
     LaunchedEffect(Unit) { load() }
 
-    SdyListScreen(title = "Хяналтын хороо", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Хяналтын хороо", silk = false, inline = true, onRefresh = { load() }) {
         item {
             ListSection {
                 Text(
@@ -196,7 +196,7 @@ private fun SanctionComposer(people: List<BranchPerson>, onDismiss: () -> Unit, 
                 ListDivider()
                 ListRow {
                     Text("Хасах оноо", style = SdyType.body, color = Color.White)
-                    Text(if (points == 0) "Зөвхөн сануулга" else "$points", style = SdyType.body, color = Theme.secondaryText, modifier = Modifier.weight(1f))
+                    Text(if (points == 0) "Зөвхөн сануулга" else "$points", style = SdyType.body, color = Theme.secondaryText, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
                     Stepper(points, 0..10000) { points = it }
                 }
             }

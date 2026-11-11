@@ -27,6 +27,9 @@ app/src/debug/assets/fixtures/   iOS-ийн Resources/Fixtures/*.json (release-�
 app/src/test/                    iOS SDYMemberTests-ийн хөрвүүлэлт (JVM unit test)
 ```
 
+Фонт: Inter (SIL OFL, `third_party/Inter-LICENSE.txt`) — iOS-ийн SF Pro-той өргөн ойр тул текст ижил газар тасарна.
+Харагдац iOS 26-ийнх: хөвөгч шилэн tab bar (`app/RootView.kt`), шилэн toolbar товч, 52 өндөр жагсаалтын мөр.
+
 iOS → Android толь: SwiftUI `NavigationStack(path:)` → `app/Nav.kt`-ийн `TabStack` (таб бүр өөрийн stack-тай, доорх
 дэлгэцүүдийн төлөв хадгалагдана), `List(.insetGrouped)` → `SdyListScreen` + `ListSection`, `.sheet` → `SdySheet`/`FormSheet`,
 `.fullScreenCover` → `SdyFullScreen`, `.confirmationDialog` → `ActionSheet`, `Loader<T>` → `rememberLoader`.

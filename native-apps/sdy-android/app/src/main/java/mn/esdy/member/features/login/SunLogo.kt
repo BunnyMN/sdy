@@ -27,7 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -73,7 +76,7 @@ fun SunLogo(diameter: Dp, t: Float, modifier: Modifier = Modifier) {
                 .graphicsLayer { alpha = 0.55f; rotationZ = t * 3; compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val r = size.minDimension / 2
-            val spokes = List(25) { i -> if (i % 2 == 0) Color(0xFFFF7A5C).copy(alpha = 0.5f) else Color.Transparent }
+            val spokes = List(24) { i -> if (i % 2 == 0) Color(0xFFFF7A5C).copy(alpha = 0.5f) else Color.Transparent }
             drawCircle(Brush.sweepGradient(spokes, center), radius = r)
             drawCircle(
                 Brush.radialGradient(0f to Color.White, 0.4286f to Color.White, 0.714f to Color.White.copy(alpha = 0.4f), 1f to Color.Transparent, center = center, radius = r),
@@ -132,15 +135,17 @@ private fun Globe(diameter: Dp, t: Float) {
             var u0 = l0 / (2 * PI) + 0.25 + phase
             u0 -= floor(u0)
             val du = (l1 - l0) / (2 * PI)
-            val srcX = (u0 * turn).roundToInt()
-            val srcW = max(1, (du * turn).roundToInt())
             val dstX = (r + x0 * r).toFloat()
             val dstW = ((x1 - x0) * r).toFloat()
-            // A hair of overlap so no seam shows between columns.
-            drawImage(
-                skin, srcOffset = IntOffset(srcX, 0), srcSize = IntSize(srcW, dPx),
-                dstOffset = IntOffset(floor(dstX).toInt(), 0), dstSize = IntSize((dstW + 1.5f).roundToInt(), d.roundToInt()),
-            )
+            // Sub-pixel, like iOS: clip to the column (a hair of overlap so no
+            // seam shows), squeeze that slice of the skin into it.
+            clipRect(dstX - 0.25f, 0f, dstX + dstW + 0.25f, d) {
+                translate(dstX, 0f) {
+                    scale((dstW / (du * turn)).toFloat(), d / dPx, pivot = Offset.Zero) {
+                        translate((-u0 * turn).toFloat(), 0f) { drawImage(skin) }
+                    }
+                }
+            }
         }
         // Light from the upper left…
         drawCircle(Brush.radialGradient(0f to Color.White.copy(alpha = 0.42f), 0.5f to Color.White.copy(alpha = 0.08f), 1f to Color.Transparent,
@@ -183,7 +188,13 @@ private fun buildSkin(context: android.content.Context, d: Int, density: Float):
             shader = RadialGradient(d / 2f, d / 2f, d * 0.42f, intArrayOf(-1, -1, 0x00FFFFFF), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         })
     }
-    c.drawBitmap(face, 0f, 0f, filter)
+    // iOS masks with a Circle in the logo's 0.74 d frame: the fade is cut at 0.37 d.
+    val cut = Bitmap.createBitmap(d, d, Bitmap.Config.ARGB_8888)
+    android.graphics.Canvas(cut).apply {
+        drawCircle(d / 2f, d / 2f, d * 0.37f, Paint(Paint.ANTI_ALIAS_FLAG))
+        drawBitmap(face, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })
+    }
+    c.drawBitmap(cut, 0f, 0f, filter)
 
     // SDY Darkhan-Uul: the wordmark with a small drop shadow.
     val mark = BitmapFactory.decodeResource(context.resources, R.drawable.wordmark)

@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -102,6 +106,8 @@ fun SdyListScreen(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     silk: Boolean = true,
+    /** A small title in the bar from the start (iOS .navigationBarTitleDisplayMode(.inline)). */
+    inline: Boolean = false,
     silkHeight: Dp = 300.dp,
     onRefresh: (suspend () -> Unit)? = null,
     state: LazyListState = rememberLazyListState(),
@@ -114,11 +120,18 @@ fun SdyListScreen(
     Box(modifier.fillMaxSize().background(Theme.canvas)) {
         if (silk) SilkListBackground(silkHeight, scrolled)
         Column(Modifier.fillMaxSize()) {
-            TopBar(title = title, showTitle = collapsed, actions = actions)
+            TopBar(title = title, showTitle = inline || collapsed, actions = actions)
             OfflineBanner()
             val list = @Composable {
-                LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                    item("sdy-large-title") {
+                val inset = LocalBottomInset.current
+                val padding = PaddingValues(
+                    start = contentPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    top = contentPadding.calculateTopPadding(),
+                    end = contentPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    bottom = contentPadding.calculateBottomPadding() + inset,
+                )
+                LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = padding, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    if (!inline) item("sdy-large-title") {
                         Column(Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 14.dp)) {
                             Text(title, style = SdyType.largeTitle, color = Color.White, modifier = Modifier.semantics { heading() })
                             if (subtitle != null) Text(subtitle, style = SdyType.subheadline, color = Color.White.copy(alpha = 0.7f))
@@ -148,31 +161,42 @@ fun TopBar(title: String, showTitle: Boolean = true, onBack: (() -> Unit)? = nul
     val nav = LocalNav.current
     val back = onBack ?: if (pushed) ({ nav.pop() }) else null
     val alpha by animateFloatAsState(if (showTitle) 1f else 0f, label = "title")
-    Box(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.35f * alpha)).statusBarsPadding().height(48.dp)) {
-        Row(Modifier.align(Alignment.CenterStart).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (back != null) {
-                Box(
-                    Modifier.size(Theme.minTap).pressable(0.9f, onClick = back).semantics { contentDescription = "Буцах" },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, null, tint = Theme.accent, modifier = Modifier.size(20.dp).padding(start = 4.dp)) }
+    Box(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.35f * alpha)).statusBarsPadding().height(56.dp)) {
+        // Back, the title in what room is left (centred when the sides match,
+        // nudged over when a wide action needs the space, as iOS does), actions.
+        Row(Modifier.fillMaxSize().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val side = 52.dp
+            Box(Modifier.widthIn(min = side)) {
+                if (back != null) {
+                    // iOS 26: a glass circle with a white chevron.
+                    Box(
+                        Modifier.padding(start = 8.dp).size(Theme.minTap).pressable(0.9f, onClick = back).glassBarItem(CircleShape).semantics { contentDescription = "Буцах" },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, null, tint = Color.White, modifier = Modifier.size(19.dp).padding(start = 5.dp)) }
+                }
             }
+            Text(
+                title, style = SdyType.headline, color = Color.White, maxLines = 1, textAlign = TextAlign.Center,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp).graphicsLayer { this.alpha = alpha },
+            )
+            Row(Modifier.widthIn(min = side), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, content = actions)
         }
-        Text(
-            title, style = SdyType.headline, color = Color.White, maxLines = 1, textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = 96.dp).graphicsLayer { this.alpha = alpha },
-        )
-        Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 
 /** A tappable icon for a top bar (iOS toolbar button). */
 @Composable
-fun BarIconButton(icon: ImageVector, label: String, enabled: Boolean = true, tint: Color = Theme.accent, onClick: () -> Unit) {
+fun BarIconButton(icon: ImageVector, label: String, enabled: Boolean = true, tint: Color = Color.White, onClick: () -> Unit) {
     Box(
-        Modifier.size(Theme.minTap).pressable(0.9f, enabled = enabled, onClick = onClick).semantics { contentDescription = label },
+        Modifier.padding(horizontal = 2.dp).size(Theme.minTap).pressable(0.9f, enabled = enabled, onClick = onClick).glassBarItem(CircleShape).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = if (enabled) tint else Theme.tertiaryText, modifier = Modifier.size(22.dp)) }
+    ) { Icon(icon, null, tint = if (enabled) tint else Theme.tertiaryText, modifier = Modifier.size(21.dp)) }
 }
+
+/** iOS 26 toolbar items sit on glass: a dark translucent fill and a faint rim. */
+fun Modifier.glassBarItem(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.background(Color(0xD92A2A2C), shape).border(0.5.dp, Color.White.copy(alpha = 0.16f), shape)
 
 /** A tappable word for a top bar (iOS toolbar text button). */
 @Composable
@@ -181,13 +205,17 @@ fun BarTextButton(text: String, enabled: Boolean = true, bold: Boolean = false, 
         text,
         style = SdyType.body.copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
         color = if (enabled) color else Theme.tertiaryText,
-        modifier = Modifier.heightIn(min = Theme.minTap).pressable(0.95f, enabled = enabled, onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
+        modifier = Modifier.padding(horizontal = 2.dp).heightIn(min = Theme.minTap).pressable(0.95f, enabled = enabled, onClick = onClick)
+            .glassBarItem(CircleShape).padding(horizontal = 16.dp, vertical = 11.dp),
     )
 }
 
 // endregion
 
 // region Lists
+
+/** An iOS 26 list row's least height. */
+val ROW_MIN = 52.dp
 
 /**
  * A group of rows on a rounded cell, with an optional header above and
@@ -207,11 +235,11 @@ fun ListSection(
         if (header != null || headerContent != null) {
             Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 7.dp)) {
                 if (headerContent != null) headerContent()
-                else Text(header!!, style = SdyType.footnote, color = Theme.secondaryText, modifier = Modifier.semantics { heading() })
+                else Text(header!!, style = SdyType.headline, color = Theme.systemSecondary, modifier = Modifier.semantics { heading() })
             }
         }
         Column(
-            Modifier.fillMaxWidth().background(Theme.groupedCell, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().background(Theme.groupedCell, RoundedCornerShape(26.dp)).padding(horizontal = 16.dp),
             content = content,
         )
         if (footer != null || footerContent != null) {
@@ -229,13 +257,13 @@ fun ListRow(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
-    verticalPadding: Dp = 11.dp,
+    verticalPadding: Dp = 15.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
         modifier.fillMaxWidth()
             .then(if (onClick != null) Modifier.pressable(0.985f, enabled = enabled, onClick = onClick) else Modifier)
-            .heightIn(min = Theme.minTap)
+            .heightIn(min = ROW_MIN)
             .padding(vertical = verticalPadding)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f },
         verticalAlignment = Alignment.CenterVertically,
@@ -247,9 +275,54 @@ fun ListRow(
 /** A label on the left and a value on the right (iOS LabeledContent). */
 @Composable
 fun LabeledRow(label: String, value: String, modifier: Modifier = Modifier, valueColor: Color = Theme.secondaryText) {
+    LabeledContentRow(modifier, value = value, valueColor = valueColor) { Text(label, style = SdyType.body, color = Color.White) }
+}
+
+/**
+ * iOS 26 LabeledContent in a list: label and value on one line, the value
+ * at the end — or, when they do not fit side by side, the value on its own
+ * line under the label.
+ */
+@Composable
+fun LabeledContentRow(
+    modifier: Modifier = Modifier,
+    value: String,
+    valueColor: Color = Theme.secondaryText,
+    /** How far the label's text sits from its start (an icon before it). */
+    valueIndent: Dp = 0.dp,
+    label: @Composable () -> Unit,
+) {
     ListRow(modifier.semantics(mergeDescendants = true) {}) {
-        Text(label, style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
-        Text(value, style = SdyType.body, color = valueColor, textAlign = TextAlign.End)
+        androidx.compose.ui.layout.Layout(
+            content = {
+                Box { label() }
+                Text(value, style = SdyType.body, color = valueColor)
+            },
+            modifier = Modifier.weight(1f),
+        ) { (labelM, valueM), c ->
+            val gap = 12.dp.roundToPx()
+            val lw = labelM.maxIntrinsicWidth(Int.MAX_VALUE)
+            val vw = valueM.maxIntrinsicWidth(Int.MAX_VALUE)
+            if (lw + gap + vw <= c.maxWidth) {
+                val l = labelM.measure(c.copy(minWidth = 0))
+                val v = valueM.measure(c.copy(minWidth = 0, maxWidth = c.maxWidth - l.width - gap))
+                val h = maxOf(l.height, v.height)
+                layout(c.maxWidth, h) {
+                    l.place(0, (h - l.height) / 2)
+                    v.place(c.maxWidth - v.width, (h - v.height) / 2)
+                }
+            } else {
+                val l = labelM.measure(c.copy(minWidth = 0))
+                val indent = valueIndent.roundToPx()
+                val v = valueM.measure(c.copy(minWidth = 0, maxWidth = maxOf(0, c.maxWidth - indent)))
+                val spacing = 2.dp.roundToPx()
+                layout(c.maxWidth, l.height + spacing + v.height) {
+                    l.place(0, 0)
+                    // Under the label's text, past its icon when it has one.
+                    v.place(indent, l.height + spacing)
+                }
+            }
+        }
     }
 }
 
@@ -304,7 +377,7 @@ fun FormTextField(
     BasicTextField(
         value = field,
         onValueChange = { v -> field = v; if (v.text != value) onValueChange(v.text) },
-        modifier = modifier.fillMaxWidth().heightIn(min = Theme.minTap).padding(vertical = 11.dp)
+        modifier = modifier.fillMaxWidth().heightIn(min = ROW_MIN).padding(vertical = 15.dp)
             .semantics { contentDescription = placeholder },
         enabled = enabled,
         singleLine = singleLine,
@@ -349,12 +422,12 @@ fun <T> PickerRow(label: String, options: List<T>, selected: T, title: (T) -> St
 /** iOS segmented Picker: a row of equal segments, one selected. */
 @Composable
 fun <T> SegmentedControl(options: List<T>, selected: T, title: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().height(34.dp).background(Theme.fill, RoundedCornerShape(9.dp)).padding(2.dp)) {
+    Row(modifier.fillMaxWidth().height(36.dp).background(Theme.fill, CircleShape).padding(3.dp)) {
         options.forEach { option ->
             val on = option == selected
             Box(
                 Modifier.weight(1f).fillMaxSize()
-                    .background(if (on) Color(0xFF636366) else Color.Transparent, RoundedCornerShape(7.dp))
+                    .background(if (on) Color(0xFF636366) else Color.Transparent, CircleShape)
                     .pressable(0.97f, role = Role.Tab) { onSelect(option) },
                 contentAlignment = Alignment.Center,
             ) {
@@ -378,22 +451,24 @@ fun PrimaryButton(
     color: Color = Theme.brandRed,
     icon: ImageVector? = null,
     fillWidth: Boolean = false,
+    /** iOS buttons sized to a list row (36 high, tight sides). */
+    small: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
         modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-            .heightIn(min = 50.dp)
+            .heightIn(min = if (small) 36.dp else 50.dp)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .pressable(enabled = enabled && !busy, onClick = onClick)
             .background(color, RoundedCornerShape(14.dp))
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = if (small) 10.dp else 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
         else {
             if (icon != null) Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-            Text(text, style = SdyType.headline, color = Color.White)
+            ShrinkText(text, if (small) SdyType.body else SdyType.headline, Color.White, minScale = 0.75f)
         }
     }
 }
@@ -408,22 +483,24 @@ fun SecondaryButton(
     color: Color = Theme.accent,
     icon: ImageVector? = null,
     fillWidth: Boolean = false,
+    /** iOS buttons sized to a list row (36 high, tight sides). */
+    small: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
         modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-            .heightIn(min = 50.dp)
+            .heightIn(min = if (small) 36.dp else 50.dp)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .pressable(enabled = enabled && !busy, onClick = onClick)
             .background(color.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = if (small) 10.dp else 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = color, strokeWidth = 2.dp)
         else {
             if (icon != null) Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
-            Text(text, style = SdyType.headline, color = color)
+            ShrinkText(text, if (small) SdyType.body else SdyType.headline, color, minScale = 0.75f)
         }
     }
 }
@@ -454,6 +531,8 @@ fun SdySheet(
     onDismiss: () -> Unit,
     dismissible: Boolean = true,
     containerColor: Color = Theme.sheetBackground,
+    /** Always the whole height, whatever the content (iOS .presentationDetents([.large])). */
+    fullHeight: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { dismissible || it != androidx.compose.material3.SheetValue.Hidden })
@@ -465,7 +544,7 @@ fun SdySheet(
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         dragHandle = { Box(Modifier.padding(top = 6.dp).width(36.dp).height(5.dp).background(Color.White.copy(alpha = 0.3f), CircleShape)) },
     ) {
-        Column(Modifier.fillMaxWidth().imePadding(), content = content)
+        Column(Modifier.fillMaxWidth().then(if (fullHeight) Modifier.fillMaxHeight() else Modifier).imePadding(), content = content)
     }
 }
 
@@ -484,12 +563,16 @@ fun FormSheet(
     busy: Boolean = false,
     cancelTitle: String = "Болих",
     dismissible: Boolean = true,
+    /** «Болих» stays usable while busy (iOS sheets that only lock the confirm button). */
+    cancelWhileBusy: Boolean = false,
+    /** The sheet can still be swiped away while busy. */
+    swipeWhileBusy: Boolean = false,
     onConfirm: () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    SdySheet(onDismiss = onDismiss, dismissible = dismissible && !busy) {
+    SdySheet(onDismiss = onDismiss, dismissible = dismissible && (!busy || swipeWhileBusy)) {
         Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp)) {
-            Box(Modifier.align(Alignment.CenterStart)) { BarTextButton(cancelTitle, enabled = !busy, onClick = onDismiss) }
+            Box(Modifier.align(Alignment.CenterStart)) { BarTextButton(cancelTitle, enabled = !busy || cancelWhileBusy, onClick = onDismiss) }
             Text(title, style = SdyType.headline, color = Color.White, maxLines = 1, modifier = Modifier.align(Alignment.Center).padding(horizontal = 88.dp))
             if (confirmTitle != null) {
                 Box(Modifier.align(Alignment.CenterEnd)) {
@@ -548,7 +631,7 @@ data class SheetAction(val title: String, val destructive: Boolean = false, val 
 
 /** A list of choices from the bottom, with Болих (iOS .confirmationDialog). */
 @Composable
-fun ActionSheet(title: String?, actions: List<SheetAction>, onDismiss: () -> Unit, message: String? = null) {
+fun ActionSheet(title: String?, actions: List<SheetAction>, onDismiss: () -> Unit, message: String? = null, cancelTitle: String = "Болих") {
     SdySheet(onDismiss = onDismiss, containerColor = Theme.cardRaised) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (title != null || message != null) {
@@ -573,7 +656,7 @@ fun ActionSheet(title: String?, actions: List<SheetAction>, onDismiss: () -> Uni
             Box(
                 Modifier.fillMaxWidth().heightIn(min = 56.dp).background(Theme.card, RoundedCornerShape(14.dp)).pressable(0.98f, onClick = onDismiss),
                 contentAlignment = Alignment.Center,
-            ) { Text("Болих", style = SdyType.body.copy(fontWeight = FontWeight.SemiBold), color = Theme.accent) }
+            ) { Text(cancelTitle, style = SdyType.body.copy(fontWeight = FontWeight.SemiBold), color = Theme.accent) }
         }
     }
 }

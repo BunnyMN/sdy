@@ -116,7 +116,7 @@ fun FinanceAdminScreen() {
     LaunchedEffect(period) { load() }
 
     val actionsEnabled = !busy && !app.isOffline
-    SdyListScreen(title = "Санхүү", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Санхүү", silk = false, inline = true, onRefresh = { load() }) {
         item {
             ListSection {
                 PickerRow("Сар", listOf("") + periods, period, title = { it.ifEmpty { "Бүх сар" } }, onSelect = { period = it })

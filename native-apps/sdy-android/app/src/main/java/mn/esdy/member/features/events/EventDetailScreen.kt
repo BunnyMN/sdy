@@ -59,6 +59,7 @@ import mn.esdy.member.design.Chips
 import mn.esdy.member.design.ErrorStateView
 import mn.esdy.member.design.Labels
 import mn.esdy.member.design.ListDivider
+import mn.esdy.member.design.LabeledContentRow
 import mn.esdy.member.design.ListRow
 import mn.esdy.member.design.ListSection
 import mn.esdy.member.design.NoticeKind
@@ -85,7 +86,7 @@ fun EventDetailScreen(eventId: String) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val loader = rememberLoader(eventId) { app.api.event(eventId) }
+    val loader = rememberLoader(eventId, autoLoad = false) { app.api.event(eventId) }
     val discussion = remember(eventId) { DiscussionModel(eventId, app.api, context.applicationContext, scope) }
     val tasks = remember(eventId) { TasksModel(eventId, app.api, scope) }
     var busy by remember { mutableStateOf(false) }
@@ -97,7 +98,9 @@ fun EventDetailScreen(eventId: String) {
     var editing by remember { mutableStateOf(false) }
     var showingQR by remember { mutableStateOf(false) }
 
+    // One after another, as iOS: the event, then its discussion, then its tasks.
     LaunchedEffect(eventId) {
+        loader.loadIfNeeded()
         discussion.load()
         tasks.load()
     }
@@ -152,6 +155,10 @@ fun EventDetailScreen(eventId: String) {
         }
     }
 
+    // Back on screen with the list open but nothing in it (the activity was
+    // recreated): ask again instead of spinning.
+    LaunchedEffect(showParticipants) { if (showParticipants && participants == null && participantsError == null) loadParticipants() }
+
     val event = loader.value
     InlineListScreen(
         title = event?.title ?: "Арга хэмжээ",
@@ -176,7 +183,6 @@ fun EventDetailScreen(eventId: String) {
                 onWithdraw = { confirmWithdraw = true },
                 onToggleParticipants = {
                     showParticipants = !showParticipants
-                    if (showParticipants && participants == null) loadParticipants()
                 },
             )
             error != null -> item { ErrorStateView(error) { loader.reload() } }
@@ -190,6 +196,7 @@ fun EventDetailScreen(eventId: String) {
             message = "Дахин бүртгүүлэхэд суудал үлдсэн байх шаардлагатай.",
             actions = listOf(SheetAction("Бүртгэл цуцлах", destructive = true) { withdraw() }),
             onDismiss = { confirmWithdraw = false },
+            cancelTitle = "Буцах",
         )
     }
     if (discussion.signing != null) VoteSigningSheet(discussion)
@@ -256,10 +263,7 @@ private fun Summary(event: EventRecord) {
 
 @Composable
 private fun DetailRow(label: String, icon: ImageVector, value: String) {
-    ListRow(Modifier.semantics(mergeDescendants = true) {}) {
-        IconLabel(label, icon, iconColor = Theme.accent)
-        Text(value, style = SdyType.body, color = Theme.secondaryText, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-    }
+    LabeledContentRow(value = value, valueIndent = 26.dp) { IconLabel(label, icon, iconColor = Theme.accent) }
 }
 
 /**

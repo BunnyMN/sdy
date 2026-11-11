@@ -63,10 +63,11 @@ import mn.esdy.member.design.GlassFill
 import mn.esdy.member.design.HeroScaffold
 import mn.esdy.member.design.IconRow
 import mn.esdy.member.design.Labels
-import mn.esdy.member.design.OfflineBanner
+import mn.esdy.member.design.HeroOfflineBanner
 import mn.esdy.member.design.RowDivider
 import mn.esdy.member.design.RowGroup
 import mn.esdy.member.design.SdyType
+import mn.esdy.member.design.ShrinkText
 import mn.esdy.member.design.SheetAction
 import mn.esdy.member.design.Theme
 import mn.esdy.member.design.pressable
@@ -90,7 +91,7 @@ fun ProfileScreen() {
     }
 
     Column(Modifier.fillMaxSize()) {
-        OfflineBanner()
+        HeroOfflineBanner()
         HeroScaffold(
             heroHeight = 420.dp,
             compact = {
@@ -112,10 +113,7 @@ fun ProfileScreen() {
                     Spacer(Modifier.height(120.dp))
                     Spacer(Modifier.weight(1f))
                     EditableAvatar()
-                    Text(
-                        cardName, style = SdyType.title2, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 18.dp),
-                    )
+                    ShrinkText(cardName, SdyType.title2, Color.White, Modifier.padding(top = 18.dp, start = 20.dp, end = 20.dp))
                     val branch = app.record?.approvedBranch
                     if (branch != null) {
                         Labels.position(branch.position)?.let { position ->

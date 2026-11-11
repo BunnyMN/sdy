@@ -46,7 +46,7 @@ internal fun InlineListScreen(
         val list = @Composable {
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp + mn.esdy.member.design.LocalBottomInset.current),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 content = content,
             )

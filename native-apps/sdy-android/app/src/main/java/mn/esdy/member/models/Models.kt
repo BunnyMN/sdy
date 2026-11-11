@@ -23,7 +23,6 @@ val ApiJson = Json {
     ignoreUnknownKeys = true
     coerceInputValues = true
     explicitNulls = false
-    isLenient = true
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 

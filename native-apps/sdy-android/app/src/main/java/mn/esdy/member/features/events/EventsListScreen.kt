@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,6 +61,7 @@ import mn.esdy.member.design.DarkCard
 import mn.esdy.member.design.ErrorStateView
 import mn.esdy.member.design.GlassCircleButton
 import mn.esdy.member.design.HeroScaffold
+import mn.esdy.member.design.HeroOfflineBanner
 import mn.esdy.member.design.HeroTitle
 import mn.esdy.member.design.SdyType
 import mn.esdy.member.design.SkeletonCards
@@ -83,51 +85,54 @@ fun EventsListScreen() {
     var filter by rememberSaveable { mutableStateOf(EventFilter.Upcoming) }
     var creating by rememberSaveable { mutableStateOf(false) }
 
-    HeroScaffold(
-        heroHeight = 230.dp,
-        onRefresh = { loader.load() },
-        compact = { Text("Арга хэмжээ", style = SdyType.headline, color = Color.White) },
-        pinned = if (app.can(Permission.manageEvents)) ({
-            Row(Modifier.fillMaxWidth()) {
-                Spacer(Modifier.weight(1f))
-                GlassCircleButton(Icons.Rounded.Add, "Арга хэмжээ нэмэх") { creating = true }
-            }
-        }) else null,
-        header = { HeroTitle("Арга хэмжээ", app.me?.tenantName) },
-    ) {
-        val events = loader.value
-        val error = loader.error
-        when {
-            events != null -> {
-                val shown = filtered(events, filter)
-                FilterBar(filter, Modifier.rise(0)) { filter = it }
-                if (shown.isEmpty()) {
-                    DarkCard(Modifier.rise(1)) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(vertical = 18.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Icon(Icons.Rounded.CalendarMonth, null, tint = Theme.secondaryText, modifier = Modifier.size(36.dp))
-                            Text(
-                                if (filter == EventFilter.Upcoming) "Удахгүй болох арга хэмжээ алга" else "Өнгөрсөн арга хэмжээ алга",
-                                style = SdyType.headline, color = Color.White, textAlign = TextAlign.Center,
-                            )
-                            Text(
-                                if (filter == EventFilter.Upcoming) "Салбар шинэ арга хэмжээ зарлахад энд гарна. Доош татаж шинэчилнэ үү."
-                                else "Таны салбарт болсон арга хэмжээ энд харагдана.",
-                                style = SdyType.subheadline, color = Theme.secondaryText, textAlign = TextAlign.Center,
-                            )
+    Column(Modifier.fillMaxSize()) {
+        HeroOfflineBanner()
+        HeroScaffold(
+            heroHeight = 230.dp,
+            onRefresh = { loader.load() },
+            compact = { Text("Арга хэмжээ", style = SdyType.headline, color = Color.White) },
+            pinned = if (app.can(Permission.manageEvents)) ({
+                Row(Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.weight(1f))
+                    GlassCircleButton(Icons.Rounded.Add, "Арга хэмжээ нэмэх") { creating = true }
+                }
+            }) else null,
+            header = { HeroTitle("Арга хэмжээ", app.me?.tenantName) },
+        ) {
+            val events = loader.value
+            val error = loader.error
+            when {
+                events != null -> {
+                    val shown = filtered(events, filter)
+                    FilterBar(filter, Modifier.rise(0)) { filter = it }
+                    if (shown.isEmpty()) {
+                        DarkCard(Modifier.rise(1)) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(Icons.Rounded.CalendarMonth, null, tint = Theme.secondaryText, modifier = Modifier.size(36.dp))
+                                Text(
+                                    if (filter == EventFilter.Upcoming) "Удахгүй болох арга хэмжээ алга" else "Өнгөрсөн арга хэмжээ алга",
+                                    style = SdyType.headline, color = Color.White, textAlign = TextAlign.Center,
+                                )
+                                Text(
+                                    if (filter == EventFilter.Upcoming) "Салбар шинэ арга хэмжээ зарлахад энд гарна. Доош татаж шинэчилнэ үү."
+                                    else "Таны салбарт болсон арга хэмжээ энд харагдана.",
+                                    style = SdyType.subheadline, color = Theme.secondaryText, textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    } else {
+                        shown.forEachIndexed { index, event ->
+                            EventRow(event, Modifier.rise(index + 1).pressable(0.98f) { nav.push(Route.Event(event.id)) })
                         }
                     }
-                } else {
-                    shown.forEachIndexed { index, event ->
-                        EventRow(event, Modifier.rise(index + 1).pressable(0.98f) { nav.push(Route.Event(event.id)) })
-                    }
                 }
+                error != null -> ErrorStateView(error) { loader.reload() }
+                else -> SkeletonCards(count = 4)
             }
-            error != null -> ErrorStateView(error) { loader.reload() }
-            else -> SkeletonCards(count = 4)
         }
     }
 
@@ -192,7 +197,7 @@ internal fun EventRow(event: EventRecord, modifier: Modifier = Modifier) {
             Modifier.width(52.dp).height(58.dp).background(Color.White, RoundedCornerShape(15.dp)),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
         ) {
-            Text(date?.dayOfMonth?.toString() ?: "—", fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif, color = Color.Black, lineHeight = 24.sp)
+            Text(date?.dayOfMonth?.toString() ?: "—", fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = mn.esdy.member.design.Inter, color = Color.Black, lineHeight = 24.sp)
             Text(date?.let { "${it.monthValue} сар" } ?: "", style = SdyType.caption2.copy(fontWeight = FontWeight.SemiBold), color = Color.Black.copy(alpha = 0.55f), maxLines = 1)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

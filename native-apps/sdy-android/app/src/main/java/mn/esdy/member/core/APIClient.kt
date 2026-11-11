@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -172,19 +174,27 @@ class APIClient(
 
         val requestBody = when {
             upload != null -> upload.first.toRequestBody(upload.second.toMediaType())
-            body != null -> JSONObject(body).toString().toRequestBody(JSON)
-            method != HTTPMethod.GET -> "{}".toRequestBody(JSON)
+            // Bytes, not a String: exactly `application/json`, as iOS sends (no charset suffix).
+            body != null -> JSONObject(body).toString().toByteArray().toRequestBody(JSON)
+            method != HTTPMethod.GET -> "{}".toByteArray().toRequestBody(JSON)
             else -> null
         }
         builder.method(method.name, requestBody)
 
-        val call = client.newCall(builder.build())
-        call.timeout().timeout(timeoutSeconds, TimeUnit.SECONDS)
+        // Like URLRequest.timeoutInterval: how long the connection may sit idle,
+        // not a cap on the whole exchange (a slow photo upload still finishes).
+        val call = client.newBuilder()
+            .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .build()
+            .newCall(builder.build())
 
         val (status, data, setCookie, requestPath) = try {
             call.await()
         } catch (e: IOException) {
-            val wrapped = if (call.isCanceled()) APIError.cancelled else APIError.network
+            // Only the caller going away is a cancellation; a timeout is the
+            // network, as on iOS (offline cache, banner, eID poll retries).
+            val wrapped = if (!currentCoroutineContext().isActive) APIError.cancelled else APIError.network
             if (wrapped.isNetwork) notifyReachability(false)
             throw wrapped
         }

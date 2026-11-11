@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -42,6 +43,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -120,7 +122,7 @@ fun <T> LoadingView(loader: Loader<T>, skeletonRows: Int = 6, content: @Composab
 fun SkeletonList(rows: Int = 6, modifier: Modifier = Modifier) {
     Column(
         modifier.fillMaxWidth().padding(16.dp)
-            .background(Theme.groupedCell, RoundedCornerShape(12.dp))
+            .background(Theme.groupedCell, RoundedCornerShape(26.dp))
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clearAndSetSemantics { contentDescription = "Ачаалж байна" },
     ) {
@@ -165,7 +167,7 @@ fun ErrorStateView(error: APIError, modifier: Modifier = Modifier, retry: () -> 
         icon = if (error.isNetwork) Icons.Rounded.WifiOff else Icons.Rounded.WarningAmber,
         message = error.message,
         modifier = modifier,
-    ) { PrimaryButton("Дахин оролдох", onClick = retry) }
+    ) { PrimaryButton("Дахин оролдох", color = Theme.accent, onClick = retry) }
 }
 
 @Composable
@@ -199,6 +201,18 @@ fun OfflineBanner() {
     }
 }
 
+/**
+ * The offline banner above a hero screen, under the status bar: it pushes the
+ * screen down while shown (iOS .offlineBanner() = safeAreaInset(edge: .top)).
+ */
+@Composable
+fun HeroOfflineBanner() {
+    val app = LocalApp.current
+    AnimatedVisibility(app.isOffline) {
+        Column(Modifier.fillMaxWidth().background(Color(0xFFFF9F0A)).statusBarsPadding()) { OfflineBanner() }
+    }
+}
+
 /** An inline result message for actions (success / error). */
 enum class NoticeKind { Success, Error, Info }
 
@@ -207,7 +221,7 @@ fun NoticeView(text: String, kind: NoticeKind = NoticeKind.Info, modifier: Modif
     val color = when (kind) {
         NoticeKind.Success -> Theme.success
         NoticeKind.Error -> Theme.danger
-        NoticeKind.Info -> Theme.secondaryText
+        NoticeKind.Info -> Theme.systemSecondary
     }
     val icon = when (kind) {
         NoticeKind.Success -> Icons.Rounded.CheckCircle
@@ -227,7 +241,8 @@ fun CopyRow(label: String, value: String, modifier: Modifier = Modifier) {
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(1600); copied = false } }
     Row(
-        modifier.fillMaxWidth().heightIn(min = Theme.minTap)
+        // The vertical inset iOS gives every List row.
+        modifier.fillMaxWidth().heightIn(min = ROW_MIN).padding(vertical = 15.dp)
             .pressable(0.98f, enabled = value.isNotEmpty()) {
                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText(label, value))
@@ -258,12 +273,12 @@ fun CopyRow(label: String, value: String, modifier: Modifier = Modifier) {
 @Composable
 fun DuesProgressBar(paidPercent: Int, pendingPercent: Int, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().height(8.dp).background(Theme.fill, CircleShape)
+        modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Theme.fill)
             .clearAndSetSemantics { contentDescription = "$paidPercent хувь төлөгдсөн" },
     ) {
         val paid = paidPercent.coerceIn(0, 100) / 100f
         val pending = pendingPercent.coerceIn(0, 100 - paidPercent.coerceIn(0, 100)) / 100f
-        if (paid > 0) Box(Modifier.weight(paid).fillMaxSize().background(Theme.accent, if (pending == 0f && paid == 1f) CircleShape else RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)))
+        if (paid > 0) Box(Modifier.weight(paid).fillMaxSize().background(Theme.accent))
         if (pending > 0) Box(Modifier.weight(pending).fillMaxSize().background(Theme.accent.copy(alpha = 0.35f)))
         val rest = 1f - paid - pending
         if (rest > 0.0001f) Spacer(Modifier.weight(rest))

@@ -104,10 +104,11 @@ import mn.esdy.member.design.IconRow
 import mn.esdy.member.design.Labels
 import mn.esdy.member.design.NoticeKind
 import mn.esdy.member.design.NoticeView
-import mn.esdy.member.design.OfflineBanner
+import mn.esdy.member.design.HeroOfflineBanner
 import mn.esdy.member.design.RowDivider
 import mn.esdy.member.design.RowGroup
 import mn.esdy.member.design.SdyType
+import mn.esdy.member.design.ShrinkText
 import mn.esdy.member.design.SheetHeader
 import mn.esdy.member.design.SkeletonCards
 import mn.esdy.member.design.StatusChip
@@ -147,7 +148,8 @@ fun HomeScreen() {
     val loader = rememberLoader { fetchHome(app) }
     var pointsHidden by rememberSaveable { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        HeroOfflineBanner()
         val data = loader.value
         val error = loader.error
         when {
@@ -180,7 +182,6 @@ fun HomeScreen() {
                 header = { HeroHeader(null, pointsHidden) },
             ) { SkeletonCards() }
         }
-        Box(Modifier.fillMaxWidth().statusBarsPadding()) { OfflineBanner() }
     }
 }
 
@@ -260,10 +261,7 @@ private fun TopRow(data: HomeData?, pointsHidden: Boolean, togglePoints: () -> U
         Box(Modifier.pressable(0.9f) { app.tab = AppModel.Tab.Profile }.semantics { contentDescription = "Профайл" }) { AvatarView(50.dp) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(greeting(), style = SdyType.subheadline, color = Color.White.copy(alpha = 0.65f))
-            Text(
-                displayName(data?.profile?.name ?: app.me?.name ?: ""),
-                style = SdyType.title2, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            ShrinkText(displayName(data?.profile?.name ?: app.me?.name ?: ""), SdyType.title2, Color.White)
         }
         if (app.hasApprovedBranch) {
             GlassCircleButton(

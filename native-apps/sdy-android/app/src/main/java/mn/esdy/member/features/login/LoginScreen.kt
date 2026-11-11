@@ -103,7 +103,10 @@ fun LoginScreen() {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val model = remember { EIDLoginModel(app.api, context.applicationContext, app.scope) }
+    // Kept on the AppModel, so a sign-in under way survives the activity being
+    // recreated (iOS: the screen's @StateObject lives as long as the screen).
+    val model = remember { app.eidLogin as? EIDLoginModel ?: EIDLoginModel(app.api, context.applicationContext, app.scope).also { app.eidLogin = it } }
+    val activity = androidx.activity.compose.LocalActivity.current
     var showEID by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
@@ -119,7 +122,14 @@ fun LoginScreen() {
     LaunchedEffect(app.resumeTick) { model.resume(app.takeEIDReturnSession()) }
     // eID's link reopened the app on a session this phone started: show where it stands.
     LaunchedEffect(model.phase) { if (model.phase is EIDLoginModel.Phase.Waiting && !showEID) showEID = true }
-    DisposableEffect(model) { onDispose { if (model.phase != EIDLoginModel.Phase.Success) model.cancel() } }
+    DisposableEffect(model) {
+        onDispose {
+            if (activity?.isChangingConfigurations != true) {
+                if (model.phase != EIDLoginModel.Phase.Success) model.cancel()
+                app.eidLogin = null
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(Night.sky)) {
         Scene()
@@ -224,7 +234,7 @@ private fun FinePrint(onLink: (String) -> Unit) {
         Text("eID Mongolia-аар баталгаажсан иргэн нэвтэрнэ.", fontSize = 12.sp, color = Night.muted, textAlign = TextAlign.Center)
         ClickableText(
             text, style = TextStyle(fontSize = 12.sp, color = Night.muted, textAlign = TextAlign.Center),
-            modifier = Modifier.padding(vertical = 6.dp),
+            modifier = Modifier,
         ) { offset -> text.getStringAnnotations("url", offset, offset).firstOrNull()?.let { onLink(it.item) } }
     }
 }
@@ -305,13 +315,16 @@ private fun DrawScope.drawSky(t: Float, front: Boolean) {
         }
 
         val breath = 1 + 0.12f * sin(t * 2 * PI.toFloat() / 7)
-        drawRect(
-            Brush.radialGradient(
-                0f to Color(0xFFC3242E).copy(alpha = (0.55f * breath).coerceAtMost(1f)), 0.45f to Color(0xFF7A1219).copy(alpha = 0.2f * breath), 1f to Night.sky.copy(alpha = 0f),
-                center = Offset(w * 0.5f, h * 0.45f), radius = 0.55f * maxOf(w, h),
-            ),
-            size = Size(w, h),
-        )
+        // In the artwork's unit square (iOS scales x by w, y by h): an ellipse, 0.55 w across and 0.55 h down.
+        scale(1f, h / w, pivot = Offset(w * 0.5f, h * 0.45f)) {
+            drawRect(
+                Brush.radialGradient(
+                    0f to Color(0xFFC3242E).copy(alpha = (0.55f * breath).coerceAtMost(1f)), 0.45f to Color(0xFF7A1219).copy(alpha = 0.2f * breath), 1f to Night.sky.copy(alpha = 0f),
+                    center = Offset(w * 0.5f, h * 0.45f), radius = 0.55f * w,
+                ),
+                topLeft = Offset(0f, h * 0.45f - h * 0.45f * w / h), size = Size(w, w),
+            )
+        }
 
         val floor = Path()
         for (i in 0..20) {

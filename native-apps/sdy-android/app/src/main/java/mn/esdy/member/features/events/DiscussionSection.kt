@@ -46,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -228,8 +229,8 @@ private fun MotionRow(
             val enabled = !signingActive && !offline
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("yes", "no", "abstain").forEach { choice ->
-                    if (choice == "yes") PrimaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true) { onVote(choice) }
-                    else SecondaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true) { onVote(choice) }
+                    if (choice == "yes") PrimaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true, small = true, color = Theme.accent) { onVote(choice) }
+                    else SecondaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true, small = true) { onVote(choice) }
                 }
             }
         }
@@ -248,7 +249,7 @@ private fun MotionStatusChip(motion: Motion) {
 private fun Tally(motion: Motion) {
     val total = maxOf(1, motion.counted).toFloat()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().height(6.dp).background(Theme.fill, CircleShape).clearAndSetSemantics { }) {
+        Row(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Theme.fill).clearAndSetSemantics { }) {
             val parts = listOf(motion.yes to Theme.success, motion.no to Theme.danger, motion.abstain to Color.Gray)
             var used = 0f
             parts.forEach { (v, c) ->
@@ -363,6 +364,8 @@ private fun ProposeSheet(model: DiscussionModel, onDismiss: () -> Unit) {
         confirmTitle = "Дэвшүүлэх",
         confirmEnabled = !model.busy && title.isNotBlank(),
         busy = model.busy,
+        cancelWhileBusy = true,
+        swipeWhileBusy = true,
         onConfirm = {
             scope.launch { if (model.propose(title.trim(), text.trim())) onDismiss() }
         },

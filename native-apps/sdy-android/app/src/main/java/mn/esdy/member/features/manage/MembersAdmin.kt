@@ -98,7 +98,7 @@ fun MembersAdminScreen() {
 
     LaunchedEffect(Unit) { load() }
 
-    SdyListScreen(title = "Гишүүд ба албан тушаал", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Гишүүд ба албан тушаал", silk = false, inline = true, onRefresh = { load() }) {
         item {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 16.dp).background(Theme.fill, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),

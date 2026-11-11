@@ -5,6 +5,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -186,8 +193,12 @@ fun MainTabView() {
 
     key(app.epoch) {
         val holder = rememberSaveableStateHolder()
-        Column(Modifier.fillMaxSize().background(Theme.canvas)) {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+        // The tab bar floats over the screens (iOS 26): they run under it and
+        // leave room for it at the end of their scrolling.
+        val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val barSpace = if (app.tabBarHidden > 0) 0.dp else TAB_BAR_HEIGHT + 12.dp + navBottom
+        Box(Modifier.fillMaxSize().background(Theme.canvas)) {
+            Box(Modifier.fillMaxSize()) {
                 // Every visited tab stays composed so its stack and scroll survive switching.
                 val visited = remember { mutableSetOf<AppModel.Tab>() }
                 visited += app.tab
@@ -195,7 +206,7 @@ fun MainTabView() {
                     val shown = item.tab == app.tab
                     key(item.tab) {
                         Box(Modifier.fillMaxSize().hiddenIf(!shown)) {
-                            androidx.compose.runtime.CompositionLocalProvider(mn.esdy.member.design.LocalCovered provides !shown) {
+                            androidx.compose.runtime.CompositionLocalProvider(mn.esdy.member.design.LocalCovered provides !shown, mn.esdy.member.design.LocalBottomInset provides barSpace) {
                                 holder.SaveableStateProvider(item.tab.name) {
                                     TabStack(app.paths.getValue(item.tab)) {
                                         when (item.tab) {
@@ -212,7 +223,12 @@ fun MainTabView() {
                     }
                 }
             }
-            TabBar(tabs, app.tab, app.unreadCount) { app.select(it) }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = app.tabBarHidden == 0,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it },
+            ) { TabBar(tabs, app.tab, app.unreadCount) { app.select(it) } }
         }
     }
 
@@ -222,27 +238,39 @@ fun MainTabView() {
     }
 }
 
-/** The iOS-style tab bar: icon over label, SDY red when selected, a badge on Нүүр. */
+private val TAB_BAR_HEIGHT = 62.dp
+
+/**
+ * The iOS 26 tab bar: a floating glass capsule with a margin all round; the
+ * open tab sits on a lighter pill, icon and label in SDY red; a badge on Нүүр.
+ */
 @Composable
 private fun TabBar(tabs: List<TabItem>, selected: AppModel.Tab, unread: Int, onSelect: (AppModel.Tab) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Color(0xF20D0D0D))) {
-        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Theme.separator))
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(56.dp)) {
+    Box(
+        Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 6.dp)
+            .shadow(18.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black.copy(alpha = 0.6f))
+            .background(Color(0xE61C1C1E), CircleShape)
+            .border(0.5.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))), CircleShape)
+            .height(TAB_BAR_HEIGHT)
+            .padding(4.dp),
+    ) {
+        Row(Modifier.fillMaxSize()) {
             tabs.forEach { item ->
                 val on = item.tab == selected
-                val tint = if (on) Theme.accent else Color(0xFF8E8E93)
+                val tint = if (on) Theme.accent else Color.White
                 Column(
-                    Modifier.weight(1f).fillMaxWidth().pressable(0.92f) { onSelect(item.tab) }
-                        .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = on }
-                        .padding(top = 6.dp),
+                    Modifier.weight(1f).fillMaxHeight()
+                        .background(if (on) Color.White.copy(alpha = 0.12f) else Color.Transparent, CircleShape)
+                        .pressable(0.92f) { onSelect(item.tab) }
+                        .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = on },
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     BadgedBox(badge = {
                         if (item.tab == AppModel.Tab.Home && unread > 0) Badge(containerColor = Theme.danger) { Text("$unread", color = Color.White) }
-                    }) { Icon(item.icon, null, tint = tint, modifier = Modifier.size(26.dp)) }
-                    Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = tint, maxLines = 1)
+                    }) { Icon(item.icon, null, tint = tint, modifier = Modifier.size(25.dp)) }
                     Spacer(Modifier.height(2.dp))
+                    Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
                 }
             }
         }

@@ -396,7 +396,7 @@ fun BlockedMembersScreen() {
                             ListRow {
                                 Text(member.name.ifEmpty { "—" }, style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
                                 SecondaryButton(
-                                    "Блок цуцлах", enabled = busy == null && !app.isOffline, busy = busy == member.userId,
+                                    "Блок цуцлах", enabled = busy == null && !app.isOffline,
                                     modifier = Modifier.height(36.dp),
                                 ) { unblock(member) }
                             }

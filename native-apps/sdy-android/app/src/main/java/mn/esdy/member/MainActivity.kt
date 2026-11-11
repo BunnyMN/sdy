@@ -25,7 +25,6 @@ import mn.esdy.member.design.SdyMaterialTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var app: AppModel
-    private var bootstrapped = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (BuildConfig.DEBUG) readLaunchArguments(intent)
@@ -40,10 +39,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             SdyMaterialTheme {
                 CompositionLocalProvider(LocalApp provides app) {
+                    // In the app's own scope, so an activity recreated mid-launch
+                    // does not cancel the first session check (iOS: the root .task).
                     LaunchedEffect(Unit) {
-                        if (!bootstrapped && app.phase == AppModel.Phase.Launching) {
-                            bootstrapped = true
-                            app.bootstrap()
+                        if (!app.bootstrapStarted && app.phase == AppModel.Phase.Launching) {
+                            app.bootstrapStarted = true
+                            app.scope.launch { app.bootstrap() }
                         }
                     }
                     RootView()

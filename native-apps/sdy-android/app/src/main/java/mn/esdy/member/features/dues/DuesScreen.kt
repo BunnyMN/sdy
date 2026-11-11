@@ -96,7 +96,7 @@ fun DuesScreen() {
 
     LaunchedEffect(Unit) { if (page == null) load() }
 
-    SdyListScreen(title = "Хураамж", onRefresh = { load() }) {
+    SdyListScreen(title = "Хураамж", onRefresh = if (page != null) ({ load() }) else null) {
         val p = page
         val err = error
         when {
@@ -308,7 +308,7 @@ fun ReportPaymentSheet(charge: Charge, onDismiss: () -> Unit, onSent: () -> Unit
         }
     }
 
-    FormSheet(title = "Төлбөр мэдэгдэх", onDismiss = onDismiss, confirmTitle = "Илгээх", confirmEnabled = valid, busy = busy, onConfirm = ::submit) {
+    FormSheet(title = "Төлбөр мэдэгдэх", onDismiss = onDismiss, confirmTitle = "Илгээх", confirmEnabled = valid, busy = busy, cancelWhileBusy = true, onConfirm = ::submit) {
         item {
             ListSection {
                 LabeledRow("Хураамж", charge.period)

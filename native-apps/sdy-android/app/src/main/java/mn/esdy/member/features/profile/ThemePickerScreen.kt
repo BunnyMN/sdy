@@ -43,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -75,6 +76,12 @@ import mn.esdy.member.design.white
 @Composable
 fun ThemePickerScreen() {
     val nav = LocalNav.current
+    // iOS: .toolbar(.hidden, for: .tabBar)
+    val appModel = mn.esdy.member.app.LocalApp.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        appModel.tabBarHidden += 1
+        onDispose { appModel.tabBarHidden -= 1 }
+    }
     val scope = rememberCoroutineScope()
     val chosen by ThemeStore.chosen
     val themes = AppTheme.entries
@@ -170,7 +177,13 @@ private fun ThemePreviewPhone(theme: AppTheme, modifier: Modifier = Modifier) {
             }
         }
         Column(
-            Modifier.offset(y = (-18).dp).fillMaxWidth()
+            Modifier
+                .layout { m, c ->
+                    val p = m.measure(c)
+                    val lift = 18.dp.roundToPx()
+                    layout(p.width, maxOf(0, p.height - lift)) { p.place(0, -lift) }
+                }
+                .fillMaxWidth()
                 .background(Theme.canvas, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

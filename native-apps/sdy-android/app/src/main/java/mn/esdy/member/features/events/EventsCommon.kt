@@ -62,7 +62,7 @@ internal fun InlineListScreen(
             val list = @Composable {
                 LazyColumn(
                     Modifier.fillMaxSize(), state = state,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp + mn.esdy.member.design.LocalBottomInset.current),
                     content = content,
                 )
             }
@@ -95,5 +95,5 @@ internal fun IconLabel(
 /** A section header with an icon (iOS Label in a Section header). */
 @Composable
 internal fun IconHeader(text: String, icon: ImageVector) {
-    IconLabel(text, icon, color = Theme.secondaryText, style = SdyType.footnote, iconSize = 15.dp)
+    IconLabel(text, icon, color = Theme.systemSecondary, style = SdyType.headline, iconSize = 19.dp)
 }

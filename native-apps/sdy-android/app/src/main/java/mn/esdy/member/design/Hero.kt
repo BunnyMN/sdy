@@ -1,6 +1,5 @@
 package mn.esdy.member.design
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -42,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -58,6 +58,12 @@ import kotlin.math.sin
 import kotlinx.coroutines.launch
 import mn.esdy.member.design.Aurora.drawAurora
 import mn.esdy.member.design.Starfield.drawStarfield
+
+/**
+ * Room to leave at the bottom of a scrolling screen for the floating tab bar
+ * that sits over it (iOS adds the tab bar to the safe area).
+ */
+val LocalBottomInset = compositionLocalOf { 0.dp }
 
 /**
  * True for a screen that another screen is pushed over: its moving
@@ -77,7 +83,8 @@ fun SilkBackground(modifier: Modifier = Modifier, redTint: Float = 0.35f, forced
     val theme = forcedTheme ?: chosen
     val reduceMotion = rememberReduceMotion()
     val time = rememberAnimationTime(paused = reduceMotion || LocalCovered.current)
-    Crossfade(theme, modifier.clearAndSetSemantics { }, animationSpec = tween(500), label = "silk") { shown ->
+    val shown = theme
+    Box(modifier.clearAndSetSemantics { }) {
         Canvas(Modifier.fillMaxSize()) {
             val t = if (reduceMotion) 0f else time.value
             drawRect(Theme.canvas)
@@ -162,6 +169,8 @@ fun HeroScaffold(
                         val scale = if (y < 0) max(0.8f, 1 + y / (heroPx * 1.6f)) else 1f
                         scaleX = scale; scaleY = scale
                         transformOrigin = TransformOrigin(0.5f, 0f)
+                        // The silk drifts at half speed, the header a little faster (iOS: −y·0.45 against −y·0.5).
+                        if (y < 0) translationY = y * 0.05f
                     },
                     content = header,
                 )
@@ -174,7 +183,7 @@ fun HeroScaffold(
                     }
                     .fillMaxWidth()
                     .background(Theme.canvas, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 32.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 32.dp + LocalBottomInset.current),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 content = content,
             )
@@ -209,6 +218,7 @@ fun HeroScaffold(
                     Modifier.fillMaxWidth()
                         .graphicsLayer { alpha = progress; translationY = (1 - progress) * -8 * density.density }
                         .background(Color(0xE6101010))
+                        .drawBehind { drawRect(Color.White.copy(alpha = 0.08f), topLeft = Offset(0f, size.height - 0.5f * density.density), size = androidx.compose.ui.geometry.Size(size.width, 0.5f * density.density)) }
                         .statusBarsPadding()
                         .height(52.dp)
                         .padding(horizontal = 20.dp),
@@ -249,7 +259,7 @@ fun SilkListBackground(height: Dp = 300.dp, scrollOffsetPx: Float = 0f) {
         SilkBackground(Modifier.fillMaxSize())
         // Fade to black towards the bottom (iOS masks with black → clear).
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.66f to Color.Transparent, 1f to Theme.canvas))
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color.Transparent, 1f to Theme.canvas))
         }
     }
 }

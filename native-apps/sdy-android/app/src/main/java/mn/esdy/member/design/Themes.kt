@@ -118,23 +118,30 @@ fun rememberReduceMotion(): Boolean {
  */
 @Composable
 fun rememberAnimationTime(paused: Boolean): State<Float> {
-    val time = remember { mutableFloatStateOf(0f) }
+    val time = remember { mutableFloatStateOf(AnimationClock.now()) }
     LaunchedEffect(paused) {
         if (paused) return@LaunchedEffect
         var last = 0L
-        var origin = -1L
-        val base = time.floatValue
         while (true) {
             withFrameNanos { now ->
-                if (origin < 0) origin = now
                 if (now - last >= 33_000_000L) {
                     last = now
-                    time.floatValue = base + (now - origin) / 1_000_000_000f
+                    time.floatValue = AnimationClock.now()
                 }
             }
         }
     }
     return time
+}
+
+/**
+ * One clock for every animation, counted from process start, so moving
+ * backgrounds stay in step and carry on from screen to screen (iOS reads the
+ * wall clock in each TimelineView).
+ */
+object AnimationClock {
+    private val origin = android.os.SystemClock.elapsedRealtimeNanos()
+    fun now(): Float = ((android.os.SystemClock.elapsedRealtimeNanos() - origin) / 1_000_000L) / 1000f
 }
 
 /**
@@ -196,10 +203,14 @@ object Aurora {
         for (o in orbs) {
             val cx = (o.x + 0.12f * sin(t * o.speed + o.phase)) * w
             val cy = (o.y + 0.10f * cos(t * o.speed * 1.3f + o.phase)) * h
-            val r = o.r * max(w, h) * 0.5f * (1 + 0.08f * sin(t * 0.4f + o.phase)) + min(w, h) * 0.16f
+            // iOS blurs a solid disc by min(w,h)·0.16: full colour inside, a soft edge either side of the rim.
+            val disc = o.r * max(w, h) * 0.5f * (1 + 0.08f * sin(t * 0.4f + o.phase))
+            val blur = min(w, h) * 0.16f
+            val r = disc + blur
+            val inner = (max(0f, disc - blur) / r).coerceIn(0f, 0.99f)
             drawCircle(
                 Brush.radialGradient(
-                    0f to o.color.copy(alpha = 0.85f), 0.55f to o.color.copy(alpha = 0.55f), 1f to o.color.copy(alpha = 0f),
+                    0f to o.color.copy(alpha = 0.85f), inner to o.color.copy(alpha = 0.85f), (disc / r) to o.color.copy(alpha = 0.42f), 1f to o.color.copy(alpha = 0f),
                     center = Offset(cx, cy), radius = r,
                 ),
                 radius = r, center = Offset(cx, cy),

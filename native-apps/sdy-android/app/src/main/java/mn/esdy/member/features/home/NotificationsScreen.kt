@@ -101,12 +101,10 @@ fun NotificationsScreen() {
         actionError = null
         scope.launch {
             if (!item.isRead && !app.isOffline) {
-                try {
-                    app.api.markRead(item.id)
-                    items = items.map { if (it.id == item.id) it.copy(readAt = Instant.now().toString()) else it }
-                    unread = maxOf(0, unread - 1)
-                    app.unreadCount = unread
-                } catch (_: Throwable) {}
+                try { app.api.markRead(item.id) } catch (_: Throwable) {}
+                items = items.map { if (it.id == item.id) it.copy(readAt = Instant.now().toString()) else it }
+                unread = maxOf(0, unread - 1)
+                app.unreadCount = unread
             }
             try {
                 // From the list, a screen opens on top of it (in Нүүр or Профайл,
@@ -134,6 +132,7 @@ fun NotificationsScreen() {
     SdyListScreen(
         title = "Мэдэгдэл",
         silk = false,
+        inline = true,
         onRefresh = { load() },
         actions = {
             if (unread > 0) BarTextButton("Бүгдийг уншсан", enabled = !busy && !app.isOffline) { readAll() }
