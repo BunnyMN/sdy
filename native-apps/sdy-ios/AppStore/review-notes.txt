@@ -1,0 +1,19 @@
+DEMO ACCOUNT: sign in with email and password. New in 1.1.1, the sign-in screen shows a single eID Mongolia button; the email/password sign-in is the link "Нууц үгээр нэвтрэх" (Sign in with password) in the small text at the very bottom of the screen, under the button. The account is an approved member of a test branch with sample events, a discussion, a task and membership dues.
+
+The app's interface is in Mongolian. It is the member app of SDY (Social Democratic Youth Union of Mongolia).
+
+eID MONGOLIA: members normally sign in with eID Mongolia, the national digital ID of Mongolia, and sign meeting votes with their eID digital signature (PIN2). eID requires Mongolian civil registration, so it cannot be used outside Mongolia; that is why the demo account uses email/password. Voting on a motion requires eID and attendance, so the demo account can read the discussion but voting is not available to it.
+
+QR CHECK-IN: Check-in tab (Ирц) -> scan the organiser's QR code shown at an event. The camera is used only to read that QR code.
+
+PAYMENTS: the app takes no payments. Membership dues are paid by bank transfer outside the app; "Төлбөр мэдэгдэх" only reports a transfer for the branch treasurer to confirm. These are membership dues of a non-profit organisation, not digital content (Guideline 3.1.1 does not apply).
+
+ACCOUNT DELETION: Profile (Профайл) -> Бүртгэл устгах (Delete account). The request is cancelled if the person signs in again within 30 days; after that personal data is anonymised.
+
+USER-GENERATED CONTENT (Guideline 1.2): only approved members of a branch can post discussion issues, and branch organisers moderate them. On every issue raised by another member, the "..." menu offers "Мэдээлэх" (Report, with a reason; the event organiser is notified at once) and "Гишүүнийг блоклох" (Block member; their issues are hidden from you). An issue reported by three members is hidden until an organiser reviews it. Blocked members: Profile (Профайл) -> Блоклосон гишүүд, where a block can be undone. Path: Events (Арга хэмжээ) -> an event -> Хэлэлцүүлэг (Discussion).
+
+PUSH NOTIFICATIONS: the app asks for notification permission after sign-in. Notifications are sent only for the member's own branch activity (events, decisions, replies to their reports) — never marketing. Signing out removes the device from notifications.
+
+BRANCH MANAGEMENT (new in 1.1.0): Profile (Профайл) -> Удирдлага appears only for members who hold an office in their branch (chair, secretary, treasurer, control committee). It lets them approve members, assign positions, create events, confirm dues transfers and record control committee warnings. The demo account is an ordinary member, so this section is not shown to it; the rest of the app is unchanged for ordinary members.
+
+Privacy policy: https://e-sdy.mn/privacy  Support: https://e-sdy.mn/support
