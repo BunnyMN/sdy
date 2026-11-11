@@ -112,6 +112,9 @@ Entitlement: `applinks:e-sdy.mn`. Ажиллахын тулд `https://e-sdy.mn/
 
 ## App Store руу гаргах
 
+> Шинэчлэл гаргах алхам алхмаар заавар (дурын Mac-аас, түлхүүр шилжүүлэх, TestFlight, App Review):
+> **[RELEASE.md](RELEASE.md)**. Доорх нь анх апп үүсгэх үеийн тэмдэглэл.
+
 1. App Store Connect → Apps → «+» → New App: iOS, нэр «E-sdy», Bundle ID `mn.esdy.member`
    (Xcode automatic signing эсвэл developer.apple.com → Identifiers дээр Associated Domains-тай үүсгэнэ), SKU `sdy-member-ios`.
 2. App Store Connect API key үүсгэнэ (Users and Access → Integrations → Team key, App Manager эрх), `.p8`-ийг татна.
