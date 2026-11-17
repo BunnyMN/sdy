@@ -1,5 +1,6 @@
 package mn.esdy.member.features.profile
 
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -43,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -75,6 +77,12 @@ import mn.esdy.member.design.white
 @Composable
 fun ThemePickerScreen() {
     val nav = LocalNav.current
+    // iOS: .toolbar(.hidden, for: .tabBar)
+    val appModel = mn.esdy.member.app.LocalApp.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        appModel.tabBarHidden += 1
+        onDispose { appModel.tabBarHidden -= 1 }
+    }
     val scope = rememberCoroutineScope()
     val chosen by ThemeStore.chosen
     val themes = AppTheme.entries
@@ -120,18 +128,28 @@ fun ThemePickerScreen() {
                 }
             }
 
+            val isChosen = shown == chosen
             Box(
                 Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding()
                     .fillMaxWidth().heightIn(min = 56.dp)
-                    .pressable {
+                    .pressable(enabled = !isChosen) {
                         ThemeStore.choose(shown)
                         Haptics.success()
                         nav.pop()
                     }
-                    .background(shown.accent, CircleShape),
+                    .background(if (isChosen) Color.White.copy(alpha = 0.12f) else shown.accent, CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = if (isChosen) 0.18f else 0f), CircleShape)
+                    .semantics { contentDescription = if (isChosen) "Сонгогдсон өнгө" else "Энэ өнгийг хадгалах" },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (shown == chosen) "Сонгогдсон" else "Хадгалах", style = SdyType.headline, color = Color.White)
+                if (isChosen) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Rounded.Check, null, tint = Color.White.copy(alpha = 0.75f), modifier = Modifier.size(20.dp))
+                        Text("Сонгогдсон", style = SdyType.headline, color = Color.White.copy(alpha = 0.75f))
+                    }
+                } else {
+                    Text("Хадгалах", style = SdyType.headline, color = Color.White)
+                }
             }
         }
     }
@@ -170,7 +188,13 @@ private fun ThemePreviewPhone(theme: AppTheme, modifier: Modifier = Modifier) {
             }
         }
         Column(
-            Modifier.offset(y = (-18).dp).fillMaxWidth()
+            Modifier
+                .layout { m, c ->
+                    val p = m.measure(c)
+                    val lift = 18.dp.roundToPx()
+                    layout(p.width, maxOf(0, p.height - lift)) { p.place(0, -lift) }
+                }
+                .fillMaxWidth()
                 .background(Theme.canvas, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

@@ -49,6 +49,8 @@ object Theme {
     val cardRaised = Color(0xFF2B2B2B)    // white 0.17
     val secondaryText = Color(0xFF9E9E9E) // white 0.62
     val tertiaryText = Color(0xFF6B6B6B)  // white 0.42
+    /** iOS `.secondary` on dark (secondaryLabel). */
+    val systemSecondary = Color(0xFF8D8D93)
 
     /** iOS grouped-list cells in dark mode (secondarySystemGroupedBackground). */
     val groupedCell = Color(0xFF1C1C1E)
@@ -74,18 +76,32 @@ object Night {
  * iOS Dynamic Type sizes at the default setting, so a `.font(.headline)` on
  * iOS is `SdyType.headline` here.
  */
+/**
+ * Inter (SIL Open Font License, third_party/Inter-LICENSE.txt): the closest
+ * open face to iOS's SF Pro in width and shape, so text wraps and fits as it
+ * does on iPhone. Roboto runs narrower.
+ */
+val Inter = androidx.compose.ui.text.font.FontFamily(
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_regular, FontWeight.Normal),
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_medium, FontWeight.Medium),
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_semibold, FontWeight.SemiBold),
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_bold, FontWeight.Bold),
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_extrabold, FontWeight.ExtraBold),
+    androidx.compose.ui.text.font.Font(mn.esdy.member.R.font.inter_black, FontWeight.Black),
+)
+
 object SdyType {
-    val largeTitle = TextStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, lineHeight = 41.sp)
-    val title = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
-    val title2 = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
-    val title3 = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 25.sp)
-    val headline = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
-    val body = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
-    val callout = TextStyle(fontSize = 16.sp, lineHeight = 21.sp)
-    val subheadline = TextStyle(fontSize = 15.sp, lineHeight = 20.sp)
-    val footnote = TextStyle(fontSize = 13.sp, lineHeight = 18.sp)
-    val caption = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
-    val caption2 = TextStyle(fontSize = 11.sp, lineHeight = 13.sp)
+    val largeTitle = TextStyle(fontFamily = Inter, fontSize = 34.sp, fontWeight = FontWeight.Bold, lineHeight = 41.sp)
+    val title = TextStyle(fontFamily = Inter, fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
+    val title2 = TextStyle(fontFamily = Inter, fontSize = 22.sp, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
+    val title3 = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 25.sp)
+    val headline = TextStyle(fontFamily = Inter, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
+    val body = TextStyle(fontFamily = Inter, fontSize = 17.sp, lineHeight = 22.sp)
+    val callout = TextStyle(fontFamily = Inter, fontSize = 16.sp, lineHeight = 21.sp)
+    val subheadline = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 20.sp)
+    val footnote = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 18.sp)
+    val caption = TextStyle(fontFamily = Inter, fontSize = 12.sp, lineHeight = 16.sp)
+    val caption2 = TextStyle(fontFamily = Inter, fontSize = 11.sp, lineHeight = 13.sp)
     val mono = FontFamily.Monospace
 }
 
@@ -96,7 +112,7 @@ object SdyType {
 enum class Tone { Neutral, Accent, Success, Warning, Danger, Info }
 
 fun Tone.color(): Color = when (this) {
-    Tone.Neutral -> Theme.secondaryText
+    Tone.Neutral -> Theme.systemSecondary
     Tone.Accent -> Theme.accent
     Tone.Success -> Theme.success
     Tone.Warning -> Theme.warning
@@ -233,3 +249,26 @@ object Labels {
     }
 }
 
+
+/**
+ * One line that shrinks to fit, down to `minScale` of its size, before it
+ * would be cut (iOS .lineLimit(1).minimumScaleFactor(minScale)).
+ */
+@Composable
+fun ShrinkText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    minScale: Float = 0.7f,
+) {
+    val max = style.fontSize
+    androidx.compose.foundation.text.BasicText(
+        text,
+        modifier = modifier,
+        style = style.copy(color = color),
+        maxLines = 1,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = max * minScale, maxFontSize = max, stepSize = 0.5.sp),
+    )
+}

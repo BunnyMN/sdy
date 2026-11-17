@@ -23,7 +23,6 @@ val ApiJson = Json {
     ignoreUnknownKeys = true
     coerceInputValues = true
     explicitNulls = false
-    isLenient = true
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
@@ -89,8 +88,12 @@ data class EIDStart(
     val binding: String? = null,
 ) {
     companion object {
-        /** A session known only by its id (the app was reopened by eID's link). */
-        fun resuming(id: String) = EIDStart(sessionId = id)
+        /**
+         * A session known only by what this phone kept of it (the app was
+         * reopened by eID's link): its id, the binding and when it runs out.
+         */
+        fun resuming(id: String, binding: String? = null, expiresAt: String? = null) =
+            EIDStart(sessionId = id, binding = binding, expiresAt = expiresAt)
     }
 }
 
@@ -310,6 +313,25 @@ data class EventRecord(
     val isOpen: Boolean get() = status == "planned"
     val startDate: Instant? get() = Formatters.parseDate(startsAt)
     val isUpcoming: Boolean get() = (startDate ?: Instant.MIN) >= Instant.now()
+    val endDate: Instant? get() = Formatters.parseDate(endsAt)
+
+    /**
+     * Over: marked done, or its end (six hours after the start when it
+     * names none) has passed — a three-day camp stays upcoming until it ends.
+     */
+    fun isPast(now: Instant = Instant.now()): Boolean {
+        if (status == "done") return true
+        val start = startDate ?: return false
+        val end = endDate?.takeIf { it > start } ?: start.plusSeconds(6 * 3600)
+        return end < now
+    }
+
+    /** "12/50 бүртгүүлсэн", with "· 3 ирсэн" once anybody has come. */
+    val capacityShort: String
+        get() {
+            val reg = capacity?.let { "$registeredCount/$it" } ?: "$registeredCount"
+            return if (attendedCount > 0) "$reg бүртгүүлсэн · $attendedCount ирсэн" else "$reg бүртгүүлсэн"
+        }
 
     /** "12/50 бүртгүүлсэн · 3 ирсэн" */
     val capacityText: String
@@ -541,10 +563,15 @@ data class MyDuesTotals(
 data class MyDuesPage(
     val charges: List<Charge> = emptyList(),
     val payments: List<Payment> = emptyList(),
-    val hasMore: Boolean = false,
-    val nextOffset: Int? = null,
+    override val hasMore: Boolean = false,
+    override val nextOffset: Int? = null,
+    /** Per-list cursors (backend 2026-11); absent from older servers, which page both lists with `nextOffset`. */
+    override val chargesHasMore: Boolean? = null,
+    override val paymentsHasMore: Boolean? = null,
+    override val nextChargesOffset: Int? = null,
+    override val nextPaymentsOffset: Int? = null,
     val totals: MyDuesTotals? = null,
-)
+) : mn.esdy.member.core.DuesPaged
 
 @Serializable
 data class ReportResult(val id: String? = null, val changed: Boolean = false)

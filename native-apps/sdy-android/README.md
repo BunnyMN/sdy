@@ -10,7 +10,22 @@ iOS апп (`native-apps/sdy-ios`)-ын нэг-нэгээр хөрвүүлэлт
   хөтөч биш — `FLAG_ACTIVITY_REQUIRE_NON_BROWSER`), апп байхгүй бол регистрийн дугаараар. Имэйл/нууц үг нь
   доод талын жижиг холбоос (Play-ийн шалгагчийн демо бүртгэл)
 - Session: bearer token (`Authorization: Bearer`, `X-Session-Transport: bearer`, `X-Client: SDYMember-Android/…`),
-  Android Keystore-ийн AES-GCM түлхүүрээр шифрлэж хадгална; cookie хэрэглэхгүй; backup/device transfer-ээс хассан
+  Android Keystore-ийн AES-GCM түлхүүрээр шифрлэж хадгална; cookie хэрэглэхгүй; backup/device transfer-ээс хассан.
+  Апп устгахад SharedPreferences, Keystore-ийн түлхүүр хамт устдаг тул дахин суулгахад нэвтрээгүй эхэлнэ (iOS-ийн
+  `TokenStore.clearIfFreshInstall` Android-д хэрэггүй; `allowBackup=false`-ийг тест шалгана). Гарсны дараа хоцорсон
+  хариу кэшэд бичигдэхгүй (`OfflineCache.generation`).
+- Нүүр табуудыг давтахгүй: оноо, «Тэргүүлэгчид», «Түүх», «Танд хийх зүйл» (60 с-ээс хуучин бол харагдах бүрт шинэчлэгдэнэ).
+  Оноог нуух нь Профайл → «Нүүрэнд оноогоо нуух» (`HomeSettings`, `sdy.prefs` / `home.pointsHidden`).
+- Эрх: апп foreground-д ирэх, ямар ч 403 хариу (30 с throttle) бүрт `/auth/me`-г кэшгүй дахин уншина
+  (`AppModel.refreshIdentity`; офлайн бол юу ч өөрчлөхгүй, хүлээх хооронд салбар/session солигдвол хариуг хаяна).
+- Салбар солилт: сервер солисны дараа `/auth/me` амжилтгүй бол апп шинэ салбарт (эрхгүйгээр) шилжиж, алдааг харуулна.
+- eID: start-ийн `binding` Keystore-оор шифрлэгдэж (`TokenStore` account `eid_binding`), `expires_at` (байвал тоолуур,
+  байхгүй бол 15 минутын backstop) хадгалагдаж, App Link-ээр дахин нээгдэхэд poll-д илгээгдэнэ (`PendingEIDSession`).
+  Poll 404 → хугацаа дууссан.
+- Хяналтын хорооны шийдвэр `Idempotency-Key` толгойтой (`IntentKey`: шийдвэр бүрт нэг UUID, дахин оролдоход —
+  A→B→A-д ч — ижил). Хураамжийн жагсаалт charges/payments-ийг тусад нь хуудаслана (`DuesPaged.nextPageQuery`).
+- Мэдэгдэл/линк нэвтрээгүй үед (жишээ нь eID-ийн санал буцалт апп эхлэх үед) `AppModel.pendingPush`-д хүлээгдэж,
+  нэвтэрсний дараа нээгдэнэ; гарах эсвэл 401-ээр session дуусахад устна. Push (FCM) холбогдоогүй — `openPushed` бэлэн.
 
 ## Бүтэц
 
@@ -27,6 +42,9 @@ app/src/debug/assets/fixtures/   iOS-ийн Resources/Fixtures/*.json (release-�
 app/src/test/                    iOS SDYMemberTests-ийн хөрвүүлэлт (JVM unit test)
 ```
 
+Фонт: Inter (SIL OFL, `third_party/Inter-LICENSE.txt`) — iOS-ийн SF Pro-той өргөн ойр тул текст ижил газар тасарна.
+Харагдац iOS 26-ийнх: хөвөгч шилэн tab bar (`app/RootView.kt`), шилэн toolbar товч, 52 өндөр жагсаалтын мөр.
+
 iOS → Android толь: SwiftUI `NavigationStack(path:)` → `app/Nav.kt`-ийн `TabStack` (таб бүр өөрийн stack-тай, доорх
 дэлгэцүүдийн төлөв хадгалагдана), `List(.insetGrouped)` → `SdyListScreen` + `ListSection`, `.sheet` → `SdySheet`/`FormSheet`,
 `.fullScreenCover` → `SdyFullScreen`, `.confirmationDialog` → `ActionSheet`, `Loader<T>` → `rememberLoader`.
@@ -38,7 +56,7 @@ iOS → Android толь: SwiftUI `NavigationStack(path:)` → `app/Nav.kt`-ий
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 ./gradlew :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest      # unit тест
+./gradlew :app:testDebugUnitTest      # unit тест (97: Decoding, Parsing, AuditFixTest — iOS AuditFixTests-ийн хөрвүүлэлт)
 ```
 
 ### Backend-гүй харах (зөвхөн debug)
@@ -83,8 +101,12 @@ Manifest-д `https://e-sdy.mn/auth/eid/callback` болон `/member/check-in`-�
    keyAlias=esdy-upload
    keyPassword=…
    ```
-3. `app/build.gradle.kts`-ийн `versionCode`-г +1 (хувилбар бүрт), `versionName`-г iOS-тэй ижил байлгана.
-4. `./gradlew :app:bundleRelease` → `app/build/outputs/bundle/release/app-release.aab`
+3. Хувилбар: `app/build.gradle.kts`-ийн `appVersion`-ийг iOS-тэй ижил болгоно; `versionCode` түүнээс гарна
+   (`MMmmpp` + 2 оронтой upload тоолуур `androidBuild`: 1.1.1 → 1010101). Ижил `appVersion`-ийг дахин ачаалах бол
+   `androidBuild`-ийг +1, шинэ `appVersion` дээр 1 болгоно.
+4. `./gradlew :app:bundleRelease` → `app/build/outputs/bundle/release/app-release.aab`.
+   `keystore.properties` байхгүй бол `bundleRelease` / `assembleRelease` тодорхой алдаагаар зогсоно (гарын үсэггүй
+   build чимээгүй гарахгүй); `assembleDebug`, `:app:minifyReleaseWithR8` түүнийг шаардахгүй.
 5. Play Console → Create app («E-sdy», Social, Free) → Internal testing-д `.aab` ачаална → Play App Signing-ийг зөвшөөрнө →
    App integrity-ээс SHA-256-г авч `ANDROID_CERT_SHA256`-д тавина (дээрх App Links).
 6. Store listing, Data safety (iOS App Privacy-тэй ижил: нэр, имэйл, утас, зураг, апп доторх үйлдэл; шифрлэгдсэн дамжуулалт;
@@ -97,4 +119,6 @@ Manifest-д `https://e-sdy.mn/auth/eid/callback` болон `/member/check-in`-�
 iOS апп APNs-ээр push авдаг (`backend/internal/workspace/push`). Android-д Firebase Cloud Messaging хэрэгтэй:
 Firebase төсөл (`google-services.json`), backend-д FCM илгээгч (HTTP v1, service account), аппад
 `FirebaseMessagingService` + `POST /push-tokens` (`provider: "FCM"`, `Endpoints.kt`-д бэлэн). Хүртэл нь
-мэдэгдлүүд апп доторх «Мэдэгдэл» жагсаалт болон Нүүрийн badge-д (апп нээгдэх бүрт шинэчлэгдэнэ) харагдана.
+мэдэгдлүүд апп доторх «Мэдэгдэл» жагсаалт, Нүүрийн хонхны цэг ба «Танд хийх зүйл»-д (апп нээгдэх бүрт шинэчлэгдэнэ)
+харагдана. FCM-ийн дарилтыг `AppModel.openPushed(path, notificationID)` руу дамжуулна (нэвтрээгүй бол хүлээгдэнэ);
+foreground-д push ирэхэд `refreshUnread()` + `refreshIdentity(minimumIntervalMs = 5_000)`.

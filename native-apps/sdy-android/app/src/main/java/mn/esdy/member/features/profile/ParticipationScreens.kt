@@ -1,5 +1,13 @@
 package mn.esdy.member.features.profile
 
+import mn.esdy.member.design.ListDivider
+import mn.esdy.member.design.RowButton
+import androidx.compose.foundation.layout.heightIn
+import mn.esdy.member.design.SheetAction
+import mn.esdy.member.design.ActionSheet
+import mn.esdy.member.design.StatusChip
+import mn.esdy.member.design.Chips
+import mn.esdy.member.core.appendingUnique
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,7 +89,7 @@ fun ParticipationScreen() {
         scope.launch {
             try {
                 val next = app.api.myEvents(current.nextOffset ?: current.items.size)
-                mine = next.copy(items = current.items + next.items)
+                mine = next.copy(items = current.items.appendingUnique(next.items) { it.id })
             } catch (_: Exception) {} finally { busy = false }
         }
     }
@@ -92,7 +100,7 @@ fun ParticipationScreen() {
         scope.launch {
             try {
                 val next = app.api.points(current.nextOffset ?: current.entries.size)
-                points = next.copy(entries = current.entries + next.entries)
+                points = next.copy(entries = current.entries.appendingUnique(next.entries) { it.id })
             } catch (_: Exception) {} finally { busy = false }
         }
     }
@@ -126,9 +134,11 @@ fun ParticipationScreen() {
                             ListRow(Modifier.semantics(mergeDescendants = true) {}) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(item.title, style = SdyType.body, color = Color.White)
-                                    Text("${Labels.attendance(item.status)} · ${Formatters.dateTime(item.startsAt)}", style = SdyType.caption, color = Theme.secondaryText)
+                                    Text(Formatters.dateTime(item.startsAt), style = SdyType.caption, color = Theme.secondaryText)
                                 }
-                                Text("${item.points.toInt()}", style = numberStyle, color = Color.White)
+                                // Status, not a «0» for an event still to come; the points
+                                // themselves are in «Онооны түүх» below.
+                                Chips.attendance(item.status)?.let { StatusChip(it) }
                             }
                         }
                         if (m.hasMore) {
@@ -182,7 +192,17 @@ fun LeaderboardScreen() {
     var error by remember { mutableStateOf<APIError?>(null) }
 
     suspend fun load() {
-        try { data = app.api.leaderboard(period); error = null } catch (e: Throwable) { data = null; error = APIError.wrap(e) }
+        // Switching the period cancels the load in flight: that is not an
+        // error to flash, and the last board stays until the new one arrives.
+        try {
+            val board = app.api.leaderboard(period)
+            data = board; error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            val wrapped = APIError.wrap(e)
+            if (wrapped.kind != APIError.Kind.Cancelled) { data = null; error = wrapped }
+        }
     }
     LaunchedEffect(period) { load() }
 
@@ -277,6 +297,30 @@ fun PersonalHistoryScreen() {
     var events by remember { mutableStateOf<PersonalParticipationHistory?>(null) }
     var dues by remember { mutableStateOf<PersonalDuesHistory?>(null) }
     var error by remember { mutableStateOf<APIError?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    fun moreEvents() {
+        val current = events ?: return
+        busy = true
+        scope.launch {
+            try {
+                val next = app.api.participationHistory(offset = current.nextOffset ?: current.items.size)
+                events = next.copy(items = current.items.appendingUnique(next.items) { it.id }, entries = current.entries.appendingUnique(next.entries) { it.id })
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Throwable) {} finally { busy = false }
+        }
+    }
+
+    /** Charges and payments come in one page; both grow. */
+    fun moreDues() {
+        val current = dues ?: return
+        busy = true
+        scope.launch {
+            try {
+                val next = app.api.duesHistory(offset = current.nextOffset ?: (current.charges.size + current.payments.size))
+                dues = next.copy(charges = current.charges.appendingUnique(next.charges) { it.id }, payments = current.payments.appendingUnique(next.payments) { it.id })
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Throwable) {} finally { busy = false }
+        }
+    }
 
     suspend fun load() {
         try {
@@ -313,6 +357,10 @@ fun PersonalHistoryScreen() {
                                 "${Labels.attendance(e.status)} · ${e.points.toInt()} оноо" to Color.White,
                             )
                         }
+                        if (ev.hasMore) {
+                            ListDivider()
+                            RowButton("Цааш үзэх", enabled = !busy) { moreEvents() }
+                        }
                     }
                 }
                 item {
@@ -339,6 +387,10 @@ fun PersonalHistoryScreen() {
                                 if (p.reference.isNotEmpty()) p.reference to Theme.secondaryText else null,
                             )
                         }
+                        if (du.hasMore) {
+                            ListDivider()
+                            RowButton("Цааш үзэх", enabled = !busy) { moreDues() }
+                        }
                     }
                 }
             }
@@ -364,6 +416,7 @@ fun BlockedMembersScreen() {
     var data by remember { mutableStateOf<BlockedList?>(null) }
     var error by remember { mutableStateOf<APIError?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
+    var unblocking by remember { mutableStateOf<BlockedMember?>(null) }
 
     suspend fun load() {
         try { data = app.api.blockedMembers(); error = null } catch (e: Throwable) { error = APIError.wrap(e) }
@@ -396,9 +449,9 @@ fun BlockedMembersScreen() {
                             ListRow {
                                 Text(member.name.ifEmpty { "—" }, style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
                                 SecondaryButton(
-                                    "Блок цуцлах", enabled = busy == null && !app.isOffline, busy = busy == member.userId,
-                                    modifier = Modifier.height(36.dp),
-                                ) { unblock(member) }
+                                    "Блок цуцлах", enabled = busy == null && !app.isOffline,
+                                    small = true, modifier = Modifier.heightIn(min = Theme.minTap),
+                                ) { unblocking = member }
                             }
                         }
                     }
@@ -409,5 +462,14 @@ fun BlockedMembersScreen() {
                 }
             }
         }
+    }
+
+    unblocking?.let { member ->
+        ActionSheet(
+            title = "${member.name}-ийн блокийг цуцлах уу?",
+            message = "Энэ гишүүний дэвшүүлсэн асуудлууд танд дахин харагдана.",
+            actions = listOf(SheetAction("Блок цуцлах") { unblock(member) }),
+            onDismiss = { unblocking = null },
+        )
     }
 }

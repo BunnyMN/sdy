@@ -7,7 +7,9 @@ import mn.esdy.member.core.AppConfig
 import mn.esdy.member.core.FixtureRouter
 import mn.esdy.member.core.OfflineCache
 import mn.esdy.member.core.TokenStore
+import mn.esdy.member.design.HomeSettings
 import mn.esdy.member.design.ThemeStore
+import mn.esdy.member.features.login.PendingEIDSession
 
 /**
  * Holds the one AppModel for the process, so the session and every tab's
@@ -19,6 +21,7 @@ class SDYApplication : Application() {
     /** Built on first use, after MainActivity has read the launch extras. */
     fun appModel(): AppModel = model ?: run {
         ThemeStore.init(this)
+        HomeSettings.init(this)
         val fixtures = AppConfig.fixturesEnabled
         val api = APIClient(
             tokens = if (fixtures) TokenStore.inMemory() else TokenStore.persistent(this),
@@ -26,6 +29,7 @@ class SDYApplication : Application() {
             context = this,
         )
         if (fixtures) api.fixtures = FixtureRouter(this)
+        else PendingEIDSession.install(this)
         AppModel(api, this).also { model = it }
     }
 }

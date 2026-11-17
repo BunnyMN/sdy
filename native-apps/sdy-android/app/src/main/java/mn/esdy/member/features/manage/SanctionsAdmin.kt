@@ -84,16 +84,16 @@ fun SanctionsAdminScreen() {
         scope.launch {
             try {
                 val page = app.api.sanctions(offset = next)
-                list = page.copy(sanctions = current.sanctions + page.sanctions)
+                list = page.copy(sanctions = current.sanctions.appendingUnique(page.sanctions) { it.id })
             } catch (e: Throwable) { actionError = APIError.wrap(e).message } finally { busy = false }
         }
     }
 
     /** True when recorded, so the sheet can close. */
-    suspend fun record(userID: String, points: Int, reason: String): Boolean {
+    suspend fun record(userID: String, points: Int, reason: String, key: String): Boolean {
         actionError = null; notice = null
         return try {
-            app.api.sanction(userID, points, reason)
+            app.api.sanction(userID, points, reason, idempotencyKey = key)
             notice = "Шийдвэр бүртгэгдлээ."
             Haptics.success()
             load()
@@ -107,7 +107,7 @@ fun SanctionsAdminScreen() {
 
     LaunchedEffect(Unit) { load() }
 
-    SdyListScreen(title = "Хяналтын хороо", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Хяналтын хороо", silk = false, inline = true, onRefresh = { load() }) {
         item {
             ListSection {
                 Text(
@@ -142,8 +142,8 @@ fun SanctionsAdminScreen() {
     }
 
     if (composing) {
-        SanctionComposer(people.filter { it.userId != app.me?.id }, onDismiss = { composing = false }) { id, points, reason ->
-            record(id, points, reason)
+        SanctionComposer(people.filter { it.userId != app.me?.id }, onDismiss = { composing = false }) { id, points, reason, key ->
+            record(id, points, reason, key)
         }
     }
 }
@@ -169,8 +169,10 @@ fun SanctionRow(sanction: Sanction, showMember: Boolean = false) {
 }
 
 @Composable
-private fun SanctionComposer(people: List<BranchPerson>, onDismiss: () -> Unit, onSubmit: suspend (String, Int, String) -> Boolean) {
+private fun SanctionComposer(people: List<BranchPerson>, onDismiss: () -> Unit, onSubmit: suspend (String, Int, String, String) -> Boolean) {
     val scope = rememberCoroutineScope()
+    /** Same key while the officer retries this decision; new once they change it. */
+    val intent = remember { IntentKey() }
     var userID by remember { mutableStateOf("") }
     var points by remember { mutableStateOf(0) }
     var reason by remember { mutableStateOf("") }
@@ -196,7 +198,7 @@ private fun SanctionComposer(people: List<BranchPerson>, onDismiss: () -> Unit, 
                 ListDivider()
                 ListRow {
                     Text("Хасах оноо", style = SdyType.body, color = Color.White)
-                    Text(if (points == 0) "Зөвхөн сануулга" else "$points", style = SdyType.body, color = Theme.secondaryText, modifier = Modifier.weight(1f))
+                    Text(if (points == 0) "Зөвхөн сануулга" else "$points", style = SdyType.body, color = Theme.secondaryText, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
                     Stepper(points, 0..10000) { points = it }
                 }
             }
@@ -215,7 +217,9 @@ private fun SanctionComposer(people: List<BranchPerson>, onDismiss: () -> Unit, 
                 SheetAction("Бүртгэх", destructive = true) {
                     busy = true
                     scope.launch {
-                        val ok = onSubmit(userID, points, reason.trim())
+                        val text = reason.trim()
+                        val key = intent.key("$userID|$points|$text")
+                        val ok = onSubmit(userID, points, text, key)
                         busy = false
                         if (ok) onDismiss()
                     }

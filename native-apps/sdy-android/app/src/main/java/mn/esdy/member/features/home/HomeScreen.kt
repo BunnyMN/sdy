@@ -21,6 +21,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.widthIn
+import androidx.lifecycle.repeatOnLifecycle
+import mn.esdy.member.design.HomeSettings
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Badge
@@ -104,10 +109,11 @@ import mn.esdy.member.design.IconRow
 import mn.esdy.member.design.Labels
 import mn.esdy.member.design.NoticeKind
 import mn.esdy.member.design.NoticeView
-import mn.esdy.member.design.OfflineBanner
+import mn.esdy.member.design.HeroOfflineBanner
 import mn.esdy.member.design.RowDivider
 import mn.esdy.member.design.RowGroup
 import mn.esdy.member.design.SdyType
+import mn.esdy.member.design.ShrinkText
 import mn.esdy.member.design.SheetHeader
 import mn.esdy.member.design.SkeletonCards
 import mn.esdy.member.design.StatusChip
@@ -141,13 +147,24 @@ data class HomeData(
     val points: Int? = null,
 )
 
+/** How old the to-do list may be when Нүүр shows again. */
+const val HOME_STALE_AFTER_MS = 60_000L
+
 @Composable
 fun HomeScreen() {
     val app = LocalApp.current
     val loader = rememberLoader { fetchHome(app) }
-    var pointsHidden by rememberSaveable { mutableStateOf(false) }
+    val pointsHidden = HomeSettings.pointsHidden
+    // The to-do list follows what happened elsewhere: back from a screen,
+    // back to the app, another tab — when what it shows is over a minute old.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(lifecycle, app.tab) {
+        if (app.tab != AppModel.Tab.Home) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { loader.refresh(HOME_STALE_AFTER_MS) }
+    }
 
-    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        HeroOfflineBanner()
         val data = loader.value
         val error = loader.error
         when {
@@ -155,7 +172,7 @@ fun HomeScreen() {
                 heroHeight = 416.dp,
                 onRefresh = { loader.load(); app.refreshUnread() },
                 compact = { CompactBar(data, pointsHidden) },
-                pinned = { TopRow(data, pointsHidden) { pointsHidden = !pointsHidden } },
+                pinned = { TopRow(data) },
                 header = { HeroHeader(data, pointsHidden) },
             ) {
                 if (app.hasApprovedBranch) TodoSection(data) else JoinSection(data)
@@ -176,11 +193,10 @@ fun HomeScreen() {
             }
             else -> HeroScaffold(
                 heroHeight = 416.dp,
-                pinned = { TopRow(null, pointsHidden) { pointsHidden = !pointsHidden } },
+                pinned = { TopRow(null) },
                 header = { HeroHeader(null, pointsHidden) },
             ) { SkeletonCards() }
         }
-        Box(Modifier.fillMaxWidth().statusBarsPadding()) { OfflineBanner() }
     }
 }
 
@@ -232,16 +248,14 @@ private fun HeroHeader(data: HomeData?, pointsHidden: Boolean) {
 
         Spacer(Modifier.weight(1f).heightIn(min = 16.dp))
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 52.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 52.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             val tile = Modifier.weight(1f)
+            // Events, check-in and dues are tabs of their own; Нүүр does not repeat them.
             if (app.hasApprovedBranch) {
-                GlassTile("Арга хэмжээ", Icons.Rounded.CalendarMonth, tile) { app.tab = AppModel.Tab.Events }
-                GlassTile("Ирц", Icons.Rounded.QrCodeScanner, tile) { app.tab = AppModel.Tab.Checkin }
-                GlassTile("Хураамж", Icons.Rounded.Payments, tile) { app.tab = AppModel.Tab.Dues }
-                GlassTile("Түүх", Icons.Rounded.History, tile) { nav.push(Route.Home(HomeRoute.History)) }
+                GlassTile("Түүх", Icons.Rounded.History, Modifier.widthIn(max = 96.dp).fillMaxWidth()) { nav.push(Route.Home(HomeRoute.History)) }
             } else {
+                // The bell above already opens the notifications.
                 GlassTile("Элсэх", Icons.Rounded.PersonAdd, tile) { nav.push(Route.Home(HomeRoute.JoinRequest)) }
-                GlassTile("Мэдэгдэл", Icons.Rounded.Notifications, tile, badge = app.unreadCount) { nav.push(Route.Home(HomeRoute.Notifications)) }
                 GlassTile("Гишүүнчлэл", Icons.Rounded.Badge, tile) { nav.push(Route.Home(HomeRoute.Record)) }
                 GlassTile("Тусламж", Icons.Rounded.QuestionMark, tile) {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppConfig.supportURL)))
@@ -253,24 +267,14 @@ private fun HeroHeader(data: HomeData?, pointsHidden: Boolean) {
 
 /** The greeting and the round buttons: held in place by HeroScaffold. */
 @Composable
-private fun TopRow(data: HomeData?, pointsHidden: Boolean, togglePoints: () -> Unit) {
+private fun TopRow(data: HomeData?) {
     val app = LocalApp.current
     val nav = LocalNav.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.pressable(0.9f) { app.tab = AppModel.Tab.Profile }.semantics { contentDescription = "Профайл" }) { AvatarView(50.dp) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(greeting(), style = SdyType.subheadline, color = Color.White.copy(alpha = 0.65f))
-            Text(
-                displayName(data?.profile?.name ?: app.me?.name ?: ""),
-                style = SdyType.title2, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (app.hasApprovedBranch) {
-            GlassCircleButton(
-                if (pointsHidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                if (pointsHidden) "Оноог харуулах" else "Оноог нуух",
-                onClick = togglePoints,
-            )
+            ShrinkText(displayName(data?.profile?.name ?: app.me?.name ?: ""), SdyType.title2, Color.White)
         }
         GlassCircleButton(
             Icons.Rounded.Notifications,
@@ -320,17 +324,12 @@ private fun TodoSection(data: HomeData) {
     val app = LocalApp.current
     val nav = LocalNav.current
     val toReport = data.dues?.totals?.let { it.outstanding - it.pending } ?: 0.0
-    val anything = toReport > 0 || data.nextEvent != null || data.openVotes.isNotEmpty() || data.taskOffers.isNotEmpty() || data.unread > 0
+    // The live count, not the one loaded with the page: reading a
+    // notification anywhere takes it off here at once.
+    val unread = app.unreadCount
+    val anything = toReport > 0 || data.nextEvent != null || data.openVotes.isNotEmpty() || data.taskOffers.isNotEmpty() || unread > 0
 
-    SheetHeader("Танд хийх зүйл", Modifier.rise(0)) {
-        if (data.unread > 0) {
-            Box(
-                Modifier.defaultMinSize(34.dp, 34.dp).background(Theme.brandRed, CircleShape)
-                    .clearAndSetSemantics { contentDescription = "${data.unread} уншаагүй мэдэгдэл" },
-                contentAlignment = Alignment.Center,
-            ) { Text("${data.unread}", style = SdyType.subheadline.copy(fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.padding(horizontal = 6.dp)) }
-        }
-    }
+    SheetHeader("Танд хийх зүйл", Modifier.rise(0))
 
     val dues = data.dues
     val totals = dues?.totals
@@ -364,8 +363,8 @@ private fun TodoSection(data: HomeData) {
         for ((event, task) in data.taskOffers) {
             add(TodoRow(Icons.Rounded.PanTool, "Танд санал болгосон ажил: ${task.title}", event.title) { app.openEvent(event.id) })
         }
-        if (data.unread > 0) {
-            add(TodoRow(Icons.Rounded.NotificationImportant, "${data.unread} уншаагүй мэдэгдэл", "Шинэ мэдээллээ үзнэ үү") {
+        if (unread > 0) {
+            add(TodoRow(Icons.Rounded.NotificationImportant, "$unread уншаагүй мэдэгдэл", "Шинэ мэдээллээ үзнэ үү") {
                 nav.push(Route.Home(HomeRoute.Notifications))
             })
         }
@@ -409,16 +408,28 @@ private fun JoinSection(data: HomeData) {
             }
         }
     }
-    if (pending.isEmpty() && app.record?.hasPrimary != true) {
+    val primary = app.record?.memberships?.firstOrNull { it.isPrimary }
+    if (primary != null && pending.isEmpty()) {
+        // Suspended, lapsed or left: a join request is not the way back.
+        DarkCard(Modifier.rise(2), padding = 16.dp) {
+            IconRow(
+                "Гишүүнчлэл: ${Labels.membershipStatus(primary.status)}", Icons.Rounded.ErrorOutline,
+                subtitle = "${primary.name}. Гишүүнчлэлээ сэргээх талаар салбарын удирдлагад хандана уу.",
+                chevron = false,
+            )
+        }
+    }
+    if (pending.isEmpty() && primary == null) {
         DarkCard(Modifier.rise(2).pressable(0.98f) { nav.push(Route.Home(HomeRoute.JoinRequest)) }, padding = 16.dp) {
             IconRow("Салбарт элсэх хүсэлт илгээх", Icons.Rounded.PersonAdd, tint = Color.White, tile = Theme.brandRed)
         }
     }
     Text(
-        if (pending.isEmpty())
-            "Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Салбарын менежер баталсны дараа арга хэмжээ, ирц, хураамжийн хэсгүүд нээгдэнэ."
-        else
-            "Таны хүсэлтийг салбарын менежер шийдвэрлэсний дараа бүх хэсэг нээгдэнэ. Доош татаж шинэчилнэ үү.",
+        when {
+            pending.isNotEmpty() -> "Таны хүсэлтийг салбарын удирдлага шийдвэрлэсний дараа бүх хэсэг нээгдэнэ. Доош татаж шинэчилнэ үү."
+            primary != null -> "Гишүүнчлэл идэвхжсэний дараа арга хэмжээ, ирц, хураамжийн хэсгүүд дахин нээгдэнэ."
+            else -> "Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Салбарын удирдлага баталсны дараа арга хэмжээ, ирц, хураамжийн хэсгүүд нээгдэнэ."
+        },
         style = SdyType.footnote, color = Theme.secondaryText,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).rise(3),
     )

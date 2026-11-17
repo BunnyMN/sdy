@@ -81,10 +81,12 @@ fun DuesScreen() {
         loadingMore = true
         scope.launch {
             try {
-                val next = app.api.myDues(offset = current.nextOffset ?: current.charges.size)
+                // Charges and payments run out separately; each list asks for its own next rows.
+                val query = current.nextPageQuery(current.charges.size, current.payments.size) ?: return@launch
+                val next = app.api.myDues(page = query)
                 page = next.copy(
-                    charges = current.charges + next.charges,
-                    payments = current.payments + next.payments,
+                    charges = current.charges.appendingUnique(next.charges) { it.id },
+                    payments = current.payments.appendingUnique(next.payments) { it.id },
                     totals = next.totals ?: current.totals,
                 )
             } catch (_: Exception) {
@@ -96,7 +98,7 @@ fun DuesScreen() {
 
     LaunchedEffect(Unit) { if (page == null) load() }
 
-    SdyListScreen(title = "Хураамж", onRefresh = { load() }) {
+    SdyListScreen(title = "Хураамж", onRefresh = if (page != null) ({ load() }) else null) {
         val p = page
         val err = error
         when {
@@ -308,7 +310,7 @@ fun ReportPaymentSheet(charge: Charge, onDismiss: () -> Unit, onSent: () -> Unit
         }
     }
 
-    FormSheet(title = "Төлбөр мэдэгдэх", onDismiss = onDismiss, confirmTitle = "Илгээх", confirmEnabled = valid, busy = busy, onConfirm = ::submit) {
+    FormSheet(title = "Төлбөр мэдэгдэх", onDismiss = onDismiss, confirmTitle = "Илгээх", confirmEnabled = valid, busy = busy, cancelWhileBusy = true, onConfirm = ::submit) {
         item {
             ListSection {
                 LabeledRow("Хураамж", charge.period)

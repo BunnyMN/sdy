@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Apartment
@@ -44,7 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -86,9 +86,10 @@ fun CheckInTabScreen() {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 64.dp)
                         .graphicsLayer { alpha = if (app.isOffline) 0.45f else 1f }
-                        .background(Theme.brandRed, RoundedCornerShape(12.dp))
+                        .background(Theme.brandRed, RoundedCornerShape(26.dp))
                         .pressable(0.98f, enabled = !app.isOffline) { scanning = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        // The row's own 12 plus the inset iOS gives every List row.
+                        .padding(horizontal = 16.dp, vertical = 27.dp)
                         .semantics(mergeDescendants = true) {},
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -109,10 +110,18 @@ fun CheckInTabScreen() {
         when {
             value != null -> {
                 val (mine, points) = value
-                item { PointsSection(points) { nav.push(Route.Home(HomeRoute.Leaderboard)) } }
                 item { MineSection(mine) { app.openEvent(it) } }
-                if (points.entries.isNotEmpty()) {
-                    item { HistorySection(points) { nav.push(Route.Home(HomeRoute.Participation)) } }
+                // Points and the leaderboard live in Профайл → «Ирц ба оноо» and on Нүүр.
+                if (points.entries.isNotEmpty() || mine.hasMore) {
+                    item {
+                        ListSection {
+                            ListRow(onClick = { nav.push(Route.Home(HomeRoute.Participation)) }) {
+                                Icon(Icons.Rounded.History, null, tint = Theme.accent, modifier = Modifier.size(22.dp))
+                                Text("Ирц ба онооны бүх түүх", style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
+                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.tertiaryText)
+                            }
+                        }
+                    }
                 }
             }
             error != null -> item { ErrorStateView(error) { loader.reload() } }
@@ -122,22 +131,6 @@ fun CheckInTabScreen() {
 
     if (scanning) {
         QRScannerScreen(onDismiss = { scanning = false }) { code -> app.pendingCheckin = code }
-    }
-}
-
-@Composable
-private fun PointsSection(points: PointsPage, onLeaderboard: () -> Unit) {
-    ListSection {
-        Column(Modifier.padding(vertical = 10.dp).semantics(mergeDescendants = true) {}) {
-            Text("Нийт оноо", style = SdyType.caption, color = Theme.secondaryText)
-            Text("${points.total.toInt()}", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        }
-        ListDivider()
-        ListRow(onClick = onLeaderboard) {
-            Icon(Icons.Rounded.EmojiEvents, null, tint = Theme.accent, modifier = Modifier.size(22.dp))
-            Text("Тэргүүлэгчид", style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.tertiaryText)
-        }
     }
 }
 
@@ -162,26 +155,6 @@ private fun MineSection(mine: MyEventsPage, onOpen: (String) -> Unit) {
                     if (item.points > 0) Text("+${item.points.toInt()}", style = SdyType.caption.copy(fontWeight = FontWeight.Bold), color = Color.White)
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun HistorySection(points: PointsPage, onAll: () -> Unit) {
-    ListSection(header = "Онооны түүх") {
-        points.entries.take(10).forEach { entry ->
-            ListRow(Modifier.semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(entry.title, style = SdyType.body, color = Color.White)
-                    Text("${Labels.pointReason(entry.reason)} · ${Formatters.dateTime(entry.createdAt)}", style = SdyType.caption, color = Theme.secondaryText)
-                }
-                Text("${if (entry.delta > 0) "+" else ""}${entry.delta.toInt()}", style = SdyType.body.copy(fontWeight = FontWeight.Bold), color = Color.White)
-            }
-            ListDivider()
-        }
-        ListRow(onClick = onAll) {
-            Text("Бүх түүх", style = SdyType.body, color = Color.White, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.tertiaryText)
         }
     }
 }
@@ -245,7 +218,8 @@ fun CheckInConfirmSheet(code: CheckinCode, onDismiss: () -> Unit) {
     LaunchedEffect(code) { load() }
 
     val close = { app.pendingCheckin = null; onDismiss() }
-    FormSheet(title = "Ирцээ бүртгүүлэх", onDismiss = close, cancelTitle = if (done == null) "Болих" else "Хаах") {
+    val canConfirm = event?.let { CheckInConfirm.blockedReason(it) == null } ?: true
+    FormSheet(title = "Ирцээ бүртгүүлэх", onDismiss = close, cancelTitle = if (done == null && canConfirm) "Болих" else "Хаах") {
         item {
             Column(
                 Modifier.fillMaxWidth().padding(8.dp),
@@ -258,7 +232,7 @@ fun CheckInConfirmSheet(code: CheckinCode, onDismiss: () -> Unit) {
                 when {
                     d != null -> Success(d, ev, close)
                     wrongBranch -> BranchMismatch(app.me?.tenantName ?: "", tenants.filter { it.id != app.me?.tenantId }, actionError, busy, ::switchAndRetry)
-                    ev != null -> Confirm(ev, busy, actionError, app.isOffline) { submit(ev) }
+                    ev != null -> Confirm(ev, busy, actionError, app.isOffline, close) { submit(ev) }
                     err != null -> ErrorStateView(err) { scope.launch { load() } }
                     else -> Column(Modifier.padding(top = 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator(color = Theme.accent)
@@ -279,7 +253,7 @@ private fun InfoLine(icon: ImageVector, text: String) {
 }
 
 @Composable
-private fun Confirm(event: EventRecord, busy: Boolean, actionError: String?, offline: Boolean, onSubmit: () -> Unit) {
+private fun Confirm(event: EventRecord, busy: Boolean, actionError: String?, offline: Boolean, close: () -> Unit, onSubmit: () -> Unit) {
     Icon(Icons.Rounded.PendingActions, null, tint = Theme.accent, modifier = Modifier.size(56.dp))
     Text(event.title, style = SdyType.title2, color = Color.White, textAlign = TextAlign.Center)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -288,7 +262,13 @@ private fun Confirm(event: EventRecord, busy: Boolean, actionError: String?, off
         val points = event.pointsValue
         if (points != null && points > 0) InfoLine(Icons.Rounded.StarOutline, "Ирцийн оноо: ${points.toInt()}")
     }
-    if (event.myStatus == "attended") NoticeView("Таны ирц аль хэдийн баталгаажсан байна.", NoticeKind.Success)
+    val blocked = CheckInConfirm.blockedReason(event)
+    if (blocked != null) {
+        // Nothing to confirm: say why, and the only way on is out.
+        NoticeView(blocked, if (event.myStatus == "attended") NoticeKind.Success else NoticeKind.Info)
+        SecondaryButton("Хаах", fillWidth = true, onClick = close)
+        return
+    }
     if (event.myStatus.isEmpty()) {
         Text(
             "Та энэ арга хэмжээнд бүртгүүлээгүй байна. Батлахад эхлээд автоматаар бүртгэнэ.",
@@ -298,8 +278,19 @@ private fun Confirm(event: EventRecord, busy: Boolean, actionError: String?, off
     if (actionError != null) NoticeView(actionError, NoticeKind.Error)
     PrimaryButton(
         "Би ирсэн — батлах", fillWidth = true, busy = busy,
-        enabled = !busy && event.myStatus != "attended" && !offline, onClick = onSubmit,
+        enabled = !busy && !offline, onClick = onSubmit,
     )
+}
+
+object CheckInConfirm {
+    /** Why this code cannot be confirmed, or null when it can: already attended, marked absent, or the event is no longer open. */
+    fun blockedReason(event: EventRecord): String? = when {
+        event.myStatus == "attended" -> "Таны ирц аль хэдийн баталгаажсан байна."
+        event.status == "cancelled" -> "Энэ арга хэмжээ цуцлагдсан тул ирц бүртгэх боломжгүй."
+        !event.isOpen -> "Энэ арга хэмжээ хаагдсан тул ирц бүртгэх боломжгүй."
+        event.myStatus == "absent" -> "Таныг «Ирээгүй» гэж тэмдэглэсэн байна. Зохион байгуулагчид хандана уу."
+        else -> null
+    }
 }
 
 @Composable
@@ -310,7 +301,7 @@ private fun Success(result: ActionResult, event: EventRecord?, close: () -> Unit
     if (event != null) Text(event.title, style = SdyType.body, color = Theme.secondaryText, textAlign = TextAlign.Center)
     val points = result.points ?: event?.pointsValue
     if (points != null && points > 0) {
-        Text("+${points.roundToInt()} оноо", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Theme.accent)
+        Text("+${points.toInt()} оноо", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Theme.accent)
     }
     PrimaryButton("Болсон", onClick = close)
 }

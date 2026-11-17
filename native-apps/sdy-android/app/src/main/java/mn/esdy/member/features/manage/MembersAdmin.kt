@@ -54,6 +54,8 @@ fun MembersAdminScreen() {
     var notice by remember { mutableStateOf<String?>(null) }
     var search by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<String?>(null) }
+    /** A position chosen in a picker, waiting for the chair to confirm it. */
+    var proposed by remember { mutableStateOf<Pair<ManagedMember, String>?>(null) }
 
     suspend fun load() {
         try {
@@ -76,7 +78,7 @@ fun MembersAdminScreen() {
         scope.launch {
             try {
                 val page = app.api.managedMembers(query = search, offset = next)
-                members = page.copy(members = current.members + page.members)
+                members = page.copy(members = current.members.appendingUnique(page.members) { it.userId })
             } catch (e: Throwable) { actionError = APIError.wrap(e).message } finally { busy = null }
         }
     }
@@ -98,7 +100,7 @@ fun MembersAdminScreen() {
 
     LaunchedEffect(Unit) { load() }
 
-    SdyListScreen(title = "Гишүүд ба албан тушаал", silk = false, onRefresh = { load() }) {
+    SdyListScreen(title = "Гишүүд ба албан тушаал", silk = false, inline = true, onRefresh = { load() }) {
         item {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 16.dp).background(Theme.fill, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
@@ -138,7 +140,7 @@ fun MembersAdminScreen() {
                     if (list.members.isEmpty()) Text("Гишүүн олдсонгүй.", style = SdyType.body, color = Theme.secondaryText, modifier = Modifier.padding(vertical = 11.dp))
                     list.members.forEachIndexed { i, member ->
                         if (i > 0) ListDivider()
-                        MemberRow(member, policy, app.me?.id, busy, app.isOffline) { assign(member, it) }
+                        MemberRow(member, policy, app.me?.id, busy, app.isOffline) { if (it != member.positionValue) proposed = member to it }
                     }
                     if (list.hasMore) {
                         ListDivider()
@@ -149,6 +151,16 @@ fun MembersAdminScreen() {
             err != null -> item { ErrorStateView(err) { scope.launch { load() } } }
             else -> item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.accent) } }
         }
+    }
+
+    proposed?.let { (member, position) ->
+        val name = member.name.ifEmpty { member.email }
+        ActionSheet(
+            title = "$name-д «${Labels.position(position) ?: position}» албан тушаал оноох уу?",
+            message = "Албан тушаалаар эрх олгогдоно: арга хэмжээ, ирц, санхүү эсвэл хяналтын хорооны үйлдлүүд.",
+            actions = listOf(SheetAction("Оноох") { assign(member, position) }),
+            onDismiss = { proposed = null },
+        )
     }
 }
 

@@ -11,6 +11,8 @@ fun enc(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", 
 
 // region Auth
 suspend fun APIClient.me(): Me = get("/auth/me")
+/** Straight from the server, never the offline copy (an identity refresh must not revert to a cached branch). */
+suspend fun APIClient.meFresh(): Me = get("/auth/me", cached = false)
 suspend fun APIClient.profile(): Profile = get("/profile")
 suspend fun APIClient.login(email: String, password: String): LoginResponse =
     send(HTTPMethod.POST, "/auth/login", mapOf("email" to email, "password" to password), signsOutOn401 = false)
@@ -35,7 +37,8 @@ suspend fun APIClient.switchTenant(id: String): SwitchTenantResponse =
 
 // region Membership
 suspend fun APIClient.branches(): BranchesResponse = get("/me/branches")
-suspend fun APIClient.memberRecord(offset: Int = 0): MemberRecord = get("/me/member-record?offset=$offset", cached = offset == 0)
+suspend fun APIClient.memberRecord(offset: Int = 0, cached: Boolean = true): MemberRecord =
+    get("/me/member-record?offset=$offset", cached = cached && offset == 0)
 suspend fun APIClient.saveMemberProfile(profile: MemberProfile): MemberProfile = send(HTTPMethod.PUT, "/me/member-record", profile.body)
 suspend fun APIClient.askToJoin(slug: String, message: String): JoinResponse =
     send(HTTPMethod.POST, "/me/branch-requests", mapOf("slug" to slug, "message" to message))
@@ -101,6 +104,8 @@ suspend fun APIClient.respond(eventID: String, task: String, accept: Boolean) =
 // region Dues
 suspend fun APIClient.duesSettings(): DuesSettings = get("/dues/settings")
 suspend fun APIClient.myDues(offset: Int = 0): MyDuesPage = get("/dues/mine?offset=$offset", cached = offset == 0)
+/** A later page: `query` from `DuesPaged.nextPageQuery`. */
+suspend fun APIClient.myDues(page: String): MyDuesPage = get("/dues/mine?$page", cached = false)
 suspend fun APIClient.reportPayment(chargeID: String, requestKey: String, amount: Double, reference: String): ReportResult =
     send(HTTPMethod.POST, "/dues/payments", mapOf(
         "charge_id" to chargeID, "request_key" to requestKey, "amount" to Formatters.roundHalfAway(amount).toLong(), "reference" to reference,
@@ -132,14 +137,24 @@ suspend fun APIClient.branchPeople(): BranchPeople = get("/events/members", cach
 
 suspend fun APIClient.sanctions(offset: Int = 0): SanctionList = get("/events/sanctions?offset=$offset", cached = false)
 suspend fun APIClient.mySanctions(): SanctionList = get("/events/sanctions/mine", cached = false)
-suspend fun APIClient.sanction(userID: String, points: Int, reason: String): Sanction =
-    send(HTTPMethod.POST, "/events/sanctions", mapOf("user_id" to userID, "points" to points, "reason" to reason))
+/**
+ * `idempotencyKey`: one per decision the officer means to record, the same
+ * on every retry of it, so a lost answer never records it twice.
+ */
+suspend fun APIClient.sanction(userID: String, points: Int, reason: String, idempotencyKey: String): Sanction =
+    send(HTTPMethod.POST, "/events/sanctions", mapOf("user_id" to userID, "points" to points, "reason" to reason),
+        headers = mapOf("Idempotency-Key" to idempotencyKey))
 
 suspend fun APIClient.financeOverview(period: String = "", offset: Int = 0): FinanceOverview =
     get("/dues/finance?period=${enc(period)}&offset=$offset", cached = false)
+suspend fun APIClient.financeOverview(period: String, page: String): FinanceOverview =
+    get("/dues/finance?period=${enc(period)}&$page", cached = false)
 suspend fun APIClient.reviewPayment(id: String, action: String, reason: String) =
     perform(HTTPMethod.POST, "/dues/payments/${enc(id)}/review", mapOf("action" to action, "reason" to reason))
 suspend fun APIClient.waiveCharge(id: String, reason: String) =
     perform(HTTPMethod.POST, "/dues/charges/${enc(id)}/waive", mapOf("reason" to reason))
+/** Withdraws an exemption (finance; never on one's own charge). */
+suspend fun APIClient.unwaiveCharge(id: String, reason: String) =
+    perform(HTTPMethod.POST, "/dues/charges/${enc(id)}/unwaive", mapOf("reason" to reason))
 suspend fun APIClient.createCharges(period: String) = perform(HTTPMethod.POST, "/dues/charges", mapOf("period" to period))
 // endregion

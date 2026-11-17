@@ -2,6 +2,12 @@ package mn.esdy.member.features.manage
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -290,6 +296,8 @@ fun AttendanceManageScreen(event: EventRecord) {
     var actionError by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    /** A recorded attendance being changed: the server needs a reason. */
+    var correcting by remember { mutableStateOf<Pair<Participant, String>?>(null) }
 
     suspend fun load() {
         try {
@@ -308,21 +316,30 @@ fun AttendanceManageScreen(event: EventRecord) {
         }
     }
 
-    fun mark(p: Participant, status: String) {
-        if (status == p.status) return
+    suspend fun mark(p: Participant, status: String, note: String): Boolean {
         busy = p.userId; actionError = null
-        scope.launch {
-            try {
-                // A correction of a recorded attendance needs a reason (the server checks).
-                app.api.markAttendance(event.id, p.userId, status, if (p.status == "registered") "" else "Зохион байгуулагч апп-аар залруулсан")
-                Haptics.success()
-                load()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                actionError = APIError.wrap(e).message; Haptics.error()
-            } finally { busy = null }
-        }
+        return try {
+            app.api.markAttendance(event.id, p.userId, status, note)
+            Haptics.success()
+            load()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            actionError = APIError.wrap(e).message; Haptics.error()
+            load()
+            false
+        } finally { busy = null }
+    }
+
+    /**
+     * First marks go straight through; a change to a recorded attendance
+     * (which moves points) asks for the reason the server keeps.
+     */
+    fun choose(p: Participant, status: String) {
+        if (status == p.status) return
+        if (p.status == "registered") scope.launch { mark(p, status, "") }
+        else correcting = p to status
     }
 
     fun add(person: BranchPerson) {
@@ -361,11 +378,11 @@ fun AttendanceManageScreen(event: EventRecord) {
                     if (list.isEmpty()) Text("Одоогоор бүртгүүлсэн хүн алга.", style = SdyType.body, color = Theme.secondaryText, modifier = Modifier.padding(vertical = 11.dp))
                     list.forEachIndexed { i, p ->
                         if (i > 0) ListDivider()
-                        ParticipantRow(p, busy, app.isOffline) { mark(p, it) }
+                        ParticipantRow(p, busy, app.isOffline) { choose(p, it) }
                     }
                 }
             }
-            err != null -> item { ErrorStateView(err) { scope.launch { load() } } }
+            err != null -> item { ListSection { ErrorStateView(err) { scope.launch { load() } } } }
             else -> item {
                 ListSection {
                     Box(Modifier.fillMaxWidth().padding(vertical = 11.dp), contentAlignment = Alignment.Center) {
@@ -378,12 +395,59 @@ fun AttendanceManageScreen(event: EventRecord) {
 
     if (adding) {
         val listed = participants ?: emptyList()
-        ActionSheet(
-            title = "Оролцогч нэмэх",
-            actions = people.filter { person -> listed.none { it.userId == person.userId } }.take(30)
-                .map { person -> SheetAction(person.name.ifEmpty { person.email }) { add(person) } },
-            onDismiss = { adding = false },
-        )
+        PersonPicker(people.filter { person -> listed.none { it.userId == person.userId } }, onDismiss = { adding = false }) { add(it) }
+    }
+
+    correcting?.let { (p, status) ->
+        ReasonSheet(
+            title = "${p.name.ifEmpty { p.email }}: ${Labels.attendance(p.status)} → ${Labels.attendance(status)}",
+            action = "Залруулах", destructive = status != "attended",
+            onDismiss = { correcting = null },
+        ) { reason -> mark(p, status, reason) }
+    }
+}
+
+/** Somebody of the branch to add to an event's list, found by name or e-mail. */
+@Composable
+fun PersonPicker(people: List<BranchPerson>, onDismiss: () -> Unit, onPick: (BranchPerson) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val shown = PersonPicker.filter(people, query)
+    FormSheet(title = "Оролцогч нэмэх", onDismiss = onDismiss) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 16.dp).background(Theme.fill, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Rounded.Search, null, tint = Theme.secondaryText, modifier = Modifier.size(20.dp))
+                FormTextField(query, { query = it }, "Нэр, имэйлээр хайх", modifier = Modifier.weight(1f), autoCorrect = false)
+            }
+        }
+        item {
+            ListSection {
+                if (shown.isEmpty()) {
+                    Text(if (people.isEmpty()) "Нэмэх гишүүн алга." else "Олдсонгүй.", style = SdyType.body, color = Theme.secondaryText, modifier = Modifier.padding(vertical = 11.dp))
+                }
+                shown.forEachIndexed { i, person ->
+                    if (i > 0) ListDivider()
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(min = Theme.minTap).pressable(0.98f) { onPick(person); onDismiss() }.padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(person.name.ifEmpty { person.email }, style = SdyType.body, color = Color.White)
+                        if (person.name.isNotEmpty() && person.email.isNotEmpty()) Text(person.email, style = SdyType.caption, color = Theme.secondaryText)
+                    }
+                }
+            }
+        }
+    }
+}
+
+object PersonPicker {
+    fun filter(people: List<BranchPerson>, query: String): List<BranchPerson> {
+        val q = query.trim()
+        if (q.isEmpty()) return people
+        return people.filter { it.name.contains(q, ignoreCase = true) || it.email.contains(q, ignoreCase = true) }
     }
 }
 
@@ -409,9 +473,11 @@ private fun ParticipantRow(p: Participant, busy: String?, offline: Boolean, onMa
                     Triple("absent", "Ирээгүй", Icons.Rounded.HighlightOff),
                     Triple("registered", "Бүртгүүлсэн", Icons.Rounded.RadioButtonUnchecked),
                 ).forEach { (status, title, icon) ->
+                    val current = status == p.status
                     DropdownMenuItem(
-                        text = { Text(title, color = Color.White) },
-                        leadingIcon = { Icon(icon, null, tint = Theme.secondaryText) },
+                        text = { Text(title, color = if (current) Theme.tertiaryText else Color.White) },
+                        leadingIcon = { Icon(icon, null, tint = if (current) Theme.tertiaryText else Theme.secondaryText) },
+                        enabled = !current,
                         onClick = { open = false; onMark(status) },
                     )
                 }
@@ -435,26 +501,35 @@ fun CheckinQRScreen(event: EventRecord, onDismiss: () -> Unit) {
     var image by remember { mutableStateOf<Bitmap?>(null) }
     var expires by remember { mutableStateOf<Instant?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Members walk up to scan: the screen must not go dark under them.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
 
-    suspend fun issue() {
-        try {
+    suspend fun issue(): Boolean {
+        return try {
             val code = app.api.issueCheckin(event.id)
             val url = "${AppConfig.webOrigin}/member/check-in#event=${fragmentEncode(event.id)}&token=${fragmentEncode(code.token)}"
             image = qr(url)
             expires = Formatters.parseDate(code.expiresAt) ?: Instant.now().plusSeconds(300)
             error = null
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             error = APIError.wrap(e).message
+            false
         }
     }
 
     LaunchedEffect(event.id) {
         while (isActive) {
-            issue()
+            val ok = issue()
+            // After a failure try again soon; the expired code is hidden meanwhile.
             val left = expires?.let { (it.toEpochMilli() - System.currentTimeMillis()) / 1000.0 } ?: 60.0
-            delay((max(30.0, left - 20) * 1000).toLong())
+            delay(if (ok) (max(30.0, left - 20) * 1000).toLong() else 10_000L)
         }
     }
 
@@ -473,18 +548,31 @@ fun CheckinQRScreen(event: EventRecord, onDismiss: () -> Unit) {
             val err = error
             when {
                 img != null -> {
-                    Image(
-                        img.asImageBitmap(), "Ирцийн QR код", filterQuality = FilterQuality.None,
-                        modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
-                            .background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp),
-                    )
-                    expires?.let { at ->
-                        val left by produceState(secondsUntil(at), at) {
-                            while (true) { value = secondsUntil(at); delay(1000) }
-                        }
+                    // A code past its time is never left on screen to be scanned.
+                    val at = expires
+                    val left by produceState(at?.let(::secondsUntil) ?: 0, at) {
+                        while (true) { value = at?.let(::secondsUntil) ?: 0; delay(1000) }
+                    }
+                    val expired = left == 0
+                    Box(contentAlignment = Alignment.Center) {
+                        Image(
+                            img.asImageBitmap(), if (expired) "QR кодын хугацаа дууссан" else "Ирцийн QR код", filterQuality = FilterQuality.None,
+                            modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
+                                .background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp)
+                                .then(if (expired) Modifier.blur(12.dp).graphicsLayer { alpha = 0.35f } else Modifier),
+                        )
+                        if (expired) CircularProgressIndicator(Modifier.size(40.dp), color = Theme.secondaryText)
+                    }
+                    if (expired) {
+                        Text("Хугацаа дууссан — шинэ код гаргаж байна…", style = SdyType.footnote, color = Theme.warning)
+                    } else {
                         Text("${Formatters.clock(left)}-ийн дараа шинэчлэгдэнэ", style = SdyType.footnote, color = Theme.secondaryText)
                     }
-                    Text("Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна.", style = SdyType.footnote, color = Theme.secondaryText, textAlign = TextAlign.Center)
+                    err?.let { NoticeView(it, NoticeKind.Error) }
+                    Text(
+                        "Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна. Шинэ код гаргахад таны өмнөх код хүчингүй болно. Хэд хэдэн зохион байгуулагч зэрэг QR харуулж болно. Өөрийн гаргасан кодоор өөрөө ирц бүртгэх боломжгүй.",
+                        style = SdyType.footnote, color = Theme.secondaryText, textAlign = TextAlign.Center,
+                    )
                 }
                 err != null -> {
                     NoticeView(err, NoticeKind.Error)

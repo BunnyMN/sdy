@@ -9,10 +9,24 @@ plugins {
 
 // Upload key for Google Play — keystore.properties (gitignored) next to this
 // project: storeFile, storePassword, keyAlias, keyPassword. Without it a
-// release build is unsigned (fine for CI checks, not for Play).
+// release package (assembleRelease / bundleRelease) stops with an error
+// instead of quietly producing an unsigned build that Play would refuse.
+// Debug builds and the release compile/R8 steps (e.g. :app:minifyReleaseWithR8)
+// do not need it.
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasUploadKey = keystoreProps.getProperty("storeFile") != null
+
+// Same marketing version as the iOS app. The Play build number is derived
+// from it — MMmmpp then a two-digit upload counter: 1.1.1 → 1010101 — so a new
+// versionName always outranks the last one. Upload the same versionName
+// again (a fixed build)? Bump `androidBuild`; set it back to 1 with a new versionName.
+val appVersion = "1.1.1"
+val androidBuild = 1
+val derivedVersionCode = appVersion.split(".").map(String::toInt).let { (major, minor, patch) ->
+    ((major * 100 + minor) * 100 + patch) * 100 + androidBuild
 }
 
 android {
@@ -23,14 +37,13 @@ android {
         applicationId = "mn.esdy.member"
         minSdk = 26
         targetSdk = 36
-        // Same marketing version as the iOS app; the build number is Android's own.
-        versionCode = 1
-        versionName = "1.1.0"
+        versionCode = derivedVersionCode
+        versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
-        if (keystoreProps.getProperty("storeFile") != null) {
+        if (hasUploadKey) {
             create("upload") {
                 storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
                 storePassword = keystoreProps.getProperty("storePassword")
@@ -54,6 +67,19 @@ android {
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isReturnDefaultValues = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+}
+
+// Packaging a release (APK or bundle) without the upload key fails loudly.
+tasks.matching { it.name in setOf("packageRelease", "signReleaseBundle", "packageReleaseBundle") }.configureEach {
+    doFirst {
+        if (!hasUploadKey) {
+            throw GradleException(
+                "Release signing is not configured: native-apps/sdy-android/keystore.properties is missing " +
+                    "(storeFile, storePassword, keyAlias, keyPassword). See README.md → «Google Play руу гаргах». " +
+                    "Debug builds (assembleDebug) do not need it.",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -80,4 +106,5 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

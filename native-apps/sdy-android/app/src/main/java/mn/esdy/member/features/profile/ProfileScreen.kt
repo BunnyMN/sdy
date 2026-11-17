@@ -1,5 +1,11 @@
 package mn.esdy.member.features.profile
 
+import mn.esdy.member.design.HomeSettings
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -63,10 +69,11 @@ import mn.esdy.member.design.GlassFill
 import mn.esdy.member.design.HeroScaffold
 import mn.esdy.member.design.IconRow
 import mn.esdy.member.design.Labels
-import mn.esdy.member.design.OfflineBanner
+import mn.esdy.member.design.HeroOfflineBanner
 import mn.esdy.member.design.RowDivider
 import mn.esdy.member.design.RowGroup
 import mn.esdy.member.design.SdyType
+import mn.esdy.member.design.ShrinkText
 import mn.esdy.member.design.SheetAction
 import mn.esdy.member.design.Theme
 import mn.esdy.member.design.pressable
@@ -90,7 +97,7 @@ fun ProfileScreen() {
     }
 
     Column(Modifier.fillMaxSize()) {
-        OfflineBanner()
+        HeroOfflineBanner()
         HeroScaffold(
             heroHeight = 420.dp,
             compact = {
@@ -99,23 +106,13 @@ fun ProfileScreen() {
                     Text(cardName, style = SdyType.headline, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             },
-            pinned = {
-                Row(Modifier.fillMaxWidth()) {
-                    GlassCircleButton(Icons.Rounded.Notifications, "Мэдэгдэл", dot = app.unreadCount > 0) { go(HomeRoute.Notifications) }
-                    Spacer(Modifier.weight(1f))
-                    GlassCircleButton(Icons.Rounded.PowerSettingsNew, "Гарах") { confirmLogout = true }
-                }
-            },
             header = {
                 Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Room for the pinned round buttons, drawn by HeroScaffold.
-                    Spacer(Modifier.height(120.dp))
+                    // Room for the status bar and the pulled-down silk.
+                    Spacer(Modifier.height(72.dp))
                     Spacer(Modifier.weight(1f))
                     EditableAvatar()
-                    Text(
-                        cardName, style = SdyType.title2, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 18.dp),
-                    )
+                    ShrinkText(cardName, SdyType.title2, Color.White, Modifier.padding(top = 18.dp, start = 20.dp, end = 20.dp))
                     val branch = app.record?.approvedBranch
                     if (branch != null) {
                         Labels.position(branch.position)?.let { position ->
@@ -145,10 +142,8 @@ fun ProfileScreen() {
             },
         ) {
             if (app.hasApprovedBranch) {
-                Row(Modifier.fillMaxWidth().rise(0), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Tile("Ирц ба оноо", Icons.Rounded.Star, Modifier.weight(1f)) { go(HomeRoute.Participation) }
-                    Tile("Тэргүүлэгчид", Icons.Rounded.EmojiEvents, Modifier.weight(1f)) { go(HomeRoute.Leaderboard) }
-                }
+                // The leaderboard opens from «Ирц ба оноо» and from Нүүр.
+                Tile("Ирц ба оноо", Icons.Rounded.Star, Modifier.fillMaxWidth().rise(0)) { go(HomeRoute.Participation) }
             }
 
             RowGroup(Modifier.rise(1)) {
@@ -186,6 +181,19 @@ fun ProfileScreen() {
                 IconRow("Тусламж, холбоо барих", Icons.Rounded.QuestionMark) { openURL(context, AppConfig.supportURL) }
                 RowDivider()
                 IconRow("Өнгө төрх", Icons.Rounded.Brush) { go(HomeRoute.Appearance) }
+                if (app.hasApprovedBranch) {
+                    RowDivider()
+                    // Hides the points on Нүүр (someone looking over the shoulder).
+                    val hidden = HomeSettings.pointsHidden
+                    Box(Modifier.toggleable(hidden, role = Role.Switch) { HomeSettings.setPointsHidden(it) }) {
+                        IconRow("Нүүрэнд оноогоо нуух", Icons.Rounded.VisibilityOff, chevron = false)
+                        Switch(
+                            checked = hidden, onCheckedChange = null,
+                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
+                            colors = SwitchDefaults.colors(checkedTrackColor = Theme.brandRed, checkedThumbColor = Color.White, uncheckedTrackColor = Theme.fill, uncheckedBorderColor = Color.Transparent, uncheckedThumbColor = Color.White),
+                        )
+                    }
+                }
                 RowDivider()
                 IconRow("Блоклосон гишүүд", Icons.Rounded.Block) { go(HomeRoute.Blocked) }
                 RowDivider()

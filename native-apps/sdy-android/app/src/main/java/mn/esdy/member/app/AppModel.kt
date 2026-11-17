@@ -38,7 +38,7 @@ val LocalApp = staticCompositionLocalOf<AppModel> { error("No AppModel") }
  * which tab is open, which event a link points at, a pending check-in
  * (iOS AppModel).
  */
-class AppModel(val api: APIClient, private val context: Context) {
+class AppModel(val api: APIClient, /** For the profile photo picker; null in tests. */ private val context: Context?) {
     sealed interface Phase {
         data object Launching : Phase
         data object SignedOut : Phase
@@ -70,6 +70,20 @@ class AppModel(val api: APIClient, private val context: Context) {
     var eidReturnSession by mutableStateOf<String?>(null)
     /** The signed-in person's profile photo, shown on Home and Profile. */
     var photo by mutableStateOf<ImageBitmap?>(null)
+    /** Screens that cover the tab bar (Өнгө төрх) while they are open. */
+    var tabBarHidden by mutableIntStateOf(0)
+    /** The sign-in screen's eID model, kept across activity recreation (see LoginScreen). */
+    var eidLogin: Any? = null
+    /** The first session check has been started (once per process). */
+    var bootstrapStarted = false
+    /**
+     * A notification (or a link to a screen) opened before the app was
+     * signed in — a cold launch from it, or a session that had to be renewed:
+     * opened once it is (iOS pendingPush).
+     */
+    var pendingPush: PendingPush? = null
+    data class PendingPush(val path: String?, val notificationID: String?)
+    private var identityCheckedAt = 0L
 
     val hasApprovedBranch: Boolean get() = record?.approvedBranch != null
 
@@ -85,6 +99,9 @@ class AppModel(val api: APIClient, private val context: Context) {
     init {
         api.onSessionEnded = { sessionEnded() }
         api.onReachability = { reachable -> if (isOffline == reachable) isOffline = !reachable }
+        // Refused: perhaps a position was taken away. Read who we are again,
+        // so the screens stop offering what the server no longer allows.
+        api.onForbidden = { scope.launch { refreshIdentity(minimumIntervalMs = 30_000) } }
         // `SDYSignedOut` keeps the fixtures but starts at the sign-in screen.
         if (AppConfig.fixturesEnabled && AppConfig.launchArgument("SDYSignedOut") == null) api.tokens.save("fixture-token")
     }
@@ -107,10 +124,14 @@ class AppModel(val api: APIClient, private val context: Context) {
         if (!api.tokens.hasToken) { phase = Phase.SignedOut; return }
         try {
             loadIdentity()
+            identityCheckedAt = System.currentTimeMillis()
             phase = Phase.SignedIn
             applyLaunchArguments()
             scope.launch { loadPhoto() }
             refreshUnread()
+            openPendingPush()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Throwable) {
             val error = APIError.wrap(e)
             if (error.kind == APIError.Kind.Unauthorized) clearLocal() else phase = Phase.Failed(error)
@@ -130,7 +151,7 @@ class AppModel(val api: APIClient, private val context: Context) {
         if (approved != null && approved.hasAccess &&
             record.memberships.none { it.tenantId == identity.tenantId && it.hasAccess }
         ) {
-            val switched = try { api.switchTenant(approved.tenantId); true } catch (e: Exception) { false }
+            val switched = try { api.switchTenant(approved.tenantId); true } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { false }
             if (switched) identity = api.me()
         }
         api.cacheScope = identity.tenantId
@@ -149,11 +170,14 @@ class AppModel(val api: APIClient, private val context: Context) {
     }
 
     suspend fun signOut() {
+        pendingPush = null
         api.logout()
         clearLocal()
     }
 
     fun clearLocal() {
+        // Also a 401-driven sign-out: a tap kept for the last person is not the next one's.
+        pendingPush = null
         api.tokens.clear()
         api.cache.clearAll()
         me = null
@@ -181,16 +205,78 @@ class AppModel(val api: APIClient, private val context: Context) {
     /**
      * Moves the session to another branch. The token rotates; everything
      * loaded before belongs to the branch just left, so all tabs rebuild.
+     *
+     * Once the server has switched, the app is in the new branch whatever
+     * happens next: if reading the new identity fails, the screens still
+     * rebuild for the new branch (with no officer rights until /auth/me
+     * answers) rather than show the old one while requests go to the new.
      */
     suspend fun switchBranch(tenantID: String) {
-        api.switchTenant(tenantID)
-        val identity = api.me()
-        api.cacheScope = identity.tenantId
-        me = identity
-        record = try { api.memberRecord() } catch (e: Exception) { null }
+        val switched = api.switchTenant(tenantID)
+        val newTenant = switched.tenantId.ifEmpty { tenantID }
+        api.cacheScope = newTenant
         paths.values.forEach { it.clear() }
+        try {
+            val identity = api.me()
+            api.cacheScope = identity.tenantId
+            me = identity
+            identityCheckedAt = System.currentTimeMillis()
+        } catch (e: Throwable) {
+            if (e !is kotlinx.coroutines.CancellationException) {
+                try { record = api.memberRecord() } catch (_: Exception) {}
+            }
+            me = me?.copy(
+                tenantId = newTenant,
+                tenantName = record?.memberships?.firstOrNull { it.tenantId == newTenant }?.name ?: "",
+                permissions = emptyList(),
+                isAdmin = false,
+            )
+            identityCheckedAt = 0
+            epoch += 1
+            throw e
+        }
         epoch += 1
+        record = try { api.memberRecord() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
         refreshUnread()
+    }
+
+    /**
+     * Reads /auth/me and the member record again: positions (and with them
+     * permissions) change on the server while the app stays open.
+     */
+    suspend fun refreshIdentity(minimumIntervalMs: Long = 0) {
+        val now = System.currentTimeMillis()
+        if (phase != Phase.SignedIn || now - identityCheckedAt < minimumIntervalMs) return
+        identityCheckedAt = now
+        // What this refresh is about: a branch switch or sign-out meanwhile makes its answers stale.
+        val startEpoch = epoch
+        val startTenant = me?.tenantId
+        fun stale() = phase != Phase.SignedIn || epoch != startEpoch || me?.tenantId != startTenant
+        // Uncached: no signal is not an answer, and never a reason to go back to a cached branch.
+        val identity = try { api.meFresh() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { return }
+        if (stale()) return
+        if (identity.tenantId != me?.tenantId) {
+            // Moved elsewhere (another device switched branch): rebuild.
+            api.cacheScope = identity.tenantId
+            paths.values.forEach { it.clear() }
+            epoch += 1
+        }
+        if (identity != me) me = identity
+        val expectEpoch = epoch
+        val fresh = try { api.memberRecord(cached = false) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { return }
+        if (phase != Phase.SignedIn || epoch != expectEpoch || me?.tenantId != identity.tenantId) return
+        if (fresh != record) record = fresh
+    }
+
+    /** Marks one notification read; the count drops only once the server agreed. */
+    suspend fun markNotificationRead(id: String): Boolean = try {
+        api.markRead(id)
+        unreadCount = max(0, unreadCount - 1)
+        true
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
     }
 
     // endregion
@@ -225,7 +311,7 @@ class AppModel(val api: APIClient, private val context: Context) {
     /** Crops the picked image to the centre square, scales to 512 px and uploads it. */
     suspend fun setPhoto(uri: Uri) {
         val jpeg = withContext(Dispatchers.Default) {
-            val bitmap = downsampled(context, uri) ?: throw APIError.decoding
+            val bitmap = context?.let { downsampled(it, uri) } ?: throw APIError.decoding
             squareJPEG(bitmap) ?: throw APIError.decoding
         }
         api.uploadProfilePhoto(jpeg)
@@ -255,6 +341,34 @@ class AppModel(val api: APIClient, private val context: Context) {
 
     // region Links
 
+    /**
+     * A tapped notification (FCM is not wired yet; the logic waits for it, as
+     * iOS PushCenter). Before sign-in — the tap launched the app, or the
+     * session must be renewed first — it waits, and opens once signed in.
+     */
+    fun openPushed(path: String?, notificationID: String? = null) {
+        if (phase != Phase.SignedIn) {
+            pendingPush = PendingPush(path, notificationID)
+            return
+        }
+        scope.launch { openPush(path, notificationID) }
+    }
+
+    suspend fun openPendingPush() {
+        if (phase != Phase.SignedIn) return
+        val pending = pendingPush ?: return
+        pendingPush = null
+        openPush(pending.path, pending.notificationID)
+    }
+
+    private suspend fun openPush(path: String?, notificationID: String?) {
+        // Opening a notification is reading it, as on the web.
+        if (notificationID != null) try { api.markRead(notificationID) } catch (_: Exception) {}
+        refreshUnread()
+        if (path.isNullOrEmpty()) { tab = Tab.Home; setHomePath(HomeRoute.Notifications); return }
+        try { openNotificationPath(path) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+    }
+
     fun handle(link: DeepLink) {
         when (link) {
             is DeepLink.CheckIn -> {
@@ -266,7 +380,12 @@ class AppModel(val api: APIClient, private val context: Context) {
                 eidReturnSession = link.sessionId
                 resumeTick += 1
                 val target = link.returnPath?.let { LinkParser.eventPath(it) }
-                if (phase == Phase.SignedIn && target != null) openEvent(target.first)
+                if (target != null) {
+                    if (phase == Phase.SignedIn) openEvent(target.first)
+                    // Not signed in yet (the session is being renewed): the
+                    // screen it returns to opens once it is.
+                    else pendingPush = PendingPush(link.returnPath, null)
+                }
             }
         }
     }
@@ -321,7 +440,7 @@ class AppModel(val api: APIClient, private val context: Context) {
         }
         AppConfig.launchArgument("SDYEvent")?.let { openEvent(it) }
         HomeRoute.from(AppConfig.launchArgument("SDYHomeRoute"))?.let { setHomePath(it) }
-        HomeRoute.from(AppConfig.launchArgument("SDYProfileRoute"))?.let { tab = Tab.Profile; setPath(Tab.Profile, listOf(Route.Home(it))) }
+        HomeRoute.from(AppConfig.launchArgument("SDYProfileRoute"))?.let { setPath(Tab.Profile, listOf(Route.Home(it))) }
         if (AppConfig.launchArgument("SDYCheckin") != null) {
             pendingCheckin = CheckinCode("7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "ab".repeat(24))
         }

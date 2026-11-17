@@ -68,7 +68,7 @@ fun AvatarView(size: Dp) {
                     Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Theme.brandRed, white(0.12f)))),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(initials, fontSize = (size.value * 0.34f).sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif, color = Color.White)
+                    Text(initials, fontSize = (size.value * 0.34f).sp, fontWeight = FontWeight.Bold, fontFamily = mn.esdy.member.design.Inter, color = Color.White)
                 }
             }
         }
