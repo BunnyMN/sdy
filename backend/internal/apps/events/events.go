@@ -29,6 +29,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
@@ -57,6 +58,9 @@ type Module struct {
 	permissions nexus.PermissionStore
 	// signTests are the eID signature tests in flight (signtest.go).
 	signTests signTestStore
+	// background is the work started after a request answered — fetching a
+	// stamped ballot (archive_votes.go) — so a test can wait for it.
+	background sync.WaitGroup
 }
 
 // New constructs and registers the module. Called once, from apps.Bootstrap.

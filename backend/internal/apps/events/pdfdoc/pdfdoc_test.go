@@ -79,3 +79,53 @@ func TestTextExtractsAsCyrillic(t *testing.T) {
 		}
 	}
 }
+
+// A 20000-character text with no space (the most a document body may hold)
+// is cut into lines in linear time: a slow wrap here would let anybody who
+// can open a draft preview spend the server's CPU.
+func TestALongWordRendersQuickly(t *testing.T) {
+	word := strings.Repeat("Өөрчлөлт", 2500)
+	start := time.Now()
+	l, err := NewLayout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Paragraph(word, Regular, 10.5, Black)
+	if _, err := l.Finish(Meta{}); err != nil {
+		t.Fatal(err)
+	}
+	limit := 200 * time.Millisecond
+	if raceEnabled {
+		limit = 2 * time.Second
+	}
+	if elapsed := time.Since(start); elapsed > limit {
+		t.Fatalf("a 20000-character word took %s, want under %s", elapsed, limit)
+	}
+	got, _ := extractText(t, mustFinish(t, word))
+	if !strings.Contains(strings.ReplaceAll(got, " ", ""), word[:200]) {
+		t.Fatal("the cut word lost characters")
+	}
+}
+
+func mustFinish(t *testing.T, text string) []byte {
+	t.Helper()
+	l, err := NewLayout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Paragraph(text, Regular, 10.5, Black)
+	out, err := l.Finish(Meta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func BenchmarkLongWord(b *testing.B) {
+	word := strings.Repeat("Өөрчлөлт", 2500)
+	for b.Loop() {
+		l, _ := NewLayout()
+		l.Paragraph(word, Regular, 10.5, Black)
+		_, _ = l.Finish(Meta{})
+	}
+}

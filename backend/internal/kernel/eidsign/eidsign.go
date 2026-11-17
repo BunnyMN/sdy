@@ -602,6 +602,7 @@ func (u *usecase) Poll(ctx context.Context, ownerRegNo, sessionID string) (strin
 		st.State = "completed"
 		st.SignerName = res.SubjectName
 		st.SignerSerial = res.SubjectSerial
+		st.SignerIssuer = res.IssuerName
 		st.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 		// The name eID confirmed, for the signature's reason. Not the client's.
 		if res.OrgName != "" {

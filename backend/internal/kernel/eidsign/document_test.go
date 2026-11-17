@@ -3,15 +3,23 @@ package eidsign
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // A rail-only document is signed exactly as given, on the phone when a
@@ -44,7 +52,7 @@ func TestRailOnlyDocumentNeverFallsBack(t *testing.T) {
 			}
 			_, _ = w.Write(append(in, []byte("\n% stamped\n%%EOF\n")...))
 		default:
-			_, _ = w.Write([]byte(`{"state":"COMPLETE","result":{"endResult":"OK"}}`))
+			_, _ = fmt.Fprintf(w, `{"state":"COMPLETE","result":{"endResult":"OK"},"cert":{"value":%q}}`, testCertificate(t))
 		}
 	})
 	ctx := context.Background()
@@ -79,4 +87,29 @@ func TestRailOnlyDocumentNeverFallsBack(t *testing.T) {
 	if !bytes.HasPrefix(signed.PDF, doc) || !bytes.Contains(signed.PDF, []byte("stamped")) {
 		t.Fatal("the stamped document is not what eID returned")
 	}
+	// The certificate eID reported is carried through, issuer included.
+	if signed.SignerName != "БАТ ДОРЖ" || signed.SignerSerial != "PNOMN-МА74101813" || signed.SignerIssuer != "eID Mongolia Test CA" {
+		t.Fatalf("signer from the certificate: %q %q %q", signed.SignerName, signed.SignerSerial, signed.SignerIssuer)
+	}
+}
+
+// testCertificate is a self-signed certificate naming a signer and an issuer, base64 DER.
+func testCertificate(t *testing.T) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "БАТ ДОРЖ", SerialNumber: "PNOMN-МА74101813"},
+		Issuer:       pkix.Name{CommonName: "eID Mongolia Test CA"},
+		NotBefore:    time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+	}
+	parent := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "eID Mongolia Test CA"}}
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(der)
 }

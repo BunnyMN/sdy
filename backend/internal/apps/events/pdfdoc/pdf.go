@@ -100,6 +100,12 @@ func (w *Writer) page() *bytes.Buffer {
 	return w.pages[w.current]
 }
 
+// RuneWidth is the width of one character in points.
+func (w *Writer) RuneWidth(r rune, style Style, size float64) float64 {
+	_, units := w.faces[style].glyph(r)
+	return float64(units) * size / float64(w.faces[style].unitsPerEm)
+}
+
 // TextWidth is the width of s in points.
 func (w *Writer) TextWidth(s string, style Style, size float64) float64 {
 	return w.faces[style].width(s, size)

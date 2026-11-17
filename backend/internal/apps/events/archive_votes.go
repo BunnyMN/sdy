@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
@@ -57,27 +58,60 @@ func (m *Module) fetchBallot(ctx context.Context, signer nexus.Signer, regNumber
 	return doc.PDF, ""
 }
 
-// attachBallot stores a stamped ballot that was not available when the vote
-// was counted. Best effort: the vote stands either way.
-func (m *Module) attachBallot(ctx context.Context, claims nexus.UserClaims, motionID, session string, ballot []byte) {
-	signer, err := nexus.Capability[nexus.Signer]()
-	if err != nil || !signer.Enabled() {
-		return
+// How a stamped ballot is fetched after the vote is counted: in the
+// background, at most once per ballotStampRetry per vote, and only while eID
+// still holds the ceremony.
+const (
+	ballotStampRetry   = 5 * time.Minute
+	ballotStampWindow  = 30 * time.Minute
+	ballotStampTimeout = 20 * time.Second
+)
+
+// attachBallotLater asks eID for a counted vote's stamped ballot without
+// holding up the caller. The claim (ballot_stamp_tried_at) is what throttles
+// it: two polls at once, or a poll every two seconds, ask eID once.
+func (m *Module) attachBallotLater(ctx context.Context, claims nexus.UserClaims, motionID, session string) {
+	bg := context.WithoutCancel(ctx)
+	var ballot []byte
+	err := m.db.QueryRow(bg, `UPDATE events_motion_votes SET ballot_stamp_tried_at = now()
+		WHERE tenant_id = $1 AND motion_id = $2 AND user_id = $3 AND sign_session_id = $4 AND status = 'signed'
+		  AND ballot_signing = 'pdf' AND ballot_signed_pdf IS NULL AND ballot_pdf IS NOT NULL
+		  AND signed_at > now() - make_interval(secs => $5)
+		  AND (ballot_stamp_tried_at IS NULL OR ballot_stamp_tried_at < now() - make_interval(secs => $6))
+		RETURNING ballot_pdf`,
+		claims.WorkspaceID, motionID, claims.UserID, session, ballotStampWindow.Seconds(), ballotStampRetry.Seconds()).Scan(&ballot)
+	if err != nil {
+		return // nothing to fetch, or asked too recently
 	}
-	regNumber, _, err := m.signerIdentity(ctx, claims.UserID)
-	if err != nil || regNumber == "" {
-		return
-	}
-	stamped, reason := m.fetchBallot(ctx, signer, regNumber, session, ballot)
-	if stamped == nil {
-		_, _ = m.db.Exec(ctx, `UPDATE events_motion_votes SET ballot_error = $4, updated_at = now()
-			WHERE tenant_id = $1 AND motion_id = $2 AND user_id = $3 AND status = 'signed' AND ballot_signed_pdf IS NULL`,
-			claims.WorkspaceID, motionID, claims.UserID, clip(reason, 300))
-		return
-	}
-	_, _ = m.db.Exec(ctx, `UPDATE events_motion_votes SET ballot_signed_pdf = $4, ballot_error = '', updated_at = now()
-		WHERE tenant_id = $1 AND motion_id = $2 AND user_id = $3 AND status = 'signed' AND ballot_signed_pdf IS NULL`,
-		claims.WorkspaceID, motionID, claims.UserID, stamped)
+	m.background.Add(1)
+	go func() {
+		defer m.background.Done()
+		fetchCtx, cancel := context.WithTimeout(bg, ballotStampTimeout)
+		defer cancel()
+		signer, err := nexus.Capability[nexus.Signer]()
+		if err != nil || !signer.Enabled() {
+			return
+		}
+		regNumber, _, err := m.signerIdentity(fetchCtx, claims.UserID)
+		if err != nil || regNumber == "" {
+			return
+		}
+		stamped, reason := m.fetchBallot(fetchCtx, signer, regNumber, session, ballot)
+		// The write gets its own short deadline: the fetch may have used up its own.
+		writeCtx, cancelWrite := context.WithTimeout(bg, 5*time.Second)
+		defer cancelWrite()
+		if stamped == nil {
+			_, _ = m.db.Exec(writeCtx, `UPDATE events_motion_votes SET ballot_error = $5, updated_at = now()
+				WHERE tenant_id = $1 AND motion_id = $2 AND user_id = $3 AND sign_session_id = $4 AND status = 'signed' AND ballot_signed_pdf IS NULL`,
+				claims.WorkspaceID, motionID, claims.UserID, session, clip(reason, 300))
+			return
+		}
+		if _, err := m.db.Exec(writeCtx, `UPDATE events_motion_votes SET ballot_signed_pdf = $5, ballot_error = '', updated_at = now()
+			WHERE tenant_id = $1 AND motion_id = $2 AND user_id = $3 AND sign_session_id = $4 AND status = 'signed' AND ballot_signed_pdf IS NULL`,
+			claims.WorkspaceID, motionID, claims.UserID, session, stamped); err != nil {
+			slog.WarnContext(writeCtx, "events: could not store a stamped ballot", "error", err, "motion_id", motionID)
+		}
+	}()
 }
 
 func (m *Module) myBallot(w http.ResponseWriter, r *http.Request) {
@@ -160,9 +194,10 @@ func (m *Module) protocolOnClose(ctx context.Context, tx pgx.Tx, claims nexus.Us
 }
 
 // createProtocol records a decided motion as a vote protocol. Its signers
-// are the branch's Тэргүүн and Нарийн бичиг as they are now; a vacant position
-// is skipped, and with neither it stays a draft (draft_reason 'no_signers')
-// for an administrator to give signers to. With signers it goes out at once.
+// are the branch's Тэргүүн and Нарийн бичиг as they are now; a vacant position,
+// or a holder without eID, is skipped (with a notice), and with neither it
+// stays a draft (draft_reason 'no_signers') for an administrator to give
+// signers to. With signers it goes out at once.
 func (m *Module) createProtocol(ctx context.Context, tx pgx.Tx, claims nexus.UserClaims, eventID, motionID string) (string, error) {
 	mo, err := m.loadMotion(ctx, tx, claims, eventID, motionID, false)
 	if err != nil {
@@ -218,30 +253,49 @@ func (m *Module) createProtocol(ctx context.Context, tx pgx.Tx, claims nexus.Use
 	if err != nil {
 		return "", err
 	}
-	var officers []string
-	officerRows, err := tx.Query(ctx, `SELECT m.user_id::text FROM workspace.memberships m
+	// The chair and the secretary as they are now. Somebody inactive is not
+	// asked; somebody without a linked eID could never sign, so they are
+	// skipped too — and the document says so, for a manager to see and to
+	// name a signer in their place.
+	var officers, skipped []string
+	officerRows, err := tx.Query(ctx, `SELECT m.user_id::text, m.position, COALESCE(u.name,''),
+		EXISTS (SELECT 1 FROM registry.user_eid_identities i WHERE i.user_id = m.user_id
+		        AND COALESCE(NULLIF(i.reg_number,''), NULLIF(i.civil_id,'')) IS NOT NULL)
+		FROM workspace.memberships m LEFT JOIN registry.users u ON u.id = m.user_id
 		WHERE m.tenant_id = $1::uuid AND m.position IN ('chair','secretary') AND `+usableMember+`
 		ORDER BY CASE m.position WHEN 'chair' THEN 1 ELSE 2 END, m.user_id`, claims.WorkspaceID)
 	if err != nil {
 		return "", err
 	}
 	for officerRows.Next() {
-		var id string
-		if err := officerRows.Scan(&id); err != nil {
+		var id, position, name string
+		var hasEID bool
+		if err := officerRows.Scan(&id, &position, &name, &hasEID); err != nil {
 			officerRows.Close()
 			return "", err
+		}
+		if !hasEID {
+			skipped = append(skipped, positionTitles[position]+" "+name)
+			continue
 		}
 		officers = append(officers, id)
 	}
 	officerRows.Close()
-	draftReason := ""
+	if officerRows.Err() != nil {
+		return "", officerRows.Err()
+	}
+	draftReason, notice := "", ""
 	if len(officers) == 0 {
 		draftReason = "no_signers"
 	}
+	if len(skipped) > 0 {
+		notice = clip("eID холбоогүй тул гарын үсэг зурагчаас алгассан: "+strings.Join(skipped, ", ")+
+			". Түүний оронд хэн зурахыг сонгоно уу.", 300)
+	}
 	var id string
-	if err := tx.QueryRow(ctx, `INSERT INTO events_archive_documents (tenant_id, kind, title, body, event_id, motion_id, payload, created_by, draft_reason)
-		VALUES ($1, 'vote_protocol', $2, '', $3, $4, $5, $6, $7) RETURNING id::text`,
-		claims.WorkspaceID, clip(mo.Title, 200), eventID, motionID, raw, claims.UserID, draftReason).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO events_archive_documents (tenant_id, kind, title, body, event_id, motion_id, payload, created_by, draft_reason, notice)
+		VALUES ($1, 'vote_protocol', $2, '', $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+		claims.WorkspaceID, clip(mo.Title, 200), eventID, motionID, raw, claims.UserID, draftReason, notice).Scan(&id); err != nil {
 		return "", err
 	}
 	if err := m.setSigners(ctx, tx, claims.WorkspaceID, id, officers); err != nil {

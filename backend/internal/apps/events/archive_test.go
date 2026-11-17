@@ -406,6 +406,15 @@ func TestArchiveIsTheBranchesOwn(t *testing.T) {
 	decodeInto(t, f.archive(t, "POST", "/", `{"kind":"decision","title":"Хоосон"}`, secretary, http.StatusCreated), &created)
 	f.archive(t, "POST", "/"+created.Document.ID+"/send", ``, secretary, http.StatusConflict)
 	f.archive(t, "POST", "/"+created.Document.ID+"/cancel", ``, secretary, http.StatusOK)
+	// A draft cancelled before it went out stays the managers' own: not in a
+	// member's list, not readable, no PDF preview.
+	member := f.users[4]
+	f.archive(t, "GET", "/"+created.Document.ID, ``, member, http.StatusNotFound)
+	f.archive(t, "GET", "/"+created.Document.ID+"/pdf", ``, member, http.StatusNotFound)
+	if body := f.archive(t, "GET", "/?status=cancelled", ``, member, http.StatusOK); strings.Contains(string(body), created.Document.ID) {
+		t.Fatal("a member lists a draft that was cancelled")
+	}
+	f.archive(t, "GET", "/"+created.Document.ID, ``, secretary, http.StatusOK)
 }
 
 func TestArchiveCeremonyFailuresCanBeRetried(t *testing.T) {
@@ -687,6 +696,7 @@ func TestBallotsArePDFsTheVoterSigns(t *testing.T) {
 	if polled["state"] != "signed" || polled["points"] != float64(3) || len(polled) != 2 {
 		t.Fatalf("poll answered %v", polled)
 	}
+	f.module.background.Wait() // the stamped ballot is fetched after the answer
 	var ballot, stamped []byte
 	var digest string
 	if err := f.pool.QueryRow(context.Background(), `SELECT ballot_pdf, ballot_signed_pdf, digest_hex FROM events_motion_votes WHERE motion_id = $1 AND user_id = $2`,
@@ -700,6 +710,12 @@ func TestBallotsArePDFsTheVoterSigns(t *testing.T) {
 	if text := pdfText(t, ballot); !strings.Contains(text, "САНАЛЫН ХУУДАС") || !strings.Contains(text, "ЗӨВШӨӨРӨВ") || !strings.Contains(text, "Өдөрлөг") {
 		t.Fatalf("ballot text: %.200s", text)
 	}
+	// Polling a counted vote again answers the same, points included.
+	w = f.request("POST", one+"/vote/poll", `{}`, f.tenant, f.users[1], false)
+	decodeInto(t, w.Body.Bytes(), &polled)
+	if polled["state"] != "signed" || polled["points"] != float64(3) {
+		t.Fatalf("repeat poll answered %v", polled)
+	}
 
 	own := f.request("GET", one+"/ballot", ``, f.tenant, f.users[1], false)
 	status(t, own, http.StatusOK)
@@ -711,8 +727,8 @@ func TestBallotsArePDFsTheVoterSigns(t *testing.T) {
 	status(t, f.request("GET", one+"/ballot", ``, f.tenant, f.users[2], false), http.StatusNotFound)
 
 	// eID's stamp is down: the vote counts on its confirmed digest, and the
-	// stamped ballot is attached when a later poll can get it.
-	signer.set(func(s *pdfSigner) { s.stampErr = nexus.ErrSignedDocumentUnavailable })
+	// stamped ballot is attached by a later poll — at most once per few minutes.
+	signer.set(func(s *pdfSigner) { s.stampErr = nexus.ErrSignedDocumentUnavailable; s.stampCalls = 0 })
 	w = f.request("POST", one+"/vote", `{"choice":"no"}`, f.tenant, f.users[2], false)
 	decodeInto(t, w.Body.Bytes(), &started)
 	session := started["session_id"].(string)
@@ -721,12 +737,32 @@ func TestBallotsArePDFsTheVoterSigns(t *testing.T) {
 	if polled["state"] != "signed" {
 		t.Fatalf("a vote without its stamp: %v", polled)
 	}
+	f.module.background.Wait()
 	unstamped := f.request("GET", one+"/ballot", ``, f.tenant, f.users[2], false)
 	if unstamped.Header().Get("X-Ballot-Signature") != "digest" {
 		t.Fatal("an unstamped ballot is served as stamped")
 	}
 	signer.set(func(s *pdfSigner) { s.stampErr = nil })
+	for range 3 {
+		status(t, f.request("POST", one+"/vote/poll", `{"session_id":"`+session+`"}`, f.tenant, f.users[2], false), http.StatusOK)
+	}
+	f.module.background.Wait()
+	signer.mu.Lock()
+	calls := signer.stampCalls
+	signer.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("eID was asked for the stamp %d times within the retry interval, want 1", calls)
+	}
+	if later := f.request("GET", one+"/ballot", ``, f.tenant, f.users[2], false); later.Header().Get("X-Ballot-Signature") != "digest" {
+		t.Fatal("the stamp was fetched again inside the retry interval")
+	}
+	// Five minutes later (simulated), the next poll attaches it.
+	if _, err := f.pool.Exec(context.Background(), `UPDATE events_motion_votes SET ballot_stamp_tried_at = now() - interval '6 minutes'
+		WHERE motion_id = $1 AND user_id = $2`, mo.ID, f.users[2]); err != nil {
+		t.Fatal(err)
+	}
 	status(t, f.request("POST", one+"/vote/poll", `{"session_id":"`+session+`"}`, f.tenant, f.users[2], false), http.StatusOK)
+	f.module.background.Wait()
 	if later := f.request("GET", one+"/ballot", ``, f.tenant, f.users[2], false); later.Header().Get("X-Ballot-Signature") != "pades" {
 		t.Fatal("the stamped ballot was not attached later")
 	}
@@ -746,6 +782,25 @@ func TestBallotsArePDFsTheVoterSigns(t *testing.T) {
 	_ = f.pool.QueryRow(context.Background(), `SELECT ballot_signing FROM events_motion_votes WHERE motion_id = $1 AND user_id = $2`, mo.ID, f.users[3]).Scan(&mode)
 	if mode != "digest" {
 		t.Fatalf("ballot signing mode %q", mode)
+	}
+	// That vote has no stamped ballot, so the exemption that lets one be
+	// attached is open on it — and covers only the ballot's own columns.
+	other := f.create(t, 10)
+	for _, change := range []string{
+		"event_id = '" + other.ID + "'",
+		"created_at = created_at - interval '1 day'",
+		"id = gen_random_uuid()",
+		"choice = 'yes'",
+		"ballot_pdf = 'x'",
+	} {
+		if _, err := f.pool.Exec(context.Background(), `UPDATE events_motion_votes SET `+change+`, ballot_error = 'x'
+			WHERE motion_id = $1 AND user_id = $2`, mo.ID, f.users[3]); err == nil {
+			t.Fatalf("a signed vote changed with %s", change)
+		}
+	}
+	if _, err := f.pool.Exec(context.Background(), `UPDATE events_motion_votes SET ballot_error = 'x', ballot_stamp_tried_at = now()
+		WHERE motion_id = $1 AND user_id = $2`, mo.ID, f.users[3]); err != nil {
+		t.Fatalf("the ballot's bookkeeping could not change: %v", err)
 	}
 
 	w = f.request("GET", base, ``, f.tenant, f.users[1], false)
@@ -784,5 +839,128 @@ func TestArchivePDFsAreDeterministic(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("lacks %q: %.300s", want, text)
 		}
+	}
+}
+
+// Polls of one ceremony that race each other all answer «signed» with the
+// points, and the vote is counted once — also after the vote has closed.
+func TestConcurrentVotePollsAllAnswerSigned(t *testing.T) {
+	f := newEventFixture(t)
+	useSigner(t, newPDFSigner())
+	e := f.prepareMeeting(t, 4)
+	base := "/" + e.ID + "/motions"
+	var mo Motion
+	w := f.request("POST", base, `{"title":"Зэрэг poll"}`, f.tenant, f.users[1], false)
+	decodeInto(t, w.Body.Bytes(), &mo)
+	one := base + "/" + mo.ID
+	status(t, f.request("POST", one+"/open", ``, f.tenant, f.users[0], true), http.StatusOK)
+	w = f.request("POST", one+"/vote", `{"choice":"yes"}`, f.tenant, f.users[1], false)
+	var started signStart
+	decodeInto(t, w.Body.Bytes(), &started)
+	var wg sync.WaitGroup
+	answers := make([]map[string]any, 8)
+	codes := make([]int, 8)
+	for i := range answers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			w := f.request("POST", one+"/vote/poll", `{"session_id":"`+started.SessionID+`"}`, f.tenant, f.users[1], false)
+			codes[i] = w.Code
+			_ = json.Unmarshal(w.Body.Bytes(), &answers[i])
+		}(i)
+	}
+	wg.Wait()
+	for i := range answers {
+		if codes[i] != http.StatusOK || answers[i]["state"] != "signed" || answers[i]["points"] != float64(4) {
+			t.Fatalf("poll %d: %d %v", i, codes[i], answers[i])
+		}
+	}
+	var entries int
+	_ = f.pool.QueryRow(context.Background(), `SELECT count(*) FROM events_point_entries WHERE event_id = $1 AND user_id = $2 AND reason = 'motion.vote'`,
+		e.ID, f.users[1]).Scan(&entries)
+	if entries != 1 {
+		t.Fatalf("the vote earned points %d times", entries)
+	}
+	status(t, f.request("POST", one+"/close", ``, f.tenant, f.users[0], true), http.StatusOK)
+	w = f.request("POST", one+"/vote/poll", `{"session_id":"`+started.SessionID+`"}`, f.tenant, f.users[1], false)
+	status(t, w, http.StatusOK)
+	var after map[string]any
+	decodeInto(t, w.Body.Bytes(), &after)
+	if after["state"] != "signed" || after["points"] != float64(4) {
+		t.Fatalf("poll after closing: %v", after)
+	}
+}
+
+// A signer who cannot sign is replaced while the document is out: those who
+// signed stay, the replaced one is kept with the reason, and the new signer
+// is told it is their turn and signs the latest revision.
+func TestAManagerReplacesASignerWhoCannotSign(t *testing.T) {
+	f := newEventFixture(t)
+	signer := newPDFSigner()
+	useSigner(t, signer)
+	secretary, first, stuck, instead := f.users[0], f.users[1], f.users[2], f.users[3]
+	f.grant(secretary, PermArchiveManage)
+	f.linkEIDs(t, first, instead)
+	var created archiveAnswer
+	decodeInto(t, f.archive(t, "POST", "/", `{"kind":"decision","title":"Шийдвэр","signers":["`+first+`","`+stuck+`"]}`, secretary, http.StatusCreated), &created)
+	doc := created.Document.ID
+	f.archive(t, "POST", "/"+doc+"/send", ``, secretary, http.StatusOK)
+	f.sign(t, doc, first, http.StatusOK)
+
+	body := `{"signers":["` + instead + `"],"reason":"eID-гүй тул"}`
+	f.archive(t, "PUT", "/"+doc+"/signers", body, first, http.StatusForbidden)
+	f.archive(t, "PUT", "/"+doc+"/signers", `{"signers":["`+instead+`"]}`, secretary, http.StatusBadRequest)
+	f.archive(t, "PUT", "/"+doc+"/signers", `{"signers":["`+first+`"],"reason":"x"}`, secretary, http.StatusConflict)
+	var got archiveAnswer
+	decodeInto(t, f.archive(t, "PUT", "/"+doc+"/signers", body, secretary, http.StatusOK), &got)
+	d := got.Document
+	if d.SignerCount != 2 || d.SignedCount != 1 || d.CurrentSigner == nil || *d.CurrentSigner != instead || len(d.Signers) != 3 {
+		t.Fatalf("after replacing: %+v", d)
+	}
+	if s := d.Signers[1]; s.UserID != stuck || s.Status != "replaced" || s.ReplaceReason != "eID-гүй тул" {
+		t.Fatalf("the replaced signer: %+v", s)
+	}
+	if got := f.notifications(t, instead); len(got) != 1 {
+		t.Fatalf("the new signer was told %v", got)
+	}
+	f.archive(t, "POST", "/"+doc+"/sign", `{}`, stuck, http.StatusForbidden)
+	if poll := f.sign(t, doc, instead, http.StatusOK); poll.DocumentStatus != "signed" {
+		t.Fatalf("after the new signer: %+v", poll)
+	}
+	revs := f.revisions(t, doc)
+	if sigs, err := pdfdoctest.Verify(revs[len(revs)-1]); err != nil || len(sigs) != 2 || !sigs[0].Valid || !sigs[1].Valid {
+		t.Fatalf("signatures after a replacement: %+v %v", sigs, err)
+	}
+	f.archive(t, "PUT", "/"+doc+"/signers", body, secretary, http.StatusConflict)
+	// A replaced signer's row is history, even directly.
+	if _, err := f.pool.Exec(context.Background(), `UPDATE events_archive_signers SET status = 'pending' WHERE document_id = $1 AND user_id = $2`, doc, stuck); err == nil {
+		t.Fatal("a replaced signer was brought back")
+	}
+}
+
+// A protocol skips a chair or secretary without eID and says so.
+func TestAProtocolSkipsAnOfficerWithoutEID(t *testing.T) {
+	f := newEventFixture(t)
+	useSigner(t, newPDFSigner())
+	e := f.prepareMeeting(t, 0)
+	chair, secretary := f.users[6], f.users[7]
+	f.setPosition(t, chair, "chair")
+	f.setPosition(t, secretary, "secretary")
+	f.linkEIDs(t, secretary)
+	base := "/" + e.ID + "/motions"
+	var mo Motion
+	w := f.request("POST", base, `{"title":"eID-гүй Тэргүүн"}`, f.tenant, f.users[1], false)
+	decodeInto(t, w.Body.Bytes(), &mo)
+	status(t, f.request("POST", base+"/"+mo.ID+"/open", ``, f.tenant, f.users[0], true), http.StatusOK)
+	w = f.request("POST", base+"/"+mo.ID+"/close", ``, f.tenant, f.users[0], true)
+	decodeInto(t, w.Body.Bytes(), &mo)
+	if mo.ProtocolID == nil {
+		t.Fatal("no protocol")
+	}
+	var got archiveAnswer
+	decodeInto(t, f.archive(t, "GET", "/"+*mo.ProtocolID, ``, f.users[0], http.StatusOK), &got)
+	d := got.Document
+	if d.Status != "signing" || len(d.Signers) != 1 || d.Signers[0].UserID != secretary || !strings.Contains(d.Notice, "Тэргүүн") {
+		t.Fatalf("protocol with a chair lacking eID: %+v", d)
 	}
 }

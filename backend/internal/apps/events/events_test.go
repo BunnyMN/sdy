@@ -42,6 +42,7 @@ type eventFixture struct {
 	users         []string
 	application   string
 	grants        *sync.Map
+	module        *Module
 }
 
 // grant gives a user permissions beyond reading, as a position would.
@@ -113,6 +114,8 @@ func newEventFixture(t *testing.T) *eventFixture {
 		}
 	}
 	m := &Module{db: pool, permissions: testPermissions{extra: f.grants}}
+	f.module = m
+	t.Cleanup(m.background.Wait)
 	f.router = chi.NewRouter()
 	m.RegisterRoutes(f.router, func(next http.Handler) http.Handler { return next })
 	return f

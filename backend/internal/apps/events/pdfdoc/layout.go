@@ -58,46 +58,58 @@ func (l *Layout) Space(height float64) {
 	}
 }
 
-// Wrap splits text into lines no wider than width.
+// Wrap splits text into lines no wider than width. Each character is
+// measured once, so a long text without spaces costs linear time.
 func (l *Layout) Wrap(text string, style Style, size, width float64) []string {
 	var lines []string
+	space := l.W.RuneWidth(' ', style, size)
 	for _, para := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		words := strings.Fields(para)
 		if len(words) == 0 {
 			lines = append(lines, "")
 			continue
 		}
-		line := ""
-		for _, word := range words {
-			for l.W.TextWidth(word, style, size) > width {
-				// A word wider than the line is cut by characters.
-				runes := []rune(word)
-				cut := len(runes)
-				for cut > 1 && l.W.TextWidth(string(runes[:cut]), style, size) > width {
-					cut--
-				}
-				if line != "" {
-					lines = append(lines, line)
-					line = ""
-				}
-				lines = append(lines, string(runes[:cut]))
-				word = string(runes[cut:])
-			}
-			if word == "" {
-				continue
-			}
-			candidate := word
-			if line != "" {
-				candidate = line + " " + word
-			}
-			if l.W.TextWidth(candidate, style, size) <= width {
-				line = candidate
-				continue
-			}
-			lines = append(lines, line)
-			line = word
+		var line strings.Builder
+		lineWidth := 0.0
+		flush := func() {
+			lines = append(lines, line.String())
+			line.Reset()
+			lineWidth = 0
 		}
-		lines = append(lines, line)
+		for _, word := range words {
+			wordWidth := 0.0
+			widths := make([]float64, 0, len(word))
+			for _, r := range word {
+				w := l.W.RuneWidth(r, style, size)
+				widths = append(widths, w)
+				wordWidth += w
+			}
+			if line.Len() > 0 && lineWidth+space+wordWidth <= width {
+				line.WriteByte(' ')
+				line.WriteString(word)
+				lineWidth += space + wordWidth
+				continue
+			}
+			if line.Len() > 0 {
+				flush()
+			}
+			if wordWidth <= width {
+				line.WriteString(word)
+				lineWidth = wordWidth
+				continue
+			}
+			// A word wider than the line is cut by characters.
+			i := 0
+			for _, r := range word {
+				if lineWidth+widths[i] > width && line.Len() > 0 {
+					flush()
+				}
+				line.WriteRune(r)
+				lineWidth += widths[i]
+				i++
+			}
+		}
+		flush()
 	}
 	return lines
 }

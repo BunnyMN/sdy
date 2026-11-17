@@ -621,13 +621,13 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	eventID, motionID := chi.URLParam(r, "id"), chi.URLParam(r, "motionID")
 	var status, digestHex, mode string
-	var ballot []byte
 	var stampedAlready bool
-	err := m.db.QueryRow(ctx, `SELECT status, digest_hex, COALESCE(sign_session_id,''), COALESCE(ballot_signing,''), ballot_pdf,
-		ballot_signed_pdf IS NOT NULL FROM events_motion_votes
+	var points int
+	err := m.db.QueryRow(ctx, `SELECT status, digest_hex, COALESCE(sign_session_id,''), COALESCE(ballot_signing,''),
+		ballot_signed_pdf IS NOT NULL, points_awarded FROM events_motion_votes
 		WHERE tenant_id=$1 AND motion_id=$2 AND event_id=$3 AND user_id=$4 AND ($5 = '' OR sign_session_id=$5)`,
 		claims.WorkspaceID, motionID, eventID, claims.UserID, strings.TrimSpace(in.SessionID)).
-		Scan(&status, &digestHex, &in.SessionID, &mode, &ballot, &stampedAlready)
+		Scan(&status, &digestHex, &in.SessionID, &mode, &stampedAlready, &points)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, http.StatusNotFound, "no such signature")
 		return
@@ -636,10 +636,14 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusInternalServerError, "could not read the vote")
 		return
 	}
-	if status == "signed" && mode == "pdf" && !stampedAlready {
-		// The vote was counted but eID's stamped ballot did not arrive then;
-		// while eID still holds the ceremony, it can be attached now.
-		m.attachBallot(ctx, claims, motionID, in.SessionID, ballot)
+	if status == "signed" {
+		if mode == "pdf" && !stampedAlready {
+			// Counted, but eID's stamped ballot is not here yet: ask for it in
+			// the background (throttled), never on this request's time.
+			m.attachBallotLater(ctx, claims, motionID, in.SessionID)
+		}
+		nexus.JSON(w, http.StatusOK, map[string]any{"state": "signed", "points": points})
+		return
 	}
 	if status != "signing" {
 		nexus.JSON(w, http.StatusOK, map[string]any{"state": status})
@@ -689,14 +693,16 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "the signature does not cover this vote")
 		return
 	}
-	// The vote counts on the confirmed digest, as it always has; the stamped
-	// PDF is the artifact the member keeps, and is stored when eID gives it.
-	var stamped []byte
-	ballotErr := ""
-	if mode == "pdf" {
-		stamped, ballotErr = m.fetchBallot(ctx, signer, regNumber, in.SessionID, ballot)
+	// The vote counts on the confirmed digest, as it always has, and is
+	// committed first. The stamped PDF — the artifact the member keeps — is
+	// fetched afterwards in the background, so a slow eID stamp never delays
+	// the count or the answer.
+	points, err = m.countVote(ctx, claims, eventID, motionID, in.SessionID)
+	if errors.Is(err, errAlreadyCounted) {
+		// Another poll of the same ceremony counted it first.
+		nexus.JSON(w, http.StatusOK, map[string]any{"state": "signed", "points": points})
+		return
 	}
-	points, err := m.countVote(ctx, claims, eventID, motionID, in.SessionID, stamped, ballotErr)
 	var conflict conflictError
 	if errors.As(err, &conflict) {
 		m.failVote(ctx, claims, motionID, in.SessionID)
@@ -708,12 +714,20 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nexus.Audit(ctx, claims.WorkspaceID, claims.UserID, "events.motion.vote", motionID, map[string]any{"event_id": eventID, "digest": digestHex})
+	if mode == "pdf" {
+		m.attachBallotLater(ctx, claims, motionID, in.SessionID)
+	}
 	nexus.JSON(w, http.StatusOK, map[string]any{"state": "signed", "points": points})
 }
 
+// errAlreadyCounted: this ceremony's vote was counted by an earlier poll.
+var errAlreadyCounted = errors.New("already counted")
+
 // countVote marks the vote signed under the motion's lock, so a vote whose
 // signature arrives after the vote was closed is not added to a decided count.
-func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID, motionID, sessionID string, stamped []byte, ballotErr string) (int, error) {
+// A second poll of a ceremony already counted answers errAlreadyCounted with
+// the points it earned, even after the vote has closed.
+func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID, motionID, sessionID string) (int, error) {
 	tx, err := m.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return 0, err
@@ -725,18 +739,29 @@ func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID
 		WHERE mo.tenant_id=$1 AND mo.id=$2 AND mo.event_id=$3 FOR UPDATE OF mo`, claims.WorkspaceID, motionID, eventID).Scan(&status, &points); err != nil {
 		return 0, err
 	}
+	// Under the motion's lock, so this read and the update below cannot pass
+	// a concurrent poll of the same ceremony.
+	var voteStatus string
+	var awarded int
+	if err := tx.QueryRow(ctx, `SELECT status, points_awarded FROM events_motion_votes
+		WHERE tenant_id=$1 AND motion_id=$2 AND user_id=$3 AND sign_session_id=$4`,
+		claims.WorkspaceID, motionID, claims.UserID, sessionID).Scan(&voteStatus, &awarded); err != nil {
+		return 0, err
+	}
+	if voteStatus == "signed" {
+		return awarded, errAlreadyCounted
+	}
 	if status != "voting" {
 		return 0, errConflict("the vote closed before your signature arrived")
 	}
-	tag, err := tx.Exec(ctx, `UPDATE events_motion_votes SET status='signed', signed_at=now(), points_awarded=$5,
-		ballot_signed_pdf=$6, ballot_error=$7, updated_at=now()
+	tag, err := tx.Exec(ctx, `UPDATE events_motion_votes SET status='signed', signed_at=now(), points_awarded=$5, updated_at=now()
 		WHERE tenant_id=$1 AND motion_id=$2 AND user_id=$3 AND sign_session_id=$4 AND status='signing'`,
-		claims.WorkspaceID, motionID, claims.UserID, sessionID, points, stamped, clip(ballotErr, 300))
+		claims.WorkspaceID, motionID, claims.UserID, sessionID, points)
 	if err != nil {
 		return 0, err
 	}
 	if tag.RowsAffected() == 0 {
-		return 0, errConflict("this signature has already been counted")
+		return 0, errConflict("this signature is no longer being signed")
 	}
 	if points > 0 {
 		if _, err := tx.Exec(ctx, `INSERT INTO events_point_entries (tenant_id,event_id,user_id,delta,reason,actor_id)

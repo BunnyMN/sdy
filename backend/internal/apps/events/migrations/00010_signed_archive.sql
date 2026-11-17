@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS events_archive_documents (
     status varchar(16) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','signing','signed','cancelled')),
     -- Why a document the system made is still a draft, e.g. 'no_signers'.
     draft_reason varchar(32) NOT NULL DEFAULT '',
+    -- What the system wants a manager to know, e.g. a protocol signer skipped
+    -- for having no eID.
+    notice varchar(300) NOT NULL DEFAULT '',
     created_by uuid REFERENCES registry.users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -68,7 +71,12 @@ CREATE TABLE IF NOT EXISTS events_archive_signers (
     sign_order integer NOT NULL CHECK (sign_order BETWEEN 1 AND 60),
     -- The position held when the signer was chosen, as printed on the PDF.
     position_title varchar(40) NOT NULL DEFAULT '',
-    status varchar(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','signing','signed','refused')),
+    -- replaced: a manager put somebody else in this signer's place before they
+    -- signed (kept, with the reason, so the history shows it).
+    status varchar(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','signing','signed','refused','replaced')),
+    replaced_at timestamptz,
+    replaced_by uuid REFERENCES registry.users(id) ON DELETE SET NULL,
+    replace_reason varchar(500) NOT NULL DEFAULT '',
     sign_session_id varchar(128),
     session_started_at timestamptz,
     -- The revision this ceremony signs, and that revision's SHA-256.
@@ -82,12 +90,14 @@ CREATE TABLE IF NOT EXISTS events_archive_signers (
     cert_issuer varchar(200) NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT events_archive_signer_once UNIQUE (document_id, user_id),
     CONSTRAINT events_archive_signer_order UNIQUE (document_id, sign_order),
     CONSTRAINT events_archive_signer_signed_at CHECK ((status = 'signed') = (signed_at IS NOT NULL))
 );
+-- One live place per person; a replaced row stays beside a new one.
+CREATE UNIQUE INDEX IF NOT EXISTS events_archive_signer_once ON events_archive_signers (document_id, user_id) WHERE status <> 'replaced';
 CREATE INDEX IF NOT EXISTS idx_events_archive_signers_user ON events_archive_signers (tenant_id, user_id, status);
 CREATE INDEX IF NOT EXISTS idx_events_archive_signers_user_fk ON events_archive_signers (user_id);
+CREATE INDEX IF NOT EXISTS idx_events_archive_signers_replacer ON events_archive_signers (replaced_by);
 
 CREATE TABLE IF NOT EXISTS events_archive_versions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -111,7 +121,10 @@ ALTER TABLE events_motion_votes
     ADD COLUMN IF NOT EXISTS ballot_signed_pdf bytea CHECK (ballot_signed_pdf IS NULL OR octet_length(ballot_signed_pdf) <= 8388608),
     -- 'pdf' — the PDF went to eID; 'digest' — the rail could sign only its hash.
     ADD COLUMN IF NOT EXISTS ballot_signing varchar(8) CHECK (ballot_signing IS NULL OR ballot_signing IN ('pdf','digest')),
-    ADD COLUMN IF NOT EXISTS ballot_error varchar(300) NOT NULL DEFAULT '';
+    ADD COLUMN IF NOT EXISTS ballot_error varchar(300) NOT NULL DEFAULT '',
+    -- When eID was last asked for the stamped ballot, so a vote's later polls
+    -- ask at most once every few minutes.
+    ADD COLUMN IF NOT EXISTS ballot_stamp_tried_at timestamptz;
 
 -- +goose StatementBegin
 DO $isolation$
@@ -171,6 +184,9 @@ BEGIN
     IF OLD.status = 'signed' THEN
         RAISE EXCEPTION 'a signature is final' USING ERRCODE = 'check_violation';
     END IF;
+    IF OLD.status = 'replaced' THEN
+        RAISE EXCEPTION 'a replaced signer is final' USING ERRCODE = 'check_violation';
+    END IF;
     IF (NEW.user_id, NEW.sign_order, NEW.document_id) IS DISTINCT FROM (OLD.user_id, OLD.sign_order, OLD.document_id) THEN
         SELECT status INTO doc_status FROM workspace.events_archive_documents WHERE id = OLD.document_id;
         IF doc_status <> 'draft' THEN
@@ -190,7 +206,8 @@ CREATE TRIGGER events_archive_signers_final BEFORE UPDATE OR DELETE ON events_ar
 
 -- A signed vote stays final, except that its eID-stamped ballot PDF may be
 -- attached once, afterwards, when it was not available at the moment of
--- counting. Nothing the vote says can change with it.
+-- counting. Only that PDF and its bookkeeping (ballot_error,
+-- ballot_stamp_tried_at, updated_at) may change; every other column is compared.
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION workspace.events_history_is_final() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
@@ -206,11 +223,13 @@ BEGIN
         END IF;
     ELSIF OLD.status = 'signed' THEN
         IF OLD.ballot_signed_pdf IS NULL
-           AND (NEW.choice, NEW.status, NEW.document, NEW.digest_hex, NEW.sign_session_id, NEW.signed_at,
-                NEW.points_awarded, NEW.ballot_pdf, NEW.ballot_signing, NEW.user_id, NEW.motion_id)
+           AND (NEW.id, NEW.tenant_id, NEW.event_id, NEW.motion_id, NEW.user_id, NEW.choice, NEW.status, NEW.document,
+                NEW.digest_hex, NEW.sign_session_id, NEW.signed_at, NEW.points_awarded, NEW.ballot_pdf, NEW.ballot_signing,
+                NEW.created_at)
                IS NOT DISTINCT FROM
-               (OLD.choice, OLD.status, OLD.document, OLD.digest_hex, OLD.sign_session_id, OLD.signed_at,
-                OLD.points_awarded, OLD.ballot_pdf, OLD.ballot_signing, OLD.user_id, OLD.motion_id) THEN
+               (OLD.id, OLD.tenant_id, OLD.event_id, OLD.motion_id, OLD.user_id, OLD.choice, OLD.status, OLD.document,
+                OLD.digest_hex, OLD.sign_session_id, OLD.signed_at, OLD.points_awarded, OLD.ballot_pdf, OLD.ballot_signing,
+                OLD.created_at) THEN
             RETURN NEW;
         END IF;
         RAISE EXCEPTION 'a signed vote is final' USING ERRCODE = 'check_violation';
@@ -230,6 +249,11 @@ BEGIN
     IF TG_TABLE_NAME = 'events_archive_documents' THEN
         doc := NEW;
         IF OLD.status = NEW.status THEN RETURN NEW; END IF;
+    ELSIF TG_OP = 'INSERT' THEN
+        -- A signer added to a document already out (a replacement) is told
+        -- when the turn is theirs at once; one added to a draft waits for «send».
+        SELECT * INTO doc FROM workspace.events_archive_documents WHERE id = NEW.document_id;
+        IF doc.status <> 'signing' THEN RETURN NEW; END IF;
     ELSE
         IF OLD.status = NEW.status OR NEW.status <> 'signed' THEN RETURN NEW; END IF;
         SELECT * INTO doc FROM workspace.events_archive_documents WHERE id = NEW.document_id;
@@ -237,7 +261,7 @@ BEGIN
     link := '/member/archive/' || doc.id::text || '?workspace=' || doc.tenant_id::text;
     IF doc.status = 'signing' THEN
         SELECT s.user_id INTO next_user FROM workspace.events_archive_signers s
-         WHERE s.document_id = doc.id AND s.status <> 'signed' ORDER BY s.sign_order LIMIT 1;
+         WHERE s.document_id = doc.id AND s.status NOT IN ('signed','replaced') ORDER BY s.sign_order LIMIT 1;
         IF next_user IS NOT NULL THEN
             PERFORM registry.notify_member(next_user, 'archive:' || doc.id::text || ':' || next_user::text || ':' || txid_current()::text,
                 'archive', 'Танд гарын үсэг зурах баримт ирлээ', left(coalesce(doc.number || ' · ', '') || doc.title, 500), link);
@@ -255,7 +279,7 @@ DROP TRIGGER IF EXISTS notify_archive_document ON events_archive_documents;
 CREATE TRIGGER notify_archive_document AFTER UPDATE OF status ON events_archive_documents
     FOR EACH ROW EXECUTE FUNCTION workspace.notify_archive_signing();
 DROP TRIGGER IF EXISTS notify_archive_signer ON events_archive_signers;
-CREATE TRIGGER notify_archive_signer AFTER UPDATE OF status ON events_archive_signers
+CREATE TRIGGER notify_archive_signer AFTER INSERT OR UPDATE OF status ON events_archive_signers
     FOR EACH ROW EXECUTE FUNCTION workspace.notify_archive_signing();
 
 -- +goose Down
@@ -289,5 +313,5 @@ DROP TABLE IF EXISTS events_archive_versions;
 DROP TABLE IF EXISTS events_archive_signers;
 DROP TABLE IF EXISTS events_archive_documents;
 DROP TABLE IF EXISTS events_archive_counters;
-ALTER TABLE events_motion_votes DROP COLUMN IF EXISTS ballot_error, DROP COLUMN IF EXISTS ballot_signing,
+ALTER TABLE events_motion_votes DROP COLUMN IF EXISTS ballot_stamp_tried_at, DROP COLUMN IF EXISTS ballot_error, DROP COLUMN IF EXISTS ballot_signing,
     DROP COLUMN IF EXISTS ballot_signed_pdf, DROP COLUMN IF EXISTS ballot_pdf;

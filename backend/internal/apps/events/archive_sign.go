@@ -61,7 +61,7 @@ func (m *Module) lockCurrentSigner(ctx context.Context, tx pgx.Tx, tenantID, doc
 	var base *int
 	err = tx.QueryRow(ctx, `SELECT id::text, user_id::text, status, COALESCE(sign_session_id,''), COALESCE(digest_hex,''),
 		sign_order, base_revision, session_started_at
-		FROM events_archive_signers WHERE tenant_id = $1::uuid AND document_id = $2::uuid AND status <> 'signed'
+		FROM events_archive_signers WHERE tenant_id = $1::uuid AND document_id = $2::uuid AND status NOT IN ('signed','replaced')
 		ORDER BY sign_order LIMIT 1 FOR UPDATE`, tenantID, docID).
 		Scan(&s.id, &s.userID, &s.status, &s.session, &s.digest, &s.order, &base, &s.started)
 	if base != nil {
@@ -174,7 +174,7 @@ func (m *Module) archiveSign(w http.ResponseWriter, r *http.Request) {
 	// is still next and the latest revision is still the one sent to eID.
 	tag, err := m.db.Exec(ctx, `UPDATE events_archive_signers s SET status = 'signing', sign_session_id = $4, session_started_at = now(),
 		base_revision = $5, digest_hex = $6, attempts = s.attempts + 1, last_error = '', updated_at = now()
-		WHERE s.tenant_id = $1::uuid AND s.id = $2::uuid AND s.user_id = $3::uuid AND s.status <> 'signed'
+		WHERE s.tenant_id = $1::uuid AND s.id = $2::uuid AND s.user_id = $3::uuid AND s.status NOT IN ('signed','replaced')
 		  AND (SELECT d.status FROM events_archive_documents d WHERE d.id = s.document_id) = 'signing'
 		  AND (SELECT max(v.revision) FROM events_archive_versions v WHERE v.document_id = s.document_id) = $5`,
 		claims.WorkspaceID, current.id, claims.UserID, session.SessionID, revision, digest)
@@ -199,7 +199,7 @@ func clip(s string, n int) string {
 
 func (m *Module) recordSignerError(ctx context.Context, tenantID, signerID, reason string) {
 	_, _ = m.db.Exec(ctx, `UPDATE events_archive_signers SET last_error = $3, updated_at = now()
-		WHERE tenant_id = $1::uuid AND id = $2::uuid AND status <> 'signed'`, tenantID, signerID, clip(reason, 300))
+		WHERE tenant_id = $1::uuid AND id = $2::uuid AND status NOT IN ('signed','replaced')`, tenantID, signerID, clip(reason, 300))
 }
 
 // refuseSigner ends a ceremony that cannot finish; the signer may start again.
@@ -227,7 +227,8 @@ func (m *Module) archivePoll(w http.ResponseWriter, r *http.Request) {
 	err := m.db.QueryRow(ctx, `SELECT s.id::text, s.status, COALESCE(s.sign_session_id,''), COALESCE(s.digest_hex,''), s.base_revision,
 		s.session_started_at, s.last_error, d.status
 		FROM events_archive_signers s JOIN events_archive_documents d ON d.id = s.document_id
-		WHERE s.tenant_id = $1::uuid AND s.document_id = $2::uuid AND s.user_id = $3::uuid`,
+		WHERE s.tenant_id = $1::uuid AND s.document_id = $2::uuid AND s.user_id = $3::uuid
+		ORDER BY s.status = 'replaced', s.sign_order DESC LIMIT 1`,
 		claims.WorkspaceID, docID, claims.UserID).Scan(&signerID, &status, &session, &digest, &base, &started, &lastError, &docStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, http.StatusNotFound, "no such signature")
@@ -254,6 +255,9 @@ func (m *Module) archivePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	case "refused":
 		answer("failed", map[string]any{"reason": lastError})
+		return
+	case "replaced":
+		answer("failed", map[string]any{"reason": "replaced"})
 		return
 	case "pending":
 		answer("pending", nil)
@@ -347,7 +351,7 @@ func (m *Module) archivePoll(w http.ResponseWriter, r *http.Request) {
 	}
 	var remaining int
 	if err := m.db.QueryRow(ctx, `SELECT count(*) FROM events_archive_signers WHERE tenant_id = $1::uuid AND document_id = $2::uuid
-		AND status <> 'signed' AND id <> $3::uuid`, claims.WorkspaceID, docID, signerID).Scan(&remaining); err != nil {
+		AND status NOT IN ('signed','replaced') AND id <> $3::uuid`, claims.WorkspaceID, docID, signerID).Scan(&remaining); err != nil {
 		archiveError(w, err)
 		return
 	}
@@ -430,7 +434,7 @@ func (m *Module) storeSignature(ctx context.Context, claims nexus.UserClaims, do
 		return false, err
 	}
 	var remaining int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM events_archive_signers WHERE tenant_id = $1::uuid AND document_id = $2::uuid AND status <> 'signed'`,
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM events_archive_signers WHERE tenant_id = $1::uuid AND document_id = $2::uuid AND status NOT IN ('signed','replaced')`,
 		claims.WorkspaceID, docID).Scan(&remaining); err != nil {
 		return false, err
 	}
