@@ -41,8 +41,8 @@ struct SanctionsAdminView: View {
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $composing) {
-            SanctionComposer(people: people.filter { $0.userId != app.me?.id }) { userID, points, reason in
-                await record(userID: userID, points: points, reason: reason)
+            SanctionComposer(people: people.filter { $0.userId != app.me?.id }) { userID, points, reason, key in
+                await record(userID: userID, points: points, reason: reason, key: key)
             }
         }
         .offlineBanner()
@@ -64,16 +64,16 @@ struct SanctionsAdminView: View {
         busy = true; defer { busy = false }
         do {
             var page = try await app.api.sanctions(offset: next)
-            page.sanctions = list.sanctions + page.sanctions
+            page.sanctions = list.sanctions.appendingUnique(page.sanctions)
             self.list = page
         } catch { actionError = APIError.wrap(error).message }
     }
 
     /// True when recorded, so the sheet can close.
-    private func record(userID: String, points: Int, reason: String) async -> Bool {
+    private func record(userID: String, points: Int, reason: String, key: String) async -> Bool {
         actionError = nil; notice = nil
         do {
-            _ = try await app.api.sanction(userID: userID, points: points, reason: reason)
+            _ = try await app.api.sanction(userID: userID, points: points, reason: reason, idempotencyKey: key)
             notice = "Шийдвэр бүртгэгдлээ."
             Haptics.success()
             await load()
@@ -111,8 +111,10 @@ struct SanctionRow: View {
 
 private struct SanctionComposer: View {
     let people: [BranchPerson]
-    let onSubmit: (String, Int, String) async -> Bool
+    let onSubmit: (String, Int, String, String) async -> Bool
     @Environment(\.dismiss) private var dismiss
+    /// Same key while the officer retries this decision; new once they change it.
+    @State private var intent = IntentKey()
     @State private var userID = ""
     @State private var points = 0
     @State private var reason = ""
@@ -146,7 +148,9 @@ private struct SanctionComposer: View {
                 Button("Бүртгэх", role: .destructive) {
                     Task {
                         busy = true
-                        let ok = await onSubmit(userID, points, reason.trimmingCharacters(in: .whitespacesAndNewlines))
+                        let text = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let key = intent.key(for: "\(userID)|\(points)|\(text)")
+                        let ok = await onSubmit(userID, points, text, key)
                         busy = false
                         if ok { dismiss() }
                     }

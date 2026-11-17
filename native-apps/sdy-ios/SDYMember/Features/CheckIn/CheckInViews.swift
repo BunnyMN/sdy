@@ -37,16 +37,6 @@ struct CheckInTabView: View {
 
                 if let value = loader.value {
                     let (mine, points) = value
-                    Section {
-                        VStack(alignment: .leading) {
-                            Text("Нийт оноо").font(.caption).foregroundStyle(.secondary)
-                            Text("\(Int(points.total))").font(.system(size: 36, weight: .bold, design: .rounded)).monospacedDigit()
-                        }
-                        .accessibilityElement(children: .combine)
-                        NavigationLink(value: HomeRoute.leaderboard) {
-                            Label("Тэргүүлэгчид", systemImage: "trophy").frame(minHeight: Theme.minTap)
-                        }
-                    }
                     Section("Миний ирц") {
                         if mine.items.isEmpty {
                             Text("Одоогоор оролцооны бүртгэл алга. Арга хэмжээнд бүртгүүлж, QR-ээр ирцээ батлаарай.")
@@ -71,20 +61,12 @@ struct CheckInTabView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    if !points.entries.isEmpty {
-                        Section("Онооны түүх") {
-                            ForEach(points.entries.prefix(10)) { entry in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.title)
-                                        Text("\(Labels.pointReason(entry.reason)) · \(Formatters.dateTime(entry.createdAt))")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Text("\(entry.delta > 0 ? "+" : "")\(Int(entry.delta))").bold().monospacedDigit()
-                                }
+                    // Points and the leaderboard live in Профайл → «Ирц ба оноо» and on Нүүр.
+                    if !points.entries.isEmpty || mine.hasMore {
+                        Section {
+                            NavigationLink(value: HomeRoute.participation) {
+                                Label("Ирц ба онооны бүх түүх", systemImage: "clock.arrow.circlepath").frame(minHeight: Theme.minTap)
                             }
-                            NavigationLink("Бүх түүх", value: HomeRoute.participation)
                         }
                     }
                 } else if let error = loader.error {
@@ -143,7 +125,7 @@ struct CheckInConfirmView: View {
             .navigationTitle("Ирцээ бүртгүүлэх")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(done == nil ? "Болих" : "Хаах") { close() } }
+                ToolbarItem(placement: .cancellationAction) { Button(done == nil && canConfirm ? "Болих" : "Хаах") { close() } }
             }
             .task { await load() }
         }
@@ -161,24 +143,42 @@ struct CheckInConfirmView: View {
                 if let points = event.pointsValue, points > 0 { Label("Ирцийн оноо: \(Int(points))", systemImage: "star") }
             }
             .font(.subheadline).foregroundStyle(.secondary)
-            if event.myStatus == "attended" {
-                NoticeView(text: "Таны ирц аль хэдийн баталгаажсан байна.", kind: .success)
+            if let blocked = Self.blockedReason(event) {
+                // Nothing to confirm: say why, and the only way on is out.
+                NoticeView(text: blocked, kind: event.myStatus == "attended" ? .success : .info)
+                Button { close() } label: {
+                    Text("Хаах").bold().frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                if event.myStatus.isEmpty {
+                    Text("Та энэ арга хэмжээнд бүртгүүлээгүй байна. Батлахад эхлээд автоматаар бүртгэнэ.")
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
+                if let actionError { NoticeView(text: actionError, kind: .error) }
+                Button {
+                    Task { await submit(event) }
+                } label: {
+                    HStack { if busy { ProgressView().tint(.white) }; Text("Би ирсэн — батлах").bold() }
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy || app.isOffline)
             }
-            if event.myStatus.isEmpty {
-                Text("Та энэ арга хэмжээнд бүртгүүлээгүй байна. Батлахад эхлээд автоматаар бүртгэнэ.")
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
-            if let actionError { NoticeView(text: actionError, kind: .error) }
-            Button {
-                Task { await submit(event) }
-            } label: {
-                HStack { if busy { ProgressView().tint(.white) }; Text("Би ирсэн — батлах").bold() }
-                    .frame(maxWidth: .infinity, minHeight: 52)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(busy || event.myStatus == "attended" || app.isOffline)
         }
     }
+
+    /// Why this code cannot be confirmed, or nil when it can: already
+    /// attended, marked absent, or the event is no longer open.
+    static func blockedReason(_ event: EventRecord) -> String? {
+        if event.myStatus == "attended" { return "Таны ирц аль хэдийн баталгаажсан байна." }
+        if event.status == "cancelled" { return "Энэ арга хэмжээ цуцлагдсан тул ирц бүртгэх боломжгүй." }
+        if !event.isOpen { return "Энэ арга хэмжээ хаагдсан тул ирц бүртгэх боломжгүй." }
+        if event.myStatus == "absent" { return "Таныг «Ирээгүй» гэж тэмдэглэсэн байна. Зохион байгуулагчид хандана уу." }
+        return nil
+    }
+
+    private var canConfirm: Bool { event.map { Self.blockedReason($0) == nil } ?? true }
 
     private func success(_ result: ActionResult) -> some View {
         VStack(spacing: 14) {

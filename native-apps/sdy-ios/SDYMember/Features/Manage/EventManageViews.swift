@@ -53,6 +53,8 @@ struct EventEditorView: View {
                     }
                 }
             }
+            // Times are Ulaanbaatar's, wherever the organiser's phone is set.
+            .environment(\.timeZone, Formatters.timeZone)
             .navigationTitle(event == nil ? "Шинэ арга хэмжээ" : "Засах")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -96,6 +98,14 @@ struct AttendanceManageView: View {
     @State private var actionError: String?
     @State private var busy: String?
     @State private var adding = false
+    /// A recorded attendance being changed: the server needs a reason.
+    @State private var correcting: Correction?
+
+    struct Correction: Identifiable {
+        let participant: Participant
+        let status: String
+        var id: String { participant.userId + status }
+    }
 
     var body: some View {
         List {
@@ -118,9 +128,12 @@ struct AttendanceManageView: View {
                             Spacer()
                             if busy == p.userId { ProgressView() }
                             Menu {
-                                Button { Task { await mark(p, "attended") } } label: { Label("Ирсэн", systemImage: "checkmark.circle") }
-                                Button { Task { await mark(p, "absent") } } label: { Label("Ирээгүй", systemImage: "xmark.circle") }
-                                Button { Task { await mark(p, "registered") } } label: { Label("Бүртгүүлсэн", systemImage: "circle") }
+                                Button { choose(p, "attended") } label: { Label("Ирсэн", systemImage: "checkmark.circle") }
+                                    .disabled(p.status == "attended")
+                                Button { choose(p, "absent") } label: { Label("Ирээгүй", systemImage: "xmark.circle") }
+                                    .disabled(p.status == "absent")
+                                Button { choose(p, "registered") } label: { Label("Бүртгүүлсэн", systemImage: "circle") }
+                                    .disabled(p.status == "registered")
                             } label: {
                                 Image(systemName: "ellipsis.circle").font(.title3).frame(width: Theme.minTap, height: Theme.minTap)
                             }
@@ -139,11 +152,16 @@ struct AttendanceManageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
-        .confirmationDialog("Оролцогч нэмэх", isPresented: $adding, titleVisibility: .visible) {
-            ForEach(people.filter { person in !(participants ?? []).contains { $0.userId == person.userId } }.prefix(30)) { person in
-                Button(person.name.isEmpty ? person.email : person.name) { Task { await add(person) } }
+        .sheet(isPresented: $adding) {
+            PersonPicker(people: people.filter { person in !(participants ?? []).contains { $0.userId == person.userId } }) { person in
+                Task { await add(person) }
             }
-            Button("Болих", role: .cancel) {}
+        }
+        .sheet(item: $correcting) { c in
+            ReasonSheet(title: "\(c.participant.name.isEmpty ? c.participant.email : c.participant.name): \(Labels.attendance(c.participant.status)) → \(Labels.attendance(c.status))",
+                        action: "Залруулах", destructive: c.status != "attended") { reason in
+                await mark(c.participant, c.status, note: reason)
+            }
         }
         .offlineBanner()
     }
@@ -159,17 +177,32 @@ struct AttendanceManageView: View {
         } catch { self.error = APIError.wrap(error) }
     }
 
-    private func mark(_ p: Participant, _ status: String) async {
+    /// First marks go straight through; a change to a recorded attendance
+    /// (which moves points) asks for the reason the server keeps.
+    private func choose(_ p: Participant, _ status: String) {
         guard status != p.status else { return }
+        if p.status == "registered" {
+            Task { await mark(p, status, note: "") }
+        } else {
+            correcting = Correction(participant: p, status: status)
+        }
+    }
+
+    @discardableResult
+    private func mark(_ p: Participant, _ status: String, note: String) async -> Bool {
         busy = p.userId; actionError = nil
         defer { busy = nil }
         do {
-            // A correction of a recorded attendance needs a reason (the server checks).
-            try await app.api.markAttendance(event.id, userID: p.userId, status: status,
-                                              note: p.status == "registered" ? "" : "Зохион байгуулагч апп-аар залруулсан")
+            try await app.api.markAttendance(event.id, userID: p.userId, status: status, note: note)
             Haptics.success()
             await load()
-        } catch { actionError = APIError.wrap(error).message; Haptics.error() }
+            return true
+        } catch {
+            actionError = APIError.wrap(error).message
+            Haptics.error()
+            await load()
+            return false
+        }
     }
 
     private func add(_ person: BranchPerson) async {
@@ -197,16 +230,25 @@ struct CheckinQRView: View {
             VStack(spacing: 20) {
                 Text(event.title).font(.title3.bold()).multilineTextAlignment(.center)
                 if let image {
-                    Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
-                        .frame(maxWidth: 300).padding(16).background(.white, in: RoundedRectangle(cornerRadius: 16))
-                        .accessibilityLabel("Ирцийн QR код")
-                    if let expires {
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            let left = max(0, Int(expires.timeIntervalSince(context.date)))
-                            Text("\(Formatters.clock(left))-ийн дараа шинэчлэгдэнэ").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                    // A code past its time is never left on screen to be scanned.
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let left = expires.map { max(0, Int($0.timeIntervalSince(context.date))) } ?? 0
+                        VStack(spacing: 12) {
+                            Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
+                                .frame(maxWidth: 300).padding(16).background(.white, in: RoundedRectangle(cornerRadius: 16))
+                                .blur(radius: left == 0 ? 12 : 0)
+                                .overlay { if left == 0 { ProgressView().controlSize(.large) } }
+                                .accessibilityLabel(left == 0 ? "QR кодын хугацаа дууссан" : "Ирцийн QR код")
+                            if left == 0 {
+                                Text("Хугацаа дууссан — шинэ код гаргаж байна…").font(.footnote).foregroundStyle(.orange)
+                            } else {
+                                Text("\(Formatters.clock(left))-ийн дараа шинэчлэгдэнэ").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                            }
                         }
                     }
-                    Text("Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна.").font(.footnote).foregroundStyle(.secondary)
+                    if let error { NoticeView(text: error, kind: .error) }
+                    Text("Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна. Шинэ код гаргахад өмнөх код хүчингүй болно — нэг арга хэмжээнд нэг л төхөөрөмжөөр QR харуулна уу.")
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 } else if let error {
                     NoticeView(text: error, kind: .error)
                     Button("Дахин") { Task { await issue() } }.buttonStyle(.bordered)
@@ -221,15 +263,20 @@ struct CheckinQRView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Хаах") { dismiss() } } }
             .task {
                 while !Task.isCancelled {
-                    await issue()
-                    let wait = max(30, (expires?.timeIntervalSinceNow ?? 60) - 20)
+                    let ok = await issue()
+                    // After a failure try again soon; the expired code is hidden meanwhile.
+                    let wait = ok ? max(30, (expires?.timeIntervalSinceNow ?? 60) - 20) : 10
                     try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 }
             }
+            // Members walk up to scan: the screen must not go dark under them.
+            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         }
     }
 
-    private func issue() async {
+    @discardableResult
+    private func issue() async -> Bool {
         do {
             let code = try await app.api.issueCheckin(event.id)
             var parts = URLComponents(url: AppConfig.webOrigin, resolvingAgainstBaseURL: false)!
@@ -239,8 +286,10 @@ struct CheckinQRView: View {
             image = Self.qr(parts.url?.absoluteString ?? "")
             expires = Formatters.parseDate(code.expiresAt) ?? Date().addingTimeInterval(300)
             error = nil
+            return true
         } catch {
             self.error = APIError.wrap(error).message
+            return false
         }
     }
 
@@ -251,5 +300,50 @@ struct CheckinQRView: View {
         guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
               let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
         return UIImage(cgImage: cg)
+    }
+}
+
+/// Somebody of the branch to add to an event's list, found by name or e-mail.
+struct PersonPicker: View {
+    let people: [BranchPerson]
+    let onPick: (BranchPerson) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    static func filter(_ people: [BranchPerson], _ query: String) -> [BranchPerson] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return people }
+        return people.filter { $0.name.localizedCaseInsensitiveContains(q) || $0.email.localizedCaseInsensitiveContains(q) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            let shown = Self.filter(people, query)
+            List {
+                if shown.isEmpty {
+                    Text(people.isEmpty ? "Нэмэх гишүүн алга." : "Олдсонгүй.").foregroundStyle(.secondary)
+                }
+                ForEach(shown) { person in
+                    Button {
+                        onPick(person)
+                        dismiss()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(person.name.isEmpty ? person.email : person.name).foregroundStyle(.primary)
+                            if !person.name.isEmpty, !person.email.isEmpty {
+                                Text(person.email).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: Theme.minTap, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Нэр, имэйлээр хайх")
+            .navigationTitle("Оролцогч нэмэх")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Болих") { dismiss() } } }
+        }
     }
 }

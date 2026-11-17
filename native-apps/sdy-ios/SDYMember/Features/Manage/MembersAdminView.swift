@@ -12,6 +12,8 @@ struct MembersAdminView: View {
     @State private var notice: String?
     @State private var search = ""
     @State private var busy: String?
+    /// A position chosen in a picker, waiting for the chair to confirm it.
+    @State private var proposed: (member: ManagedMember, position: String)?
 
     static let positions = ["chair", "vice_chair", "secretary", "finance", "auditor", "board", "member"]
 
@@ -47,6 +49,15 @@ struct MembersAdminView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Нэр, имэйлээр хайх")
         .onSubmit(of: .search) { Task { await load() } }
+        .confirmationDialog(proposedTitle, isPresented: Binding(get: { proposed != nil }, set: { if !$0 { proposed = nil } }),
+                            titleVisibility: .visible) {
+            Button("Оноох") {
+                if let p = proposed { Task { await assign(p.member, p.position) } }
+            }
+            Button("Болих", role: .cancel) {}
+        } message: {
+            Text("Албан тушаалаар эрх олгогдоно: арга хэмжээ, ирц, санхүү эсвэл хяналтын хорооны үйлдлүүд.")
+        }
         .task { await load() }
         .refreshable { await load() }
         .offlineBanner()
@@ -62,7 +73,7 @@ struct MembersAdminView: View {
             if editable {
                 Picker("Албан тушаал", selection: Binding(
                     get: { member.positionValue },
-                    set: { new in Task { await assign(member, new) } })) {
+                    set: { new in if new != member.positionValue { proposed = (member, new) } })) {
                     ForEach(Self.positions, id: \.self) { code in
                         Text(Labels.position(code) ?? code).tag(code)
                             .selectionDisabled(code == "chair" && policy?.canAssignChair != true)
@@ -76,6 +87,12 @@ struct MembersAdminView: View {
         }
         .padding(.vertical, 4)
         .overlay(alignment: .topTrailing) { if busy == member.userId { ProgressView() } }
+    }
+
+    private var proposedTitle: String {
+        guard let p = proposed else { return "" }
+        let name = p.member.name.isEmpty ? p.member.email : p.member.name
+        return "\(name)-д «\(Labels.position(p.position) ?? p.position)» албан тушаал оноох уу?"
     }
 
     private func load() async {
@@ -94,7 +111,7 @@ struct MembersAdminView: View {
         busy = "more"; defer { busy = nil }
         do {
             var page = try await app.api.managedMembers(query: search, offset: next)
-            page.members = members.members + page.members
+            page.members = members.members.appendingUnique(page.members)
             self.members = page
         } catch { actionError = APIError.wrap(error).message }
     }

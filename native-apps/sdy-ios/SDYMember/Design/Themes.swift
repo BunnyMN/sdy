@@ -168,17 +168,27 @@ struct ThemePickerView: View {
             .transition(.opacity)
             .padding(.bottom, 22)
 
+            let isChosen = shown.rawValue == chosen
             Button {
                 chosen = shown.rawValue
                 Haptics.success()
                 dismiss()
             } label: {
-                Text(shown.rawValue == chosen ? "Сонгогдсон" : "Хадгалах")
-                    .font(.headline).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(shown.accent, in: Capsule())
+                Group {
+                    if isChosen {
+                        Label("Сонгогдсон", systemImage: "checkmark")
+                    } else {
+                        Text("Хадгалах")
+                    }
+                }
+                .font(.headline).foregroundStyle(.white.opacity(isChosen ? 0.75 : 1))
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(isChosen ? AnyShapeStyle(.white.opacity(0.12)) : AnyShapeStyle(shown.accent), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(isChosen ? 0.18 : 0), lineWidth: 1))
             }
             .buttonStyle(PressableStyle())
+            .disabled(isChosen)
+            .accessibilityLabel(isChosen ? "Сонгогдсон өнгө" : "Энэ өнгийг хадгалах")
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
         }

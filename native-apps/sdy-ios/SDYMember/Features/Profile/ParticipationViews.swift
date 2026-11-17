@@ -20,22 +20,26 @@ struct ParticipationView: View {
                         .accessibilityElement(children: .combine)
                         NavigationLink(value: HomeRoute.leaderboard) { Label("Тэргүүлэгчдийн самбар", systemImage: "trophy") }
                     }
-                    Section("Миний ирц") {
+                    Section {
                         if mine.items.isEmpty { Text("Одоогоор оролцооны бүртгэл алга.").foregroundStyle(.secondary) }
                         ForEach(mine.items) { item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.title)
-                                    Text("\(Labels.attendance(item.status)) · \(Formatters.dateTime(item.startsAt))").font(.caption).foregroundStyle(.secondary)
+                                    Text(Formatters.dateTime(item.startsAt)).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Text("\(Int(item.points))").bold().monospacedDigit()
+                                // Status, not a «0» for an event still to come; the points
+                                // themselves are in «Онооны түүх» below.
+                                StatusChip.attendance(item.status)
                             }
                             .accessibilityElement(children: .combine)
                         }
                         if mine.hasMore {
                             Button("Цааш үзэх") { Task { await moreMine() } }.disabled(busy).frame(minHeight: Theme.minTap)
                         }
+                    } header: {
+                        Text("Миний ирц")
                     }
                     if !sanctions.isEmpty {
                         Section("Хяналтын хорооны шийдвэр") {
@@ -88,7 +92,7 @@ struct ParticipationView: View {
         guard let current = mine else { return }
         busy = true; defer { busy = false }
         if var next = try? await app.api.myEvents(offset: current.nextOffset ?? current.items.count) {
-            next.items = current.items + next.items
+            next.items = current.items.appendingUnique(next.items)
             mine = next
         }
     }
@@ -97,7 +101,7 @@ struct ParticipationView: View {
         guard let current = points else { return }
         busy = true; defer { busy = false }
         if var next = try? await app.api.points(offset: current.nextOffset ?? current.entries.count) {
-            next.entries = current.entries + next.entries
+            next.entries = current.entries.appendingUnique(next.entries)
             points = next
         }
     }
@@ -187,9 +191,18 @@ struct LeaderboardView: View {
             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
     }
 
+    /// Switching the period cancels the load in flight: that is not an
+    /// error to flash, and the last board stays until the new one arrives.
     private func load() async {
-        do { data = try await app.api.leaderboard(period: period); error = nil }
-        catch { data = nil; self.error = APIError.wrap(error) }
+        do {
+            let board = try await app.api.leaderboard(period: period)
+            guard !Task.isCancelled else { return }
+            data = board; error = nil
+        } catch {
+            let wrapped = APIError.wrap(error)
+            guard wrapped.kind != .cancelled, !Task.isCancelled else { return }
+            data = nil; self.error = wrapped
+        }
     }
 }
 
@@ -198,6 +211,7 @@ struct PersonalHistoryView: View {
     @State private var events: PersonalParticipationHistory?
     @State private var dues: PersonalDuesHistory?
     @State private var error: APIError?
+    @State private var busy = false
 
     var body: some View {
         Group {
@@ -214,6 +228,9 @@ struct PersonalHistoryView: View {
                                 Text("\(e.branch) · \(Formatters.dateTime(e.startsAt))").font(.caption).foregroundStyle(.secondary)
                                 Text("\(Labels.attendance(e.status)) · \(Int(e.points)) оноо").font(.caption)
                             }
+                        }
+                        if events.hasMore {
+                            Button("Цааш үзэх") { Task { await moreEvents() } }.disabled(busy).frame(minHeight: Theme.minTap)
                         }
                     }
                     Section("Хураамж") {
@@ -234,6 +251,9 @@ struct PersonalHistoryView: View {
                                 Text("\(Labels.payment(p.status)) · \(Formatters.dateTime(p.createdAt))").font(.caption)
                                 if !p.reference.isEmpty { Text(p.reference).font(.caption).foregroundStyle(.secondary) }
                             }
+                        }
+                        if dues.hasMore {
+                            Button("Цааш үзэх") { Task { await moreDues() } }.disabled(busy).frame(minHeight: Theme.minTap)
                         }
                     }
                 }
@@ -258,6 +278,27 @@ struct PersonalHistoryView: View {
             error = nil
         } catch { self.error = APIError.wrap(error) }
     }
+
+    private func moreEvents() async {
+        guard let current = events else { return }
+        busy = true; defer { busy = false }
+        if var next = try? await app.api.participationHistory(offset: current.nextOffset ?? current.items.count) {
+            next.items = current.items.appendingUnique(next.items)
+            next.entries = current.entries.appendingUnique(next.entries)
+            events = next
+        }
+    }
+
+    /// Charges and payments come in one page; both grow.
+    private func moreDues() async {
+        guard let current = dues else { return }
+        busy = true; defer { busy = false }
+        if var next = try? await app.api.duesHistory(offset: current.nextOffset ?? (current.charges.count + current.payments.count)) {
+            next.charges = current.charges.appendingUnique(next.charges)
+            next.payments = current.payments.appendingUnique(next.payments)
+            dues = next
+        }
+    }
 }
 
 /// Members blocked in the discussion, with a way back.
@@ -266,6 +307,7 @@ struct BlockedMembersView: View {
     @State private var data: BlockedList?
     @State private var error: APIError?
     @State private var busy: String?
+    @State private var unblocking: BlockedMember?
 
     var body: some View {
         List {
@@ -278,7 +320,7 @@ struct BlockedMembersView: View {
                         HStack {
                             Text(member.name.isEmpty ? "—" : member.name)
                             Spacer()
-                            Button("Блок цуцлах") { Task { await unblock(member) } }
+                            Button("Блок цуцлах") { unblocking = member }
                                 .buttonStyle(.bordered)
                                 .disabled(busy != nil || app.isOffline)
                         }
@@ -293,6 +335,12 @@ struct BlockedMembersView: View {
                 Text("Блоклосон гишүүний дэвшүүлсэн, санал хураалтад ороогүй асуудлууд танд харагдахгүй. Зүй бус контентыг асуудлын «…» цэсээр мэдээлнэ үү.")
             }
         }
+        .confirmationDialog("\(unblocking?.name ?? "")-ийн блокийг цуцлах уу?",
+                            isPresented: Binding(get: { unblocking != nil }, set: { if !$0 { unblocking = nil } }),
+                            titleVisibility: .visible) {
+            Button("Блок цуцлах") { if let member = unblocking { Task { await unblock(member) } } }
+            Button("Болих", role: .cancel) {}
+        } message: { Text("Энэ гишүүний дэвшүүлсэн асуудлууд танд дахин харагдана.") }
         .navigationTitle("Блоклосон гишүүд")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

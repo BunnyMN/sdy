@@ -42,8 +42,11 @@ extension APIClient {
     // MARK: Control committee
     func sanctions(offset: Int = 0) async throws -> SanctionList { try await get("/events/sanctions?offset=\(offset)", cached: false) }
     func mySanctions() async throws -> SanctionList { try await get("/events/sanctions/mine", cached: false) }
-    func sanction(userID: String, points: Int, reason: String) async throws -> Sanction {
-        try await send(.post, "/events/sanctions", body: ["user_id": userID, "points": points, "reason": reason])
+    /// `idempotencyKey`: one per decision the officer means to record, the
+    /// same on every retry of it, so a lost answer never records it twice.
+    func sanction(userID: String, points: Int, reason: String, idempotencyKey: String) async throws -> Sanction {
+        try await send(.post, "/events/sanctions", body: ["user_id": userID, "points": points, "reason": reason],
+                       headers: ["Idempotency-Key": idempotencyKey])
     }
 
     // MARK: Finance

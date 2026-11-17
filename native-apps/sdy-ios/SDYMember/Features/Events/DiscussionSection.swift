@@ -26,7 +26,7 @@ struct DiscussionSection: View {
                     MotionRow(motion: motion, data: data, signingActive: model.signing != nil, offline: app.isOffline) { choice in
                         confirm = (motion, choice)
                     } onCheck: {
-                        model.vote(motion, choice: motion.myVote?.choice ?? "yes")
+                        model.check(motion)
                     } onReport: {
                         reporting = motion
                     } onBlock: {
@@ -162,10 +162,10 @@ struct MotionRow: View {
                 HStack(spacing: 8) {
                     ForEach(["yes", "no", "abstain"], id: \.self) { choice in
                         if choice == "yes" {
-                            Button { onVote(choice) } label: { Text(Labels.choice(choice)).frame(maxWidth: .infinity, minHeight: 36) }
+                            Button { onVote(choice) } label: { Text(Labels.choice(choice)).frame(maxWidth: .infinity, minHeight: Theme.minTap) }
                                 .buttonStyle(.borderedProminent)
                         } else {
-                            Button { onVote(choice) } label: { Text(Labels.choice(choice)).frame(maxWidth: .infinity, minHeight: 36) }
+                            Button { onVote(choice) } label: { Text(Labels.choice(choice)).frame(maxWidth: .infinity, minHeight: Theme.minTap) }
                                 .buttonStyle(.bordered)
                         }
                     }
@@ -216,6 +216,12 @@ struct MotionRow: View {
                     Label("Таны санал (\(Labels.chose(vote.choice))) зурагдаж дуусаагүй байна.", systemImage: "hourglass")
                         .font(.footnote).foregroundStyle(.orange)
                     Spacer()
+                    Button("Шалгах") { onCheck() }
+                        .font(.footnote.weight(.semibold))
+                        .buttonStyle(.bordered)
+                        .frame(minHeight: Theme.minTap)
+                        .disabled(signingActive || offline)
+                        .accessibilityHint("eID гарын үсэг зурагдсан эсэхийг шалгана")
                 }
             default:
                 Label("Таны санал зурагдаагүй — дахин санал өгнө үү.", systemImage: "exclamationmark.circle")

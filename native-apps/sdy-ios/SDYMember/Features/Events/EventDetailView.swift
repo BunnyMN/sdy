@@ -24,7 +24,8 @@ struct EventDetailView: View {
 
     var body: some View {
         LoadingView(loader: loader, skeletonRows: 4) { event in content(event) }
-            .navigationTitle(loader.value?.title ?? "Арга хэмжээ")
+            // The title is the card's headline; the bar does not repeat it.
+            .navigationTitle("Арга хэмжээ")
             .navigationBarTitleDisplayMode(.inline)
             .offlineBanner()
             .task {
@@ -83,7 +84,7 @@ struct EventDetailView: View {
                 }
                 .padding(.vertical, 4)
                 LabeledContent {
-                    Text(event.endsAt.map { "\(Formatters.dateTime(event.startsAt)) – \(Formatters.dateTime($0))" } ?? Formatters.dateTime(event.startsAt))
+                    Text(Formatters.range(event.startsAt, event.endsAt))
                         .multilineTextAlignment(.trailing)
                 } label: { Label("Хэзээ", systemImage: "clock") }
                 if !event.location.isEmpty {

@@ -4,6 +4,8 @@ struct ProfileView: View {
     @EnvironmentObject var app: AppModel
     @State private var path: [HomeRoute] = []
     @State private var confirmLogout = false
+    /// Hides the points on Нүүр (someone looking over the shoulder).
+    @AppStorage(HomeView.pointsHiddenKey) private var pointsHidden = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -12,15 +14,13 @@ struct ProfileView: View {
                     AvatarView(size: 32)
                     Text(cardName).font(.headline).foregroundStyle(.white).lineLimit(1)
                 }
-            ), pinned: AnyView(topRow), pullZoom: 1 / 450) {
+            ), pullZoom: 1 / 450) {
                 header
             } content: {
                 if app.hasApprovedBranch {
-                    HStack(spacing: 12) {
-                        tile(.participation, "Ирц ба оноо", "star.fill")
-                        tile(.leaderboard, "Тэргүүлэгчид", "trophy.fill")
-                    }
-                    .rise(0)
+                    // The leaderboard opens from «Ирц ба оноо» and from Нүүр.
+                    tile(.participation, "Ирц ба оноо", "star.fill")
+                        .rise(0)
                 }
 
                 RowGroup {
@@ -65,6 +65,14 @@ struct ProfileView: View {
                     .buttonStyle(PressableStyle(scale: 0.98))
                     RowDivider()
                     row(.appearance, "Өнгө төрх", "paintbrush.fill")
+                    if app.hasApprovedBranch {
+                        RowDivider()
+                        Toggle(isOn: $pointsHidden) {
+                            IconRow(title: "Нүүрэнд оноогоо нуух", systemImage: "eye.slash.fill", chevron: false)
+                        }
+                        .tint(Theme.brandRed)
+                        .padding(.trailing, 4)
+                    }
                     RowDivider()
                     row(.blocked, "Блоклосон гишүүд", "hand.raised.slash.fill")
                     RowDivider()
@@ -104,8 +112,8 @@ struct ProfileView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            // Room for the pinned round buttons (topRow), drawn by HeroScaffold.
-            Color.clear.frame(height: 120)
+            // Room for the status bar and the pulled-down silk.
+            Color.clear.frame(height: 72)
 
             Spacer(minLength: 0)
 
@@ -137,17 +145,6 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 20)
         .accessibilityElement(children: .contain)
-    }
-
-    /// The round buttons: held in place by HeroScaffold.
-    private var topRow: some View {
-        HStack {
-            GlassCircleButton(systemImage: "bell.fill", label: "Мэдэгдэл", dot: app.unreadCount > 0) {
-                path.append(.notifications)
-            }
-            Spacer()
-            GlassCircleButton(systemImage: "power", label: "Гарах") { confirmLogout = true }
-        }
     }
 
     /// "Батболд Ганзориг" → "Б. ГАНЗОРИГ".
@@ -193,6 +190,15 @@ struct MemberRecordView: View {
     @State private var notifications = true
     @State private var saving = false
     @State private var notice: NoticeView?
+    @State private var saved = MemberProfile()
+    @State private var loadingMore = false
+
+    private var current: MemberProfile {
+        MemberProfile(phone: phone.trimmingCharacters(in: .whitespaces),
+                      residence: residence.trimmingCharacters(in: .whitespaces),
+                      notificationsEnabled: notifications)
+    }
+    private var changed: Bool { current != saved }
 
     var body: some View {
         Group {
@@ -247,7 +253,7 @@ struct MemberRecordView: View {
                     .textContentType(.addressCity)
                     .onChange(of: residence) { _, v in if v.count > 200 { residence = String(v.prefix(200)) } }
                 }
-                Toggle("Апп дотор шинэ мэдэгдэл хүлээн авах", isOn: $notifications)
+                Toggle("Мэдэгдэл хүлээн авах (апп ба push)", isOn: $notifications)
                 if let notice { notice }
                 Button {
                     Task { await save() }
@@ -255,7 +261,7 @@ struct MemberRecordView: View {
                     HStack { Spacer(); if saving { ProgressView() } else { Text("Хадгалах").bold() }; Spacer() }
                         .frame(minHeight: Theme.minTap)
                 }
-                .disabled(saving || app.isOffline)
+                .disabled(saving || app.isOffline || !changed)
             } header: {
                 Text("Холбоо барих мэдээлэл")
             } footer: {
@@ -273,6 +279,10 @@ struct MemberRecordView: View {
                         if !h.reason.isEmpty { Text(h.reason).font(.footnote) }
                     }
                 }
+                if record.hasMore {
+                    Button("Цааш үзэх") { Task { await moreHistory() } }
+                        .disabled(loadingMore).frame(minHeight: Theme.minTap)
+                }
             }
         }
     }
@@ -284,18 +294,30 @@ struct MemberRecordView: View {
             phone = r.profile.phone
             residence = r.profile.residence
             notifications = r.profile.notificationsEnabled
+            saved = current
             error = nil
         } catch { self.error = APIError.wrap(error) }
+    }
+
+    private func moreHistory() async {
+        guard let record else { return }
+        loadingMore = true; defer { loadingMore = false }
+        if let page = try? await app.api.memberRecord(offset: record.nextOffset ?? record.history.count) {
+            var merged = record
+            merged.history = record.history.appendingUnique(page.history)
+            merged.hasMore = page.hasMore
+            merged.nextOffset = page.nextOffset
+            self.record = merged
+        }
     }
 
     private func save() async {
         saving = true; notice = nil
         defer { saving = false }
         do {
-            let saved = try await app.api.saveMemberProfile(MemberProfile(phone: phone.trimmingCharacters(in: .whitespaces),
-                                                                         residence: residence.trimmingCharacters(in: .whitespaces),
-                                                                         notificationsEnabled: notifications))
+            let saved = try await app.api.saveMemberProfile(current)
             phone = saved.phone; residence = saved.residence; notifications = saved.notificationsEnabled
+            self.saved = current
             Haptics.success()
             notice = NoticeView(text: "Хадгалагдлаа.", kind: .success)
         } catch {

@@ -72,13 +72,18 @@ struct EventsListView: View {
     }
 
     private func filtered(_ events: [EventRecord]) -> [EventRecord] {
-        let now = Date()
+        Self.filter(events, filter)
+    }
+
+    /// Upcoming until an event has ended (EventRecord.isPast), soonest first;
+    /// past ones latest first.
+    static func filter(_ events: [EventRecord], _ filter: Filter, now: Date = Date()) -> [EventRecord] {
         switch filter {
         case .upcoming:
-            return events.filter { ($0.startDate ?? .distantPast) >= now.addingTimeInterval(-6 * 3600) && $0.status != "done" }
+            return events.filter { !$0.isPast(now: now) }
                 .sorted { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }
         case .past:
-            return events.filter { ($0.startDate ?? .distantPast) < now.addingTimeInterval(-6 * 3600) || $0.status == "done" }
+            return events.filter { $0.isPast(now: now) }
                 .sorted { ($0.startDate ?? .distantPast) > ($1.startDate ?? .distantPast) }
         }
     }
@@ -141,12 +146,16 @@ struct EventRow: View {
                     Label(event.location, systemImage: "mappin.and.ellipse")
                         .font(.subheadline).foregroundStyle(Theme.secondaryText).lineLimit(1)
                 }
-                HStack(spacing: 6) {
-                    Label(event.capacityText, systemImage: "person.2").font(.caption).foregroundStyle(Theme.secondaryText)
-                    Spacer(minLength: 4)
-                    if event.status != "planned" { StatusChip.eventStatus(event.status) }
-                    if let chip = StatusChip.attendance(event.myStatus) { chip }
-                    else if event.isFull && event.isOpen { StatusChip(text: "Дүүрсэн", systemImage: "person.fill.xmark", tone: .danger) }
+                // One line for the count; the chips get a line of their own.
+                Label(event.capacityShort, systemImage: "person.2").font(.caption).foregroundStyle(Theme.secondaryText)
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                let chips = event.status != "planned" || StatusChip.attendance(event.myStatus) != nil || (event.isFull && event.isOpen)
+                if chips {
+                    HStack(spacing: 6) {
+                        if event.status != "planned" { StatusChip.eventStatus(event.status) }
+                        if let chip = StatusChip.attendance(event.myStatus) { chip }
+                        else if event.isFull && event.isOpen { StatusChip(text: "Дүүрсэн", systemImage: "person.fill.xmark", tone: .danger) }
+                    }
                 }
             }
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.tertiaryText)
@@ -160,9 +169,10 @@ struct EventRow: View {
     }
 
     private var date: Date? { event.startDate }
-    private var day: String { date.map { String(Calendar.current.component(.day, from: $0)) } ?? "—" }
+    // Ulaanbaatar's day, as in the time below it, wherever the phone is set.
+    private var day: String { date.map { String(Formatters.dayMonth($0).day) } ?? "—" }
     private var month: String {
         guard let date else { return "" }
-        return "\(Calendar.current.component(.month, from: date)) сар"
+        return "\(Formatters.dayMonth(date).month) сар"
     }
 }

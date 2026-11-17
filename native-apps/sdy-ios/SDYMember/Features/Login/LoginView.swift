@@ -181,12 +181,23 @@ struct LoginView: View {
     static let passwordLink = URL(string: "sdy-login:password")!
 
     private var fineprint: some View {
-        let links = "[Нууцлал](\(AppConfig.privacyURL.absoluteString)) · [Тусламж](\(AppConfig.supportURL.absoluteString)) · [Нууц үгээр нэвтрэх](\(Self.passwordLink.absoluteString))"
-        return VStack(spacing: 6) {
+        let links = "[Нууцлал](\(AppConfig.privacyURL.absoluteString)) · [Тусламж](\(AppConfig.supportURL.absoluteString))"
+        return VStack(spacing: 4) {
+            // Its own button, big enough to hit (App Review's way in).
+            Button { showPassword = true } label: {
+                Text("Нууц үгээр нэвтрэх")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Night.silver)
+                    .underline()
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: Theme.minTap)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
             Text("eID Mongolia-аар баталгаажсан иргэн нэвтэрнэ.")
             Text((try? AttributedString(markdown: links)) ?? AttributedString(links))
         }
-        .font(.system(size: 12))
+        .font(.system(size: 13))
         .foregroundStyle(Night.muted)
         .tint(Night.silver)
         .multilineTextAlignment(.center)

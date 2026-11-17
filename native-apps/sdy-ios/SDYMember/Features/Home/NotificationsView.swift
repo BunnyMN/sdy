@@ -41,10 +41,19 @@ struct NotificationsView: View {
         .navigationTitle("Мэдэгдэл")
         .navigationDestination(item: $pushed) { $0.destination }
         .toolbar {
+            // Small, and only while something is unread.
             if unread > 0 {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Бүгдийг уншсан") { Task { await readAll() } }
+                    Menu {
+                        Button { Task { await readAll() } } label: {
+                            Label("Бүгдийг уншсанд тооцох", systemImage: "checkmark.circle")
+                        }
                         .disabled(busy || app.isOffline)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .frame(minWidth: Theme.minTap, minHeight: Theme.minTap)
+                    }
+                    .accessibilityLabel("Мэдэгдлийн үйлдэл")
                 }
             }
         }
@@ -96,7 +105,7 @@ struct NotificationsView: View {
     private func more() async {
         busy = true; defer { busy = false }
         if let page = try? await app.api.notifications(offset: nextOffset) {
-            items += page.items
+            items = items.appendingUnique(page.items)
             hasMore = page.hasMore
             nextOffset = page.nextOffset ?? items.count
         }
@@ -104,13 +113,12 @@ struct NotificationsView: View {
 
     private func open(_ item: MemberNotification) async {
         actionError = nil
-        if !item.isRead, !app.isOffline {
-            try? await app.api.markRead(item.id)
-            if let index = items.firstIndex(of: item) {
+        // Shown as read only once the server has it so.
+        if !item.isRead, !app.isOffline, await app.markNotificationRead(item.id) {
+            if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index].readAt = Formatters.dateTime(Date())
-                unread = max(0, unread - 1)
-                app.unreadCount = unread
             }
+            unread = max(0, unread - 1)
         }
         do {
             // From the list, a screen opens on top of it (in Нүүр or Профайл,

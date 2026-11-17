@@ -34,9 +34,12 @@ final class DiscussionModel: ObservableObject {
     private var timer: Timer?
     private var resumedOnce = false
 
-    init(eventID: String, api: APIClient = .shared) {
+    private let pollInterval: UInt64
+
+    init(eventID: String, api: APIClient = .shared, pollInterval: UInt64 = DiscussionModel.pollEvery) {
         self.eventID = eventID
         self.api = api
+        self.pollInterval = pollInterval
     }
 
     func load() async {
@@ -92,6 +95,16 @@ final class DiscussionModel: ObservableObject {
         }
     }
 
+    /// A vote left "signing" (the member came back before eID answered, or
+    /// the sheet was closed): ask the server where it stands — an empty
+    /// session asks about the member's own vote — without voting again.
+    func check(_ motion: Motion) {
+        actionError = nil
+        resumedOnce = true
+        signing = Signing(motion: motion, choice: motion.myVote?.choice ?? "", phase: .waiting)
+        watch()
+    }
+
     private func watch() {
         watchTask?.cancel()
         startTimer()
@@ -113,7 +126,7 @@ final class DiscussionModel: ObservableObject {
                 stopTimer()
                 return
             }
-            try? await Task.sleep(nanoseconds: Self.pollEvery)
+            try? await Task.sleep(nanoseconds: pollInterval)
             guard !Task.isCancelled else { return }
             do {
                 let result = try await api.pollVote(eventID, motion: current.motion.id, sessionID: current.sessionID)
@@ -139,7 +152,9 @@ final class DiscussionModel: ObservableObject {
                 let wrapped = APIError.wrap(error)
                 if wrapped.kind == .cancelled { return }
                 failures += 1
-                if !wrapped.isNetwork || failures > Self.toleratedFailures {
+                // No signal, or eID's gateway failing once (502/503/504), is
+                // asked again; only a real answer or repeated failure ends it.
+                if !wrapped.isTransient || failures > Self.toleratedFailures {
                     signing?.phase = .failed
                     signing?.message = wrapped.message
                     stopTimer()
