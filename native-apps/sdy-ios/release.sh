@@ -43,7 +43,20 @@ xcodebuild -project SDYMember.xcodeproj -scheme SDYMember -configuration Release
 
 # ExportOptions.plist: method app-store-connect, destination upload →
 # exportArchive өөрөө App Store Connect руу илгээнэ.
-xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
-  -exportOptionsPlist ExportOptions.plist "${AUTH[@]}"
+#
+# API key (App Manager эрх) нь «iOS Distribution» гэрчилгээг cloud-оос гаргаж
+# чаддаггүй тул export «No signing certificate "iOS Distribution" found» гэж
+# унаж болно. Тэгвэл Xcode → Settings → Accounts-д нэвтэрсэн Apple ID-аар
+# (cloud signing) дахин илгээнэ — 2026-11-09-нд build 12 ингэж явсан.
+if ! xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
+     -exportOptionsPlist ExportOptions.plist "${AUTH[@]}"; then
+  if [ -n "${ASC_KEY_ID:-}" ]; then
+    echo "API key-ээр export бүтэлгүйтлээ — Xcode-д нэвтэрсэн бүртгэлээр дахин оролдоно…" >&2
+    xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT-xcode" \
+      -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+  else
+    exit 1
+  fi
+fi
 
-echo "OK: build $NEXT App Store Connect руу илгээгдлээ. TestFlight дээр 5–30 минутын дараа гарна."
+echo "OK: build $NEXT App Store Connect руу илгээгдлээ. Боловсруулалт: scripts/asc.py wait-build $NEXT"
