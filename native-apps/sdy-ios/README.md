@@ -4,16 +4,26 @@ SDY-ийн гишүүдэд зориулсан native SwiftUI апп (WebView а
 (`frontend/`) ижил backend: `https://e-sdy.mn/api/v1`.
 
 - Bundle ID: `mn.esdy.member` · Нэр: **E-sdy** · iOS 17+ · зөвхөн iPhone, босоо
-- Таб: Нүүр · Арга хэмжээ · Ирц · Хураамж · Профайл (салбар батлагдаагүй гишүүнд зөвхөн Нүүр, Профайл)
+- Таб: Нүүр · Арга хэмжээ · Ирц · Хураамж · Профайл (салбар батлагдаагүй гишүүнд зөвхөн Нүүр, Профайл).
+  Нүүр табуудыг давтахгүй: оноо, «Тэргүүлэгчид», «Түүх», «Танд хийх зүйл» (60 с-ээс хуучин бол харагдах бүрт шинэчлэгдэнэ).
+  Оноог Нүүрэнд нуух нь Профайл → «Нүүрэнд оноогоо нуух» (`@AppStorage home.pointsHidden`)
 - Нэвтрэлт: eID Mongolia — ганц «e-ID | Нэвтрэх» товч; энэ утсан дээрх eID апп руу шууд, апп байхгүй бол регистрийн дугаараар. Имэйл/нууц үг нь доод талын жижиг холбоос (App Review-ийн демо бүртгэл)
 - Session: bearer token (`Authorization: Bearer`, `X-Session-Transport: bearer`), Keychain-д хадгална; cookie хэрэглэхгүй
   - Салбар солиход сервер хуучин token-ыг шууд цуцалдаг. Хүсэлт бүр ямар token-оор явснаа санаж, 401 / цэвэрлэсэн
     cookie нь зөвхөн тэр token одоо ч хүчинтэй бол session-ийг дуусгана; хооронд нь солигдсон бол шинэ token-оор
     нэг удаа дахин илгээнэ (`APIClient.raw`, `TokenStore.clear(ifStill:)`, `StaleTokenTests`).
+- Дахин суулгахад: Keychain-ийн token цэвэрлэгдэнэ (UserDefaults `install.marker` алга, офлайн кэш хоосон бол —
+  `TokenStore.clearIfFreshInstall`); 1.1.1-ээс шинэчлэхэд нэвтрэлт хэвээр. Гарсны дараа хоцорсон хариу кэшэд бичигдэхгүй.
+- Эрх: апп foreground-д ирэх, push ирэх, ямар ч 403 хариу бүрт `/auth/me` дахин уншина (`AppModel.refreshIdentity`).
+- Салбар солилт: сервер солисны дараа `/auth/me` амжилтгүй бол апп шинэ салбарт (эрхгүйгээр) шилжиж, алдааг харуулна.
+- eID: start-ийн `binding` Keychain-д, `expires_at` (байвал тоолуур, байхгүй бол 15 минутын backstop) хадгалагдаж, universal
+  link-ээр дахин нээгдэхэд poll-д илгээгдэнэ (`PendingEIDSession`). Poll 404 → хугацаа дууссан.
+- Хяналтын хорооны шийдвэр `Idempotency-Key` толгойтой (нэг шийдвэрт нэг UUID, дахин оролдоход ижил).
 - Мэдэгдлийн линк (`registry.member_notifications.path`) → дэлгэц: `LinkParser.notificationTarget` —
   `/module/events/…` арга хэмжээ (өөр салбарынх бол салбар солино), `/member/history` Түүх, `/member/record`
   Гишүүнчлэл, `/member/participation` Оролцоо, `/member` Нүүр. Жагсаалтаас дарвал тухайн стек дээр (Нүүр эсвэл
-  Профайл) нээгдэнэ; push-ээс Нүүр таб дээр.
+  Профайл) нээгдэнэ; push-ээс Нүүр таб дээр. Нэвтрээгүй үед дарсан push нэвтэрсний дараа нээгдэнэ. Уншсан тэмдэг
+  зөвхөн сервер зөвшөөрсөн үед.
 
 ## Бүтэц
 
@@ -27,7 +37,8 @@ SDYMember/Core           APIClient, Endpoints, TokenStore, SessionCookie, Offlin
 SDYMember/Models         API-ийн төрлүүд (frontend/lib/api/*.ts-ийн толь)
 SDYMember/Features       Login, Home, Events, CheckIn, Dues, Profile
 SDYMember/Resources      Assets, Info.plist (үүсгэгдэнэ), entitlements, PrivacyInfo, Fixtures/*.json
-SDYMemberTests           Decoding, QR, регистр, Set-Cookie, deep link, формат, алдааны текст
+SDYMemberTests           Decoding, QR, регистр, Set-Cookie, deep link, формат, алдааны текст;
+                         AuditFixTests — салбар солилт, push, eID төлөвийн машин, idempotency, кэш, хуудаслалт
 build.sh / release.sh    Симулятор build / App Store Connect руу илгээх
 ```
 
@@ -49,8 +60,11 @@ Xcode-д Apple ID-гаа (Settings → Accounts) нэмсэн байхад ха�
 ```sh
 xcodegen generate
 xcodebuild test -project SDYMember.xcodeproj -scheme SDYMember \
-  -destination 'platform=iOS Simulator,name=iPhone 17'
+  -destination 'platform=iOS Simulator,name=iPhone 16e'
 ```
+
+2026-11-17: 95 тест. `CODE_SIGNING_ALLOWED=NO`-оор ажиллуулбал Keychain-ийн тест (`testBindingRoundTripsThroughTheKeychain`)
+алгасагдана (гарын үсэггүй build-д Keychain алга).
 
 ### Backend-гүй харах (зөвхөн Debug)
 
