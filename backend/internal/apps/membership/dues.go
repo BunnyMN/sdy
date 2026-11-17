@@ -301,14 +301,20 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Reference = strings.TrimSpace(input.Reference)
-	if _, err := uuid.Parse(input.ChargeID); err != nil {
+	// Canonical forms: the advisory-lock key and the retry comparison below
+	// must not depend on how the client spelled the uuid.
+	charge, err := uuid.Parse(input.ChargeID)
+	if err != nil {
 		nexus.Error(w, 400, "invalid charge")
 		return
 	}
-	if _, err := uuid.Parse(input.RequestKey); err != nil {
+	input.ChargeID = charge.String()
+	key, err := uuid.Parse(input.RequestKey)
+	if err != nil {
 		nexus.Error(w, 400, "invalid request key")
 		return
 	}
+	input.RequestKey = key.String()
 	if input.Amount < 1 || input.Amount > 1000000000 || input.Reference == "" || !validText(input.Reference, 128) {
 		nexus.Error(w, 400, "enter the amount and transfer reference")
 		return
@@ -327,7 +333,7 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1,0))`, input.ChargeID); fail(w, err) {
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1::uuid::text,0))`, input.ChargeID); fail(w, err) {
 		return
 	}
 	var amount, paid, pending int64
@@ -341,11 +347,11 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Return a retry's existing receipt even if it was approved in between.
-	var existingID, charge, reference string
+	var existingID, existingCharge, reference string
 	var previous int64
-	err = tx.QueryRow(r.Context(), `SELECT id::text,charge_id::text,amount,reference FROM membership_dues_payments WHERE tenant_id=$1 AND user_id=$2 AND request_key=$3`, c.WorkspaceID, c.UserID, input.RequestKey).Scan(&existingID, &charge, &previous, &reference)
+	err = tx.QueryRow(r.Context(), `SELECT id::text,charge_id::text,amount,reference FROM membership_dues_payments WHERE tenant_id=$1 AND user_id=$2 AND request_key=$3`, c.WorkspaceID, c.UserID, input.RequestKey).Scan(&existingID, &existingCharge, &previous, &reference)
 	if err == nil {
-		if charge != input.ChargeID || previous != input.Amount || reference != input.Reference {
+		if existingCharge != input.ChargeID || previous != input.Amount || reference != input.Reference {
 			nexus.Error(w, 409, "request key was used for a different payment")
 			return
 		}
@@ -363,7 +369,9 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id string
-	err = m.db.QueryRow(r.Context(), `INSERT INTO membership_dues_payments(tenant_id,charge_id,user_id,request_key,amount,reference)
+	// On the transaction: the insert must be covered by the lock it holds,
+	// not run on a second pooled connection beside it.
+	err = tx.QueryRow(r.Context(), `INSERT INTO membership_dues_payments(tenant_id,charge_id,user_id,request_key,amount,reference)
 		VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,user_id,request_key) DO NOTHING RETURNING id::text`, c.WorkspaceID, input.ChargeID, c.UserID, input.RequestKey, input.Amount, input.Reference).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, 409, "this submission is already recorded; refresh your payment history")
@@ -383,11 +391,12 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id := chi.URLParam(r, "id")
-	if _, err := uuid.Parse(id); err != nil {
+	parsed, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
 		nexus.Error(w, 400, "invalid payment")
 		return
 	}
+	id := parsed.String()
 	var input struct {
 		Action string `json:"action"`
 		Reason string `json:"reason"`
@@ -495,11 +504,12 @@ func (m *Module) setWaiver(w http.ResponseWriter, r *http.Request, waive bool) {
 	if !ok {
 		return
 	}
-	id := chi.URLParam(r, "id")
-	if _, err := uuid.Parse(id); err != nil {
+	parsed, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
 		nexus.Error(w, 400, "invalid charge")
 		return
 	}
+	id := parsed.String()
 	var input struct {
 		Reason string `json:"reason"`
 	}
@@ -523,7 +533,7 @@ func (m *Module) setWaiver(w http.ResponseWriter, r *http.Request, waive bool) {
 	// Same order as a submission — advisory lock, then the charge row (a
 	// payment insert takes its FK lock on the charge) — so the two cannot
 	// deadlock.
-	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1,0))`, id); fail(w, err) {
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1::uuid::text,0))`, id); fail(w, err) {
 		return
 	}
 	var owner string

@@ -158,3 +158,40 @@ func TestMyDuesPagesEachListOnItsOwn(t *testing.T) {
 		t.Fatalf("second page: %v", second)
 	}
 }
+
+// Reports for one charge are serialised however the client spells its id:
+// the lock key and the stored row both use the canonical form.
+func TestReportsSerialiseAcrossSpellingsOfTheChargeID(t *testing.T) {
+	f := newDuesFixture(t)
+	charges := f.prepare(t)
+	id := charges[1].ID
+	forms := []string{id, strings.ToUpper(id), "{" + id + "}", strings.ReplaceAll(id, "-", ""), strings.ToUpper(strings.ReplaceAll(id, "-", ""))}
+	var wg sync.WaitGroup
+	results := make(chan int, len(forms)*2)
+	for range 2 {
+		for _, form := range forms {
+			wg.Go(func() {
+				body, _ := json.Marshal(map[string]any{"charge_id": form, "request_key": uuid.NewString(), "amount": 10000, "reference": uuid.NewString()})
+				results <- f.request("POST", "/payments", string(body), f.tenant, f.users[1], false).Code
+			})
+		}
+	}
+	wg.Wait()
+	close(results)
+	counts := map[int]int{}
+	for code := range results {
+		counts[code]++
+	}
+	if counts[201] != 1 || counts[409] != len(forms)*2-1 {
+		t.Fatal(counts)
+	}
+	// A retry with the same request key but another spelling is the same receipt.
+	key := uuid.NewString()
+	body := func(charge string) string {
+		b, _ := json.Marshal(map[string]any{"charge_id": charge, "request_key": key, "amount": 1, "reference": "SPELLING"})
+		return string(b)
+	}
+	status(t, f.request("POST", "/payments", body(charges[2].ID), f.tenant, f.users[2], false), 201)
+	status(t, f.request("POST", "/payments", body(strings.ToUpper(charges[2].ID)), f.tenant, f.users[2], false), 200)
+	status(t, f.request("POST", "/charges/"+strings.ToUpper(charges[0].ID)+"/waive", `{"reason":"x"}`, f.tenant, f.users[0], true), 403)
+}

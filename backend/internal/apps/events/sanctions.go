@@ -87,13 +87,19 @@ func (in *sanctionInput) validate() error {
 	if in.EventID != nil && strings.TrimSpace(*in.EventID) == "" {
 		in.EventID = nil
 	}
-	if _, err := uuid.Parse(in.UserID); err != nil {
+	// Canonical forms (ids.go): the self-decision guard and the replay
+	// comparison both compare these with what the database returns.
+	user, ok := canonicalID(in.UserID)
+	if !ok {
 		return errors.New("choose the member")
 	}
+	in.UserID = user
 	if in.EventID != nil {
-		if _, err := uuid.Parse(*in.EventID); err != nil {
+		event, ok := canonicalID(*in.EventID)
+		if !ok {
 			return errors.New("no such event")
 		}
+		in.EventID = &event
 	}
 	return nil
 }
@@ -158,7 +164,7 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case err == nil:
 			same := user == in.UserID && points == in.Points && reason == in.Reason &&
-				((event == nil && in.EventID == nil) || (event != nil && in.EventID != nil && *event == strings.ToLower(*in.EventID)))
+				((event == nil && in.EventID == nil) || (event != nil && in.EventID != nil && *event == *in.EventID))
 			if !same {
 				nexus.Error(w, http.StatusConflict, ErrIdempotencyReuse)
 				return
@@ -172,12 +178,20 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !m.isActiveMember(ctx, claims.WorkspaceID, in.UserID) {
+	// Read on the transaction, not the pool: the pool would take a second
+	// connection while this one holds the lock.
+	var member bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workspace.memberships
+		WHERE tenant_id = $1::uuid AND user_id = $2::uuid AND active)`, claims.WorkspaceID, in.UserID).Scan(&member); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
+		return
+	}
+	if !member {
 		nexus.Error(w, http.StatusNotFound, "no such member in this branch")
 		return
 	}
 	if in.EventID != nil {
-		if _, err := m.loadEvent(ctx, claims.WorkspaceID, claims.UserID, *in.EventID); err != nil {
+		if _, err := scanEvent(tx.QueryRow(ctx, eventColumns+` AND e.id = $3::uuid`, claims.WorkspaceID, claims.UserID, *in.EventID)); err != nil {
 			eventError(w, err)
 			return
 		}

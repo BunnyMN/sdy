@@ -240,7 +240,7 @@ func (m *Module) propose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('events.motions:'||$1,0))`, eventID); err != nil {
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('events.motions:'||$1::uuid::text,0))`, eventID); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
 		return
 	}

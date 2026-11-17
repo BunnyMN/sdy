@@ -296,6 +296,11 @@ func (m *Module) assignTask(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
+	var valid bool
+	if in.UserID, valid = canonicalID(in.UserID); !valid {
+		nexus.Error(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
 	if !m.isActiveMember(r.Context(), claims.WorkspaceID, in.UserID) {
 		nexus.Error(w, http.StatusBadRequest, "that person is not a member of this branch")
 		return

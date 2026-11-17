@@ -110,13 +110,14 @@ func (m *Module) MenuPermission() string        { return PermRead }
 func (m *Module) RoutePermissionPrefix() string { return "" }
 
 func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handler) {
-	read := nexus.RequirePermission(m.permissions, PermRead)
-	manage := nexus.RequirePermission(m.permissions, PermManage)
+	// Each gate also canonicalises the route's ids (ids.go).
+	read := gated(m.permissions, PermRead)
+	manage := gated(m.permissions, PermManage)
 	r.Route("/api/v1/events", func(er chi.Router) {
 		er.Use(gate)
 		er.With(read).Get("/", m.list)
 		er.With(manage).Post("/", m.create)
-		discipline := nexus.RequirePermission(m.permissions, PermDiscipline)
+		discipline := gated(m.permissions, PermDiscipline)
 		// The organiser picks a participant, the committee a member to decide about.
 		er.With(read).Get("/members", m.members)
 		er.With(discipline).Get("/sanctions", m.sanctions)
@@ -684,6 +685,11 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 		Note   string `json:"note"`
 	}
 	if err := decode(r, &in); err != nil || strings.TrimSpace(in.UserID) == "" {
+		nexus.Error(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+	var valid bool
+	if in.UserID, valid = canonicalID(in.UserID); !valid {
 		nexus.Error(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
