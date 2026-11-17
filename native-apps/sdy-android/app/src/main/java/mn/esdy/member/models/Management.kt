@@ -96,9 +96,14 @@ data class FinanceOverview(
     val charges: List<FinanceCharge> = emptyList(),
     val payments: List<FinancePayment> = emptyList(),
     val totals: Totals? = null,
-    val hasMore: Boolean = false,
-    val nextOffset: Int? = null,
-) {
+    override val hasMore: Boolean = false,
+    override val nextOffset: Int? = null,
+    /** Per-list cursors (backend 2026-11); absent from older servers, which page both lists with `nextOffset`. */
+    override val chargesHasMore: Boolean? = null,
+    override val paymentsHasMore: Boolean? = null,
+    override val nextChargesOffset: Int? = null,
+    override val nextPaymentsOffset: Int? = null,
+) : mn.esdy.member.core.DuesPaged {
     @Serializable
     data class Totals(val charged: Double = 0.0, val received: Double = 0.0, val outstanding: Double = 0.0, val waived: Double = 0.0)
 }

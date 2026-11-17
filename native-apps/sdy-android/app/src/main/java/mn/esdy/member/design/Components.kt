@@ -76,6 +76,7 @@ class Loader<T>(private val scope: CoroutineScope, private var fetch: suspend ()
         isLoading = true
         try {
             value = fetch()
+            loadedAt = System.currentTimeMillis()
             error = null
         } catch (e: Throwable) {
             val wrapped = APIError.wrap(e)
@@ -87,6 +88,20 @@ class Loader<T>(private val scope: CoroutineScope, private var fetch: suspend ()
     }
 
     suspend fun loadIfNeeded() { if (value == null) load() }
+
+    /** When the last good load finished (ms since the epoch). */
+    var loadedAt: Long? = null
+        private set
+
+    /**
+     * Loads again when what is shown is older than `ageMs`. Nothing shown
+     * yet is `loadIfNeeded`'s to fetch.
+     */
+    suspend fun refresh(olderThanMs: Long, now: Long = System.currentTimeMillis()) {
+        if (isLoading || value == null) return
+        loadedAt?.let { if (now - it < olderThanMs) return }
+        load()
+    }
 
     /** Fire-and-forget reload from a button. */
     fun reload() { scope.launch { load() } }

@@ -60,7 +60,11 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 app.resumeTick += 1
                 // Read elsewhere (the web, another phone): the count catches up.
-                if (app.phase == AppModel.Phase.SignedIn) app.refreshUnread()
+                // A position given or taken away meanwhile: what the app offers follows.
+                if (app.phase == AppModel.Phase.SignedIn) {
+                    app.refreshUnread()
+                    app.refreshIdentity()
+                }
             }
         }
     }

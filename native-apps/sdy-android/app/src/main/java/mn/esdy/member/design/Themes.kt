@@ -103,6 +103,28 @@ object ThemeStore {
     }
 }
 
+/**
+ * Hides the points on Нүүр (someone looking over the shoulder). Set in
+ * Профайл → «Нүүрэнд оноогоо нуух» (iOS @AppStorage home.pointsHidden).
+ */
+object HomeSettings {
+    const val pointsHiddenKey = "home.pointsHidden"
+    private var prefs: android.content.SharedPreferences? = null
+    private val state = mutableStateOf(false)
+
+    val pointsHidden: Boolean get() = state.value
+
+    fun init(context: Context) {
+        prefs = context.getSharedPreferences("sdy.prefs", Context.MODE_PRIVATE)
+        state.value = prefs?.getBoolean(pointsHiddenKey, false) ?: false
+    }
+
+    fun setPointsHidden(hidden: Boolean) {
+        state.value = hidden
+        prefs?.edit()?.putBoolean(pointsHiddenKey, hidden)?.apply()
+    }
+}
+
 /** Whether the system asks for no animation (iOS: Reduce Motion). */
 @Composable
 fun rememberReduceMotion(): Boolean {

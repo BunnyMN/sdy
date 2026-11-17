@@ -34,8 +34,10 @@ import mn.esdy.member.models.MotionList
 class DiscussionModel(
     val eventID: String,
     private val api: APIClient,
-    private val context: Context,
+    /** For opening the eID app; null in tests. */
+    private val context: Context?,
     private val scope: CoroutineScope,
+    private val pollIntervalMs: Long = POLL_EVERY_MS,
 ) {
     enum class SigningPhase { Starting, Waiting, Done, Failed }
 
@@ -113,9 +115,21 @@ class DiscussionModel(
                 phase = SigningPhase.Waiting, deadline = Instant.now().plusSeconds(POLL_FOR_SECONDS),
             )
             startTimer()
-            started.appLink?.let { openLink(context, it) }
+            started.appLink?.let { link -> context?.let { openLink(it, link) } }
             pollLoop()
         }
+    }
+
+    /**
+     * A vote left "signing" (the member came back before eID answered, or
+     * the sheet was closed): ask the server where it stands — an empty
+     * session asks about the member's own vote — without voting again.
+     */
+    fun check(motion: Motion) {
+        actionError = null
+        resumedOnce = true
+        signing = Signing(motion = motion, choice = motion.myVote?.choice ?: "", phase = SigningPhase.Waiting)
+        watch()
     }
 
     private fun watch() {
@@ -140,7 +154,7 @@ class DiscussionModel(
                 stopTimer()
                 return
             }
-            delay(POLL_EVERY_MS)
+            delay(pollIntervalMs)
             try {
                 val result = api.pollVote(eventID, current.motion.id, current.sessionID)
                 failures = 0
@@ -166,7 +180,9 @@ class DiscussionModel(
                 val wrapped = APIError.wrap(e)
                 if (wrapped.kind == APIError.Kind.Cancelled) return
                 failures += 1
-                if (!wrapped.isNetwork || failures > TOLERATED_FAILURES) {
+                // No signal, or eID's gateway failing once (502/503/504), is
+                // asked again; only a real answer or repeated failure ends it.
+                if (!wrapped.isTransient || failures > TOLERATED_FAILURES) {
                     signing = signing?.copy(phase = SigningPhase.Failed, message = wrapped.message)
                     stopTimer()
                     load()

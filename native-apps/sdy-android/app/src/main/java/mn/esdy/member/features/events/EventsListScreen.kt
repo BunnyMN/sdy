@@ -145,15 +145,12 @@ fun EventsListScreen() {
     }
 }
 
-private fun filtered(events: List<EventRecord>, filter: EventFilter): List<EventRecord> {
-    val cutoff = Instant.now().minus(Duration.ofHours(6))
-    return when (filter) {
-        EventFilter.Upcoming -> events.filter { (it.startDate ?: Instant.MIN) >= cutoff && it.status != "done" }
-            .sortedBy { it.startDate ?: Instant.MAX }
-        EventFilter.Past -> events.filter { (it.startDate ?: Instant.MIN) < cutoff || it.status == "done" }
-            .sortedByDescending { it.startDate ?: Instant.MIN }
+/** Upcoming until an event has ended (EventRecord.isPast), soonest first; past ones latest first. */
+internal fun filtered(events: List<EventRecord>, filter: EventFilter, now: Instant = Instant.now()): List<EventRecord> =
+    when (filter) {
+        EventFilter.Upcoming -> events.filter { !it.isPast(now) }.sortedBy { it.startDate ?: Instant.MAX }
+        EventFilter.Past -> events.filter { it.isPast(now) }.sortedByDescending { it.startDate ?: Instant.MIN }
     }
-}
 
 /** Upcoming / past, as a capsule switch whose knob slides between the two. */
 @Composable
@@ -213,12 +210,15 @@ internal fun EventRow(event: EventRecord, modifier: Modifier = Modifier) {
                     Text(event.location, style = SdyType.subheadline, color = Theme.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconLabel(event.capacityText, Icons.Rounded.Group, color = Theme.secondaryText, style = SdyType.caption, iconSize = 14.dp, modifier = Modifier.weight(1f))
-                if (event.status != "planned") StatusChip(Chips.eventStatus(event.status))
-                val chip = Chips.attendance(event.myStatus)
-                if (chip != null) StatusChip(chip)
-                else if (event.isFull && event.isOpen) StatusChip("Дүүрсэн", Icons.Rounded.PersonOff, Tone.Danger)
+            // One line for the count; the chips get a line of their own.
+            IconLabel(event.capacityShort, Icons.Rounded.Group, color = Theme.secondaryText, style = SdyType.caption, iconSize = 14.dp)
+            val chip = Chips.attendance(event.myStatus)
+            if (event.status != "planned" || chip != null || (event.isFull && event.isOpen)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (event.status != "planned") StatusChip(Chips.eventStatus(event.status))
+                    if (chip != null) StatusChip(chip)
+                    else if (event.isFull && event.isOpen) StatusChip("Дүүрсэн", Icons.Rounded.PersonOff, Tone.Danger)
+                }
             }
         }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.tertiaryText, modifier = Modifier.padding(top = 4.dp).size(20.dp))

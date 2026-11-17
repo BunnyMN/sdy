@@ -228,7 +228,7 @@ fun MainTabView() {
                 modifier = Modifier.align(Alignment.BottomCenter),
                 enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it },
                 exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it },
-            ) { TabBar(tabs, app.tab, app.unreadCount) { app.select(it) } }
+            ) { TabBar(tabs, app.tab) { app.select(it) } }
         }
     }
 
@@ -242,10 +242,11 @@ private val TAB_BAR_HEIGHT = 62.dp
 
 /**
  * The iOS 26 tab bar: a floating glass capsule with a margin all round; the
- * open tab sits on a lighter pill, icon and label in SDY red; a badge on Нүүр.
+ * open tab sits on a lighter pill, icon and label in SDY red. No count on
+ * Нүүр: the bell and «Танд хийх зүйл» there already show it.
  */
 @Composable
-private fun TabBar(tabs: List<TabItem>, selected: AppModel.Tab, unread: Int, onSelect: (AppModel.Tab) -> Unit) {
+private fun TabBar(tabs: List<TabItem>, selected: AppModel.Tab, onSelect: (AppModel.Tab) -> Unit) {
     Box(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 6.dp)
             .shadow(18.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black.copy(alpha = 0.6f))
@@ -266,9 +267,7 @@ private fun TabBar(tabs: List<TabItem>, selected: AppModel.Tab, unread: Int, onS
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    BadgedBox(badge = {
-                        if (item.tab == AppModel.Tab.Home && unread > 0) Badge(containerColor = Theme.danger) { Text("$unread", color = Color.White) }
-                    }) { Icon(item.icon, null, tint = tint, modifier = Modifier.size(25.dp)) }
+                    Icon(item.icon, null, tint = tint, modifier = Modifier.size(25.dp))
                     Spacer(Modifier.height(2.dp))
                     Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
                 }

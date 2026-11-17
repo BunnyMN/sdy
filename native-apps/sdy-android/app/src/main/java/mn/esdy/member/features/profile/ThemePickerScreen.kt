@@ -1,5 +1,6 @@
 package mn.esdy.member.features.profile
 
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -127,18 +128,28 @@ fun ThemePickerScreen() {
                 }
             }
 
+            val isChosen = shown == chosen
             Box(
                 Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding()
                     .fillMaxWidth().heightIn(min = 56.dp)
-                    .pressable {
+                    .pressable(enabled = !isChosen) {
                         ThemeStore.choose(shown)
                         Haptics.success()
                         nav.pop()
                     }
-                    .background(shown.accent, CircleShape),
+                    .background(if (isChosen) Color.White.copy(alpha = 0.12f) else shown.accent, CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = if (isChosen) 0.18f else 0f), CircleShape)
+                    .semantics { contentDescription = if (isChosen) "Сонгогдсон өнгө" else "Энэ өнгийг хадгалах" },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (shown == chosen) "Сонгогдсон" else "Хадгалах", style = SdyType.headline, color = Color.White)
+                if (isChosen) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Rounded.Check, null, tint = Color.White.copy(alpha = 0.75f), modifier = Modifier.size(20.dp))
+                        Text("Сонгогдсон", style = SdyType.headline, color = Color.White.copy(alpha = 0.75f))
+                    }
+                } else {
+                    Text("Хадгалах", style = SdyType.headline, color = Color.White)
+                }
             }
         }
     }

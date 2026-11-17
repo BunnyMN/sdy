@@ -17,8 +17,18 @@ import javax.crypto.spec.GCMParameterSpec
  * AfterFirstUnlockThisDeviceOnly). The ciphertext sits in private
  * SharedPreferences, which backup and device transfer exclude
  * (data_extraction_rules.xml).
+ *
+ * Unlike the iOS Keychain, nothing here outlives an uninstall: Android
+ * deletes the app's SharedPreferences and its Keystore keys with it, and
+ * backup is off (allowBackup=false), so a reinstall always starts signed out
+ * (iOS needs TokenStore.clearIfFreshInstall for that; Android does not).
  */
-class TokenStore private constructor(private val context: Context?, private val inMemory: Boolean) {
+class TokenStore private constructor(
+    private val context: Context?,
+    private val inMemory: Boolean,
+    /** Which secret: the session token, or the eID binding in flight (PendingEIDSession). */
+    private val account: String = ACCOUNT,
+) {
     private val lock = Any()
     private var cached: String? = null
     private var loaded = false
@@ -44,7 +54,7 @@ class TokenStore private constructor(private val context: Context?, private val 
             val cipher = Cipher.getInstance(TRANSFORM)
             cipher.init(Cipher.ENCRYPT_MODE, key())
             val sealed = cipher.iv + cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-            prefs()?.edit()?.putString(ACCOUNT, Base64.encodeToString(sealed, Base64.NO_WRAP))?.commit()
+            prefs()?.edit()?.putString(account, Base64.encodeToString(sealed, Base64.NO_WRAP))?.commit()
         } catch (e: Exception) {
             // The token still works from memory this run; the next launch would
             // find no token and sign the member out without saying why.
@@ -81,11 +91,11 @@ class TokenStore private constructor(private val context: Context?, private val 
     private fun clearLocked() {
         cached = null
         loaded = true
-        if (!inMemory) prefs()?.edit()?.remove(ACCOUNT)?.commit()
+        if (!inMemory) prefs()?.edit()?.remove(account)?.commit()
     }
 
     private fun read(): String? = try {
-        val raw = prefs()?.getString(ACCOUNT, null) ?: return null
+        val raw = prefs()?.getString(account, null) ?: return null
         val sealed = Base64.decode(raw, Base64.NO_WRAP)
         val cipher = Cipher.getInstance(TRANSFORM)
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, sealed, 0, IV))
@@ -116,7 +126,7 @@ class TokenStore private constructor(private val context: Context?, private val 
         private const val TRANSFORM = "AES/GCM/NoPadding"
         private const val IV = 12
 
-        fun persistent(context: Context) = TokenStore(context.applicationContext, inMemory = false)
+        fun persistent(context: Context, account: String = ACCOUNT) = TokenStore(context.applicationContext, inMemory = false, account = account)
         /** Tests and fixture mode use an in-memory store so the real one is untouched. */
         fun inMemory() = TokenStore(null, inMemory = true)
     }

@@ -36,7 +36,13 @@ import mn.esdy.member.models.EIDStart
  * offered the registration number instead — the request then goes to the eID
  * app on whichever phone holds it.
  */
-class EIDLoginModel(private val api: APIClient, private val context: Context, private val scope: CoroutineScope) {
+class EIDLoginModel(
+    private val api: APIClient,
+    /** For opening the eID app; null in tests (they sign in by registration number). */
+    private val context: Context?,
+    private val scope: CoroutineScope,
+    private val gapMs: Long = GAP_MS,
+) {
     enum class Method { SamePhone, RegisterNumber }
 
     sealed interface Phase {
@@ -107,9 +113,9 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
             }
             if (!isActive) return@launch
             begin(started)
-            PendingEIDSession.remember(context, started.sessionId)
+            PendingEIDSession.remember(started.sessionId, started.binding, started.expiresAt)
             if (method == Method.SamePhone && !AppConfig.fixturesEnabled) {
-                if (!openApp(context, started)) {
+                if (context == null || !openApp(context, started)) {
                     showRegistration(APP_MISSING_NOTICE)
                     return@launch
                 }
@@ -141,13 +147,11 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
         if (current is Phase.Waiting) {
             pollJob?.cancel()
             pollJob = scope.launch { pollLoop(current.started) }
-        } else if (sessionFromLink != null && (current == Phase.Idle || current == Phase.Starting) &&
-            PendingEIDSession.matches(context, sessionFromLink)
-        ) {
+        } else if (sessionFromLink != null && (current == Phase.Idle || current == Phase.Starting)) {
             // The app was relaunched by eID's link: pick the session up — only
             // one this phone started, so a link from someone else cannot sign
-            // the member into another account.
-            val started = EIDStart.resuming(sessionFromLink)
+            // the member into another account. Its binding goes with every poll.
+            val started = PendingEIDSession.resumable(sessionFromLink) ?: return
             begin(started)
             pollJob?.cancel()
             pollJob = scope.launch { pollLoop(started) }
@@ -180,19 +184,21 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
             } catch (e: Throwable) {
                 val wrapped = APIError.wrap(e)
                 if (wrapped.kind == APIError.Kind.Cancelled) return
+                // The server no longer knows the session: it ran out.
+                if (wrapped.status == 404) { finish(Phase.Expired); return }
                 // A 4xx is an answer, not a dropped connection.
                 val k = wrapped.kind
                 if (k is APIError.Kind.Server && k.status in 400..499) { finish(Phase.Failed(pollMessage(wrapped))); return }
                 if (k == APIError.Kind.Unauthorized) { finish(Phase.Failed(pollMessage(wrapped))); return }
                 failures += 1
-                if (failures > TOLERATED_FAILURES) { finish(Phase.Failed(wrapped.message)); return }
+                if (failures > TOLERATED_FAILURES) { finish(Phase.Failed(pollMessage(wrapped))); return }
             }
-            delay(GAP_MS)
+            delay(gapMs)
         }
     }
 
     private fun finish(phase: Phase) {
-        PendingEIDSession.forget(context)
+        PendingEIDSession.forget()
         countdownJob?.cancel()
         countdownJob = null
         this.phase = phase
@@ -201,7 +207,7 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
 
     fun cancel() {
         stop()
-        PendingEIDSession.forget(context)
+        PendingEIDSession.forget()
         phase = Phase.Idle
     }
 
@@ -222,7 +228,7 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
                 secondsLeft = max(0, left)
                 if (left <= 0 && phase is Phase.Waiting) {
                     pollJob?.cancel()
-                    PendingEIDSession.forget(context)
+                    PendingEIDSession.forget()
                     phase = Phase.Expired
                     return@launch
                 }
@@ -269,19 +275,27 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
             }
         }
 
-        fun startMessage(error: APIError): String = when (error.status) {
+        private fun knownText(error: APIError): String? = ErrorText.known[error.serverMessage.trim().lowercase()]
+
+        /** The server's own sentence when it is a known one, else by status. */
+        fun startMessage(error: APIError): String = knownText(error) ?: when (error.status) {
             400 -> "Регистрийн дугаараа шалгаад дахин оролдоно уу."
             403 -> "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
             404 -> "Энэ регистрийн дугаартай eID бүртгэл олдсонгүй. eID Mongolia аппаа идэвхжүүлсэн эсэхээ шалгана уу."
+            429 -> ErrorText.fallback(429)
             502, 503, 504 -> "eID Mongolia-тай холбогдож чадсангүй. Түр хүлээгээд дахин оролдоно уу."
             else -> error.message
         }
 
-        fun pollMessage(error: APIError): String = when (error.status) {
-            401 -> "eID баталгаажуулалт амжилтгүй боллоо. Дахин оролдоно уу."
-            403 -> "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
-            else -> error.message
-        }
+        fun pollMessage(error: APIError): String =
+            knownText(error)?.takeIf { error.serverMessage.lowercase() != "unauthorized" } ?: when (error.status) {
+                401 -> "eID баталгаажуулалт амжилтгүй боллоо. Дахин оролдоно уу."
+                // "eid_session_other_device" is known above; any other 403 is a sign-in refused.
+                403 -> "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
+                404 -> "eID хүсэлтийн хугацаа дууслаа. Дахин эхлүүлнэ үү."
+                502, 503, 504 -> "eID Mongolia-тай холбогдож чадсангүй. Түр хүлээгээд дахин оролдоно уу."
+                else -> error.message
+            }
     }
 }
 
@@ -293,21 +307,72 @@ class EIDLoginModel(private val api: APIClient, private val context: Context, pr
 object PendingEIDSession {
     private const val ID_KEY = "eid.pendingSession"
     private const val AT_KEY = "eid.pendingSessionAt"
+    private const val EXPIRES_KEY = "eid.pendingSessionExpires"
     /** Longer than any eID session lives (EIDLoginModel's backstop). */
     private const val LIFETIME_MS = 15L * 60 * 1000
 
-    private fun prefs(context: Context) = context.getSharedPreferences("sdy.prefs", Context.MODE_PRIVATE)
+    /** The id and the end: SharedPreferences in the app, memory in tests and fixtures. */
+    var defaults: KeyValues = KeyValues.Memory()
+    /**
+     * The binding proves to the server that this app started the session; it
+     * is a credential for the poll, so it is kept Keystore-encrypted like the
+     * session token (iOS: the Keychain), not in plain preferences.
+     */
+    var bindingStore: TokenStore = TokenStore.inMemory()
 
-    fun remember(context: Context, id: String) {
-        prefs(context).edit().putString(ID_KEY, id).putLong(AT_KEY, System.currentTimeMillis()).apply()
+    fun install(context: Context) {
+        defaults = KeyValues.Prefs(context.getSharedPreferences("sdy.prefs", Context.MODE_PRIVATE))
+        bindingStore = TokenStore.persistent(context, account = "eid_binding")
     }
 
-    fun matches(context: Context, id: String): Boolean {
-        if (id.isEmpty() || prefs(context).getString(ID_KEY, null) != id) return false
-        return System.currentTimeMillis() - prefs(context).getLong(AT_KEY, 0) < LIFETIME_MS
+    fun remember(id: String, binding: String? = null, expiresAt: String? = null) {
+        defaults.putString(ID_KEY, id)
+        defaults.putLong(AT_KEY, System.currentTimeMillis())
+        if (!expiresAt.isNullOrEmpty()) defaults.putString(EXPIRES_KEY, expiresAt) else defaults.remove(EXPIRES_KEY)
+        if (!binding.isNullOrEmpty()) bindingStore.save(binding) else bindingStore.clear()
     }
 
-    fun forget(context: Context) {
-        prefs(context).edit().remove(ID_KEY).remove(AT_KEY).apply()
+    fun matches(id: String): Boolean {
+        if (id.isEmpty() || defaults.getString(ID_KEY) != id) return false
+        return System.currentTimeMillis() - defaults.getLong(AT_KEY) < LIFETIME_MS
+    }
+
+    /** The session as this phone kept it, for the poll after a relaunch: its binding and its end. Null for any other session. */
+    fun resumable(id: String): EIDStart? {
+        if (!matches(id)) return null
+        return EIDStart.resuming(id, binding = bindingStore.token, expiresAt = defaults.getString(EXPIRES_KEY))
+    }
+
+    fun forget() {
+        defaults.remove(ID_KEY)
+        defaults.remove(AT_KEY)
+        defaults.remove(EXPIRES_KEY)
+        bindingStore.clear()
+    }
+}
+
+/** A few small values kept between launches (iOS UserDefaults). */
+interface KeyValues {
+    fun getString(key: String): String?
+    fun getLong(key: String): Long
+    fun putString(key: String, value: String)
+    fun putLong(key: String, value: Long)
+    fun remove(key: String)
+
+    class Prefs(private val prefs: android.content.SharedPreferences) : KeyValues {
+        override fun getString(key: String) = prefs.getString(key, null)
+        override fun getLong(key: String) = prefs.getLong(key, 0)
+        override fun putString(key: String, value: String) = prefs.edit().putString(key, value).apply()
+        override fun putLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()
+        override fun remove(key: String) = prefs.edit().remove(key).apply()
+    }
+
+    class Memory : KeyValues {
+        private val values = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        override fun getString(key: String) = values[key] as? String
+        override fun getLong(key: String) = values[key] as? Long ?: 0
+        override fun putString(key: String, value: String) { values[key] = value }
+        override fun putLong(key: String, value: Long) { values[key] = value }
+        override fun remove(key: String) { values.remove(key) }
     }
 }

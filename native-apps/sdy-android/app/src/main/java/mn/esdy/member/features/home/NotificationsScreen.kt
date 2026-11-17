@@ -1,5 +1,12 @@
 package mn.esdy.member.features.home
 
+import mn.esdy.member.core.appendingUnique
+import mn.esdy.member.design.BarIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,7 +96,7 @@ fun NotificationsScreen() {
         scope.launch {
             try {
                 val page = app.api.notifications(nextOffset)
-                items = items + page.items
+                items = items.appendingUnique(page.items) { it.id }
                 hasMore = page.hasMore
                 nextOffset = page.nextOffset ?: items.size
             } catch (_: Throwable) {
@@ -100,11 +107,10 @@ fun NotificationsScreen() {
     fun open(item: MemberNotification) {
         actionError = null
         scope.launch {
-            if (!item.isRead && !app.isOffline) {
-                try { app.api.markRead(item.id) } catch (_: Throwable) {}
+            // Shown as read only once the server has it so.
+            if (!item.isRead && !app.isOffline && app.markNotificationRead(item.id)) {
                 items = items.map { if (it.id == item.id) it.copy(readAt = Instant.now().toString()) else it }
                 unread = maxOf(0, unread - 1)
-                app.unreadCount = unread
             }
             try {
                 // From the list, a screen opens on top of it (in Нүүр or Профайл,
@@ -135,7 +141,21 @@ fun NotificationsScreen() {
         inline = true,
         onRefresh = { load() },
         actions = {
-            if (unread > 0) BarTextButton("Бүгдийг уншсан", enabled = !busy && !app.isOffline) { readAll() }
+            // Small, and only while something is unread.
+            if (unread > 0) {
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    BarIconButton(Icons.Rounded.MoreHoriz, "Мэдэгдлийн үйлдэл") { menu = true }
+                    DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Theme.cardRaised) {
+                        DropdownMenuItem(
+                            text = { Text("Бүгдийг уншсанд тооцох", color = if (!busy && !app.isOffline) Color.White else Theme.tertiaryText) },
+                            leadingIcon = { Icon(Icons.Rounded.CheckCircleOutline, null, tint = Theme.secondaryText) },
+                            enabled = !busy && !app.isOffline,
+                            onClick = { menu = false; readAll() },
+                        )
+                    }
+                }
+            }
         },
     ) {
         val err = error

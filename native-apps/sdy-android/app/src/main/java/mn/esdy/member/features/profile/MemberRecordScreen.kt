@@ -39,6 +39,7 @@ import mn.esdy.member.design.SkeletonList
 import mn.esdy.member.design.Theme
 import mn.esdy.member.design.ToggleRow
 import mn.esdy.member.models.MemberProfile
+import mn.esdy.member.core.appendingUnique
 import mn.esdy.member.models.MemberRecord
 
 @Composable
@@ -52,6 +53,10 @@ fun MemberRecordScreen() {
     var notifications by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<Pair<String, NoticeKind>?>(null) }
+    var saved by remember { mutableStateOf(MemberProfile()) }
+    var loadingMore by remember { mutableStateOf(false) }
+    val current = MemberProfile(phone.trim(), residence.trim(), notifications)
+    val changed = current != saved
 
     suspend fun load() {
         try {
@@ -60,6 +65,7 @@ fun MemberRecordScreen() {
             phone = r.profile.phone
             residence = r.profile.residence
             notifications = r.profile.notificationsEnabled
+            saved = MemberProfile(phone.trim(), residence.trim(), notifications)
             error = null
         } catch (e: Throwable) {
             error = APIError.wrap(e)
@@ -70,8 +76,9 @@ fun MemberRecordScreen() {
         saving = true; notice = null
         scope.launch {
             try {
-                val saved = app.api.saveMemberProfile(MemberProfile(phone.trim(), residence.trim(), notifications))
-                phone = saved.phone; residence = saved.residence; notifications = saved.notificationsEnabled
+                val answer = app.api.saveMemberProfile(MemberProfile(phone.trim(), residence.trim(), notifications))
+                phone = answer.phone; residence = answer.residence; notifications = answer.notificationsEnabled
+                saved = MemberProfile(phone.trim(), residence.trim(), notifications)
                 Haptics.success()
                 notice = "Хадгалагдлаа." to NoticeKind.Success
             } catch (e: Throwable) {
@@ -79,6 +86,20 @@ fun MemberRecordScreen() {
             } finally {
                 saving = false
             }
+        }
+    }
+
+    fun moreHistory() {
+        val r = record ?: return
+        loadingMore = true
+        scope.launch {
+            try {
+                val page = app.api.memberRecord(offset = r.nextOffset ?: r.history.size)
+                record = r.copy(history = r.history.appendingUnique(page.history) { it.id }, hasMore = page.hasMore, nextOffset = page.nextOffset)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+            } finally { loadingMore = false }
         }
     }
 
@@ -136,13 +157,13 @@ fun MemberRecordScreen() {
                             FormTextField(residence, { residence = it.take(200) }, "Жишээ: Дархан-Уул, Дархан")
                         }
                         ListDivider()
-                        ToggleRow("Апп дотор шинэ мэдэгдэл хүлээн авах", notifications, { notifications = it })
+                        ToggleRow("Мэдэгдэл хүлээн авах (апп ба push)", notifications, { notifications = it })
                         notice?.let { (text, kind) ->
                             ListDivider()
                             NoticeView(text, kind, Modifier.padding(vertical = 11.dp))
                         }
                         ListDivider()
-                        RowButton("Хадгалах", center = true, busy = saving, enabled = !saving && !app.isOffline) { save() }
+                        RowButton("Хадгалах", center = true, busy = saving, enabled = !saving && !app.isOffline && changed) { save() }
                     }
                 }
                 item {
@@ -155,6 +176,10 @@ fun MemberRecordScreen() {
                                 Text(Formatters.dateTime(h.createdAt), style = SdyType.caption, color = Theme.secondaryText)
                                 if (h.reason.isNotEmpty()) Text(h.reason, style = SdyType.footnote, color = Color.White)
                             }
+                        }
+                        if (r.hasMore) {
+                            ListDivider()
+                            RowButton("Цааш үзэх", enabled = !loadingMore) { moreHistory() }
                         }
                     }
                 }

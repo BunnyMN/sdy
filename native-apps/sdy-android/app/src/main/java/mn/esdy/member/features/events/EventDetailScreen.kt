@@ -161,7 +161,8 @@ fun EventDetailScreen(eventId: String) {
 
     val event = loader.value
     InlineListScreen(
-        title = event?.title ?: "Арга хэмжээ",
+        // The title is the card's headline; the bar does not repeat it.
+        title = "Арга хэмжээ",
         onRefresh = if (event != null) ({ loader.load(); discussion.load(); tasks.load() }) else null,
     ) {
         val error = loader.error
@@ -251,7 +252,7 @@ private fun Summary(event: EventRecord) {
             if (event.description.isNotEmpty()) Text(event.description, style = SdyType.body, color = Color.White)
         }
         ListDivider()
-        val time = event.endsAt?.let { "${Formatters.dateTime(event.startsAt)} – ${Formatters.dateTime(it)}" } ?: Formatters.dateTime(event.startsAt)
+        val time = Formatters.range(event.startsAt, event.endsAt)
         DetailRow("Хэзээ", Icons.Rounded.Schedule, time)
         if (event.location.isNotEmpty()) { ListDivider(); DetailRow("Хаана", Icons.Rounded.Place, event.location) }
         ListDivider()

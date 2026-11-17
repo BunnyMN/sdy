@@ -1,5 +1,6 @@
 package mn.esdy.member.design
 
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -132,8 +133,10 @@ fun GlassCapsule(title: String, modifier: Modifier = Modifier, onClick: () -> Un
         style = SdyType.subheadline.copy(fontWeight = FontWeight.SemiBold),
         color = Color.White,
         modifier = modifier.pressable(onClick = onClick)
+            .heightIn(min = Theme.minTap)
             .background(GlassFill, CircleShape)
             .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape)
+            .wrapContentHeight()
             .padding(horizontal = 22.dp, vertical = 10.dp),
     )
 }

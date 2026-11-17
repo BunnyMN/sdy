@@ -30,6 +30,8 @@ class APIError(
         else -> 0
     }
     val isNetwork: Boolean get() = kind == Kind.Network
+    /** Worth asking again: no connection, or a gateway between here and eID that failed once (502/503/504). */
+    val isTransient: Boolean get() = isNetwork || status in setOf(502, 503, 504)
 
     override val message: String get() = ErrorText.message(this)
 
@@ -77,6 +79,69 @@ object ErrorText {
         "no such event" to "Арга хэмжээ олдсонгүй. Өөр салбарынх байж магадгүй.",
         "no such task" to "Ажил үүрэг олдсонгүй.",
         "no such motion" to "Хэлэлцэх асуудал олдсонгүй.",
+        "this event is not open" to "Энэ арга хэмжээ нээлттэй биш байна.",
+        "capacity is below the number of participants" to "Хүний тоо одоо бүртгүүлсэн оролцогчдоос цөөн байж болохгүй.",
+        "points cannot change after attendance has been recorded" to "Ирц бүртгэгдсэний дараа оноог өөрчлөх боломжгүй.",
+        "that person is not on this event's list" to "Энэ хүн арга хэмжээний жагсаалтад алга. Шинэчилнэ үү.",
+        "that person is not a member of this organisation" to "Энэ хүн салбарын гишүүн биш байна.",
+        "that person is not a member of this branch" to "Энэ хүн салбарын гишүүн биш байна.",
+        "provide a reason for the attendance correction" to "Ирц залруулах шалтгаанаа бичнэ үү.",
+        "note is too long" to "Тайлбар хэт урт байна.",
+        "title is required" to "Нэрээ бичнэ үү.",
+        "title is too long" to "Нэр хэт урт байна.",
+        "description is too long" to "Тайлбар хэт урт байна.",
+        "location is too long" to "Байршил хэт урт байна.",
+        "ends_at is before starts_at" to "Дуусах цаг эхлэх цагаас өмнө байна.",
+        "capacity must be a positive number" to "Хүний тоо эерэг тоо байна.",
+        // self-actions, cancelled events, check-in window (backend PR #46)
+        "you cannot check in with a check-in code you issued" to "Өөрийн гаргасан QR кодоор ирцээ бүртгэх боломжгүй. Өөр зохион байгуулагчийн кодыг уншуулна уу.",
+        "check-in is open from 2 hours before the event starts until 2 hours after it ends" to "Ирц арга хэмжээ эхлэхээс 2 цагийн өмнөөс дууссанаас хойш 2 цаг хүртэл бүртгэгдэнэ.",
+        "you cannot change the exemption of your own charge" to "Өөрийнхөө хураамжийн чөлөөлөлтийг өөрөө өөрчлөх боломжгүй. Өөр санхүүчид хандана уу.",
+        "this charge has a pending payment report; approve or reject it before exempting the charge" to "Энэ хураамжид хүлээгдэж буй төлбөрийн мэдэгдэл байна. Чөлөөлөхийн өмнө төлбөрийг батлах эсвэл татгалзана уу.",
+        "this idempotency-key was already used for a different decision" to "Шийдвэрийг өөр утгатайгаар давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу.",
+        "idempotency-key must be a uuid" to "Шийдвэрийн түлхүүр буруу байна. Аппаа шинэчилнэ үү.",
+        "no waived charge with that id" to "Хураамж олдсонгүй эсвэл чөлөөлөгдөөгүй байна.",
+        "provide the reason for withdrawing the exemption" to "Чөлөөлөлтийг буцаах шалтгаанаа бичнэ үү.",
+        "you cannot record your own attendance" to "Өөрийнхөө ирц, оноог өөрөө батлах боломжгүй. Өөр зохион байгуулагчид хандана уу.",
+        "you cannot change your own attendance" to "Өөрийнхөө ирц, оноог өөрөө батлах боломжгүй. Өөр зохион байгуулагчид хандана уу.",
+        "you cannot award points to yourself" to "Өөртөө оноо олгох боломжгүй. Өөр зохион байгуулагчид хандана уу.",
+        "you cannot confirm your own task" to "Өөрийнхөө ажлыг өөрөө батлах боломжгүй.",
+        "you cannot confirm your own work" to "Өөрийнхөө ажлыг өөрөө батлах боломжгүй.",
+        "you cannot review your own payment" to "Өөрийнхөө төлбөрийг өөрөө батлах боломжгүй. Өөр санхүүчид хандана уу.",
+        "you cannot approve your own payment" to "Өөрийнхөө төлбөрийг өөрөө батлах боломжгүй. Өөр санхүүчид хандана уу.",
+        "you cannot waive your own dues" to "Өөрийнхөө хураамжийг өөрөө чөлөөлөх боломжгүй. Өөр санхүүчид хандана уу.",
+        "you cannot waive your own charge" to "Өөрийнхөө хураамжийг өөрөө чөлөөлөх боломжгүй. Өөр санхүүчид хандана уу.",
+        "a charge with a pending payment cannot be waived" to "Хүлээгдэж буй төлбөртэй хураамжийг чөлөөлөх боломжгүй. Эхлээд төлбөрийг батлах эсвэл татгалзана уу.",
+        "this charge has a pending payment" to "Хүлээгдэж буй төлбөртэй хураамжийг чөлөөлөх боломжгүй. Эхлээд төлбөрийг батлах эсвэл татгалзана уу.",
+        // tasks
+        "every place on this task is taken" to "Энэ ажлын бүх суудал дүүрсэн байна.",
+        "you already have this task" to "Та энэ ажлыг аль хэдийн авсан байна.",
+        "this member already has this task" to "Энэ гишүүн уг ажлыг аль хэдийн авсан байна.",
+        "there is nothing to answer on this task" to "Энэ ажилд хариулах санал алга. Шинэчилнэ үү.",
+        "only a task the member has accepted can be confirmed" to "Зөвхөн хүлээн авсан ажлын гүйцэтгэлийг батална.",
+        "this work has not been confirmed" to "Энэ ажлын гүйцэтгэл батлагдаагүй байна.",
+        "fewer places than people already doing it" to "Суудлын тоо ажлыг авсан хүмүүсээс цөөн байж болохгүй.",
+        "points cannot change after the work has been confirmed" to "Гүйцэтгэл батлагдсаны дараа оноог өөрчлөх боломжгүй.",
+        // discussion
+        "only the member who raised it or a manager may do this" to "Зөвхөн асуудлыг дэвшүүлсэн гишүүн эсвэл зохион байгуулагч үүнийг хийнэ.",
+        "only an issue that is not yet under vote can be edited" to "Санал хураалт эхэлсэн асуудлыг засах боломжгүй.",
+        "only an issue that is not yet under vote can be withdrawn" to "Санал хураалт эхэлсэн асуудлыг буцаах боломжгүй.",
+        "the vote on this issue has already been opened or closed" to "Энэ асуудлын санал хураалт аль хэдийн нээгдсэн эсвэл хаагдсан.",
+        "the vote closed before your signature arrived" to "Гарын үсэг ирэхээс өмнө санал хураалт хаагдсан тул санал тоологдсонгүй.",
+        "this signature has already been counted" to "Энэ гарын үсэг аль хэдийн тоологдсон байна.",
+        "no such signature" to "Гарын үсгийн хүсэлт олдсонгүй. Дахин санал өгнө үү.",
+        "you cannot report your own issue" to "Өөрийнхөө асуудлыг мэдээлэх боломжгүй.",
+        "only members of this branch may report an issue" to "Зөвхөн энэ салбарын гишүүд асуудал мэдээлнэ.",
+        "you cannot block yourself" to "Өөрийгөө блоклох боломжгүй.",
+        "no such member" to "Гишүүн олдсонгүй.",
+        "reason is too long" to "Шалтгаан хэт урт байна.",
+        // control committee
+        "a decision about yourself is for the rest of the committee" to "Өөрийнхөө талаарх шийдвэрийг хорооны бусад гишүүд гаргана.",
+        "no such member in this branch" to "Энэ салбарт ийм гишүүн алга.",
+        "choose the member" to "Гишүүнээ сонгоно уу.",
+        "a reason is required" to "Шалтгаанаа бичнэ үү.",
+        "points must be between 0 and 10000" to "Оноо 0–10000 хооронд байна.",
+        "idempotency key was used for a different request" to "Шийдвэрийг давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу.",
         // discussion & votes
         "you have already voted on this issue" to "Та энэ асуудалд аль хэдийн санал өгсөн байна.",
         "this issue is not under vote" to "Энэ асуудлын санал хураалт явагдаагүй байна.",
@@ -97,6 +162,13 @@ object ErrorText {
         "request key was used for a different payment" to "Мэдэгдлийг давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу.",
         "no such charge" to "Хураамж олдсонгүй.",
         "no unwaived charge with that id" to "Хураамж олдсонгүй эсвэл чөлөөлөгдсөн байна.",
+        "no such payment" to "Төлбөр олдсонгүй.",
+        "this payment cannot make that transition" to "Төлбөрийн төлөв өөрчлөгдсөн байна. Шинэчлээд дахин оролдоно уу.",
+        "approval exceeds the outstanding balance" to "Батлах дүн үлдэгдлээс их байна.",
+        "provide the reason for exemption" to "Чөлөөлөх шалтгаанаа бичнэ үү.",
+        "choose approve, reject or reverse and provide a reason" to "Шийдвэр болон шалтгаанаа бичнэ үү.",
+        "configure dues before creating charges" to "Хураамжийн тохиргоо хийгдээгүй байна. Админд хандана уу.",
+        "dues settings are changed by an administrator" to "Хураамжийн тохиргоог зөвхөн админ өөрчилнө.",
         // auth
         "invalid credentials" to "Имэйл эсвэл нууц үг буруу байна.",
         "invalid email or password" to "Имэйл эсвэл нууц үг буруу байна.",
@@ -104,6 +176,12 @@ object ErrorText {
         "eid mongolia session check failed" to "eID Mongolia-тай холбогдож чадсангүй. Дахин оролдоно уу.",
         "session_id is required" to "eID хүсэлт олдсонгүй. Дахин эхлүүлнэ үү.",
         "invalid callback url" to "eID буцах хаяг буруу байна.",
+        "invalid eid callback url" to "eID буцах хаяг буруу байна. Аппаа шинэчилнэ үү.",
+        "eid mongolia session could not be started" to "eID Mongolia хүсэлт эхлүүлж чадсангүй. Түр хүлээгээд дахин оролдоно уу.",
+        "eid session expired" to "eID хүсэлтийн хугацаа дууслаа. Дахин эхлүүлнэ үү.",
+        "eid_session_other_device" to "Энэ eID хүсэлтийг өөр төхөөрөмж эхлүүлсэн байна. Дахин эхлүүлнэ үү.",
+        "e-id verification failed" to "eID баталгаажуулалт амжилтгүй боллоо.",
+        "регистрийн дугаар олдсонгүй эсвэл eid апп-д бүртгэлгүй байна" to "Регистрийн дугаар олдсонгүй эсвэл eID апп-д бүртгэлгүй байна. eID Mongolia аппаа идэвхжүүлсэн эсэхээ шалгана уу.",
         "unauthorized" to "Нэвтрэх хугацаа дууссан. Дахин нэвтэрнэ үү.",
         "forbidden" to "Энэ үйлдлийг хийх эрх танд алга.",
     )
@@ -135,8 +213,31 @@ object ErrorText {
             error.code?.let { transferCodes[it] }
                 ?: transferCodes[raw]
                 ?: known[raw.lowercase()]
-                ?: if (raw.startsWith("transfer_")) "Үйлдлийг гүйцэтгэж чадсангүй. Шинэчлээд дахин оролдоно уу." else fallback(k.status)
+                ?: if (raw.startsWith("transfer_")) "Үйлдлийг гүйцэтгэж чадсангүй. Шинэчлээд дахин оролдоно уу." else generic(raw.lowercase(), k.status)
         }
+    }
+
+    /**
+     * Server sentences not (yet) known word for word, by what they are about.
+     * The backend is adding refusals for officers acting on themselves (403)
+     * and for actions on cancelled events (409); their exact wording may
+     * still change, so they are recognised by their parts.
+     */
+    fun generic(raw: String, status: Int): String {
+        if (status == 403 && (raw.contains(" own ") || raw.endsWith(" own") || raw.contains("yourself") || raw.contains("self"))) {
+            return "Өөрийнхөө талаар энэ үйлдлийг хийх боломжгүй. Өөр эрх бүхий хүнд хандана уу."
+        }
+        if (status == 409 && (raw.contains("cancelled") || raw.contains("canceled"))) {
+            return "Энэ арга хэмжээ цуцлагдсан тул үйлдлийг хийх боломжгүй."
+        }
+        if (status == 409 && (raw.contains("pending payment") || (raw.contains("pending") && raw.contains("waive")))) {
+            return "Хүлээгдэж буй төлбөртэй хураамжийг чөлөөлөх боломжгүй. Эхлээд төлбөрийг батлах эсвэл татгалзана уу."
+        }
+        if (status == 409 && raw.contains("idempotency")) {
+            return "Шийдвэрийг давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу."
+        }
+        if (status == 400 && raw.contains("too long")) return "Оруулсан текст хэт урт байна."
+        return fallback(status)
     }
 
     fun fallback(status: Int): String = when (status) {

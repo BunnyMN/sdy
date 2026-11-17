@@ -81,10 +81,12 @@ fun DuesScreen() {
         loadingMore = true
         scope.launch {
             try {
-                val next = app.api.myDues(offset = current.nextOffset ?: current.charges.size)
+                // Charges and payments run out separately; each list asks for its own next rows.
+                val query = current.nextPageQuery(current.charges.size, current.payments.size) ?: return@launch
+                val next = app.api.myDues(page = query)
                 page = next.copy(
-                    charges = current.charges + next.charges,
-                    payments = current.payments + next.payments,
+                    charges = current.charges.appendingUnique(next.charges) { it.id },
+                    payments = current.payments.appendingUnique(next.payments) { it.id },
                     totals = next.totals ?: current.totals,
                 )
             } catch (_: Exception) {

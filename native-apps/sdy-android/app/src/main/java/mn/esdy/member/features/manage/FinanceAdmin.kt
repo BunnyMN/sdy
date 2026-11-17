@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -21,28 +22,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import mn.esdy.member.app.LocalApp
 import mn.esdy.member.core.*
 import mn.esdy.member.design.*
+import mn.esdy.member.features.events.IconLabel
 import mn.esdy.member.models.FinanceCharge
 import mn.esdy.member.models.FinanceOverview
 import mn.esdy.member.models.FinancePayment
 
 private enum class FinanceTab(val title: String) { Payments("Төлөлт"), Charges("Хураамж") }
 
-private enum class DecisionKind(val title: String) { Approve("Батлах"), Reject("Татгалзах"), Reverse("Буцаах"), Waive("Чөлөөлөх") }
+private enum class DecisionKind(val title: String) { Approve("Батлах"), Reject("Татгалзах"), Reverse("Буцаах"), Waive("Чөлөөлөх"), Unwaive("Чөлөөлөлтийг буцаах") }
 
 private data class Decision(val kind: DecisionKind, val id: String, val title: String)
 
-/** The last twelve months, newest first ("2026-11"). */
-private val periods: List<String> = run {
-    val f = DateTimeFormatter.ofPattern("yyyy-MM")
-    val now = YearMonth.now(Formatters.zone)
-    (0 until 12).map { now.minusMonths(it.toLong()).format(f) }
-}
+/**
+ * The last twelve months, newest first ("2026-11"), in Ulaanbaatar — worked
+ * out each time, so a screen left open across the 1st offers the new month.
+ */
+private val periods: List<String> get() = Formatters.recentPeriods()
 
 /**
  * Санхүү: the treasurer sees every charge and payment, confirms or rejects
@@ -72,12 +71,12 @@ fun FinanceAdminScreen() {
 
     fun more() {
         val current = data ?: return
-        val next = current.nextOffset ?: return
+        val query = current.nextPageQuery(current.charges.size, current.payments.size) ?: return
         busy = true
         scope.launch {
             try {
-                val page = app.api.financeOverview(period = period, offset = next)
-                data = page.copy(charges = current.charges + page.charges, payments = current.payments + page.payments)
+                val page = app.api.financeOverview(period = period, page = query)
+                data = page.copy(charges = current.charges.appendingUnique(page.charges) { it.id }, payments = current.payments.appendingUnique(page.payments) { it.id })
             } catch (e: Throwable) { actionError = APIError.wrap(e).message } finally { busy = false }
         }
     }
@@ -90,6 +89,7 @@ fun FinanceAdminScreen() {
                 DecisionKind.Reject -> app.api.reviewPayment(decision.id, "reject", reason)
                 DecisionKind.Reverse -> app.api.reviewPayment(decision.id, "reverse", reason)
                 DecisionKind.Waive -> app.api.waiveCharge(decision.id, reason)
+                DecisionKind.Unwaive -> app.api.unwaiveCharge(decision.id, reason)
             }
             notice = "Хадгалагдлаа."
             Haptics.success()
@@ -209,8 +209,18 @@ private fun Charges(list: List<FinanceCharge>, enabled: Boolean, onDecide: (Deci
                 )
                 if (c.waived) {
                     Text("Чөлөөлсөн: ${c.waiverReason}", style = SdyType.caption, color = Theme.warning)
+                    SecondaryButton("Чөлөөлөлтийг буцаах", color = Theme.danger, enabled = enabled) {
+                        onDecide(Decision(DecisionKind.Unwaive, c.id, "${c.name} · ${c.period}"))
+                    }
                 } else if (c.balance > 0) {
-                    SecondaryButton("Чөлөөлөх", enabled = enabled) { onDecide(Decision(DecisionKind.Waive, c.id, "${c.name} · ${c.period}")) }
+                    if (c.pending > 0) {
+                        // The server refuses it (409): the transfer would never be confirmed.
+                        IconLabel(
+                            "Хүлээгдэж буй төлбөр ${Formatters.money(c.pending)} байна. Чөлөөлөхийн өмнө төлбөрийг батлах эсвэл татгалзана уу.",
+                            Icons.Rounded.HourglassTop, color = Theme.warning, style = SdyType.caption, iconSize = 14.dp,
+                        )
+                    }
+                    SecondaryButton("Чөлөөлөх", enabled = enabled && c.pending <= 0) { onDecide(Decision(DecisionKind.Waive, c.id, "${c.name} · ${c.period}")) }
                 }
             }
         }
