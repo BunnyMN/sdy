@@ -97,19 +97,19 @@ func parseFace(name string, raw []byte) (*face, error) {
 	f := &face{
 		name: name, raw: raw, tables: tables, sf: sf,
 		unitsPerEm: int(binary.BigEndian.Uint16(head[18:20])),
-		bbox: [4]int{int(int16(binary.BigEndian.Uint16(head[36:38]))), int(int16(binary.BigEndian.Uint16(head[38:40]))),
-			int(int16(binary.BigEndian.Uint16(head[40:42]))), int(int16(binary.BigEndian.Uint16(head[42:44])))},
+		bbox: [4]int{i16(head[36:38]), i16(head[38:40]),
+			i16(head[40:42]), i16(head[42:44])},
 		longLoca:  binary.BigEndian.Uint16(head[50:52]) == 1,
 		numGlyphs: int(binary.BigEndian.Uint16(tables["maxp"][4:6])),
 		gids:      map[rune]uint16{},
 		widths:    map[uint16]int{},
 	}
 	hhea := tables["hhea"]
-	f.ascent = int(int16(binary.BigEndian.Uint16(hhea[4:6])))
-	f.descent = int(int16(binary.BigEndian.Uint16(hhea[6:8])))
+	f.ascent = i16(hhea[4:6])
+	f.descent = i16(hhea[6:8])
 	f.capHeight = f.ascent * 7 / 10
 	if os2 := tables["OS/2"]; len(os2) >= 90 {
-		f.capHeight = int(int16(binary.BigEndian.Uint16(os2[88:90])))
+		f.capHeight = i16(os2[88:90])
 	}
 	return f, nil
 }
@@ -173,7 +173,7 @@ func (f *face) components(gid int) []int {
 		return nil
 	}
 	g := glyf[start:end]
-	if int16(binary.BigEndian.Uint16(g[0:2])) >= 0 {
+	if i16(g[0:2]) >= 0 {
 		return nil
 	}
 	var out []int
@@ -256,6 +256,12 @@ func (f *face) subset(used []uint16) []byte {
 	return assembleFont(tables)
 }
 
+// i16 reads a signed 16-bit font field: the bits are a two's-complement
+// int16 by the TrueType specification, so the conversion is the reading.
+func i16(b []byte) int {
+	return int(int16(binary.BigEndian.Uint16(b))) // #nosec G115 -- a signed field, reinterpreted on purpose
+}
+
 func checksum(b []byte) uint32 {
 	var sum uint32
 	for i := 0; i < len(b); i += 4 {
@@ -281,10 +287,10 @@ func assembleFont(tables map[string][]byte) []byte {
 	var out bytes.Buffer
 	header := make([]byte, 12+16*n)
 	binary.BigEndian.PutUint32(header[0:], 0x00010000)
-	binary.BigEndian.PutUint16(header[4:], uint16(n))             // #nosec G115 -- a dozen tables
-	binary.BigEndian.PutUint16(header[6:], uint16(searchRange))   // #nosec G115 -- as above
-	binary.BigEndian.PutUint16(header[8:], uint16(entrySelector)) // #nosec G115 -- as above
-	binary.BigEndian.PutUint16(header[10:], uint16(n*16-searchRange))
+	binary.BigEndian.PutUint16(header[4:], uint16(n))                 // #nosec G115 -- a dozen tables
+	binary.BigEndian.PutUint16(header[6:], uint16(searchRange))       // #nosec G115 -- as above
+	binary.BigEndian.PutUint16(header[8:], uint16(entrySelector))     // #nosec G115 -- as above
+	binary.BigEndian.PutUint16(header[10:], uint16(n*16-searchRange)) // #nosec G115 -- a dozen tables
 	offset := len(header)
 	var body bytes.Buffer
 	headOffset := 0

@@ -254,7 +254,7 @@ func (w *Writer) writeFont(o *objects, style Style) int {
 	// same for the same text.
 	h := sha256.New()
 	for _, g := range gids {
-		fmt.Fprintf(h, "%d,", g)
+		_, _ = fmt.Fprintf(h, "%d,", g)
 	}
 	sum := h.Sum(nil)
 	tag := make([]byte, 6)

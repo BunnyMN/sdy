@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Гарын үсэгтэй архив ба PDF саналын хуудас (events 1.7.0, 00125)
+
+- **Архив** (`/api/v1/archive`, вэб `/member/archive`): хурлын тэмдэглэл, шийдвэр, санал хураалтын
+  протоколыг PDF болгож, шаардлагатай хүн бүр eID PIN2-оор дараалан зурна. Илгээхэд дугаар
+  (`2026/014`) ба PDF хөлдөнө; зурагч бүр өмнөх зурагчийн eID-ээр тамгалсан PDF-ийг зурж, зөвхөн
+  incremental revision хадгалагдана; хувилбар бүр үлдэнэ. «Бүх тэргүүлэгч» preset ба гараар сонголт.
+  Эрх `archive.read` (гишүүн), `archive.manage` (Тэргүүн, Нарийн бичиг — migration 00125, админ).
+- **Протокол автоматаар:** санал хураалт хаагдахад Тэргүүн, Нарийн бичигт очих протокол үүснэ
+  (хоёулаа сул бол `no_signers` төсөл); `POST …/motions/{id}/protocol` дахин үүсгэнэ.
+- **Саналын хуудас PDF:** санал бүр PDF болж PIN2-оор зурагдана (`digest_hex` = PDF-ийн SHA-256),
+  eID-ийн тамгалсан PDF хадгалагдана; `GET …/motions/{id}/ballot`, `…/votes/{userID}/ballot`.
+  `…/vote`, `…/vote/poll` гэрээ өөрчлөгдөөгүй; `Motion.protocol_id`, `my_vote.ballot`,
+  `my_vote.ballot_signed` нэмэгдсэн.
+- **Платформ:** `nexus.DocumentSignatureRequest.CallbackURL`, `RailSignatureOnly`,
+  `nexus.ErrSignedDocumentUnavailable`, `SignedDocument.Signer*` — rail-only PDF ёслол fallback-гүй.
+  eID mock нь rail-only баримтад incremental гарын үсэг нэмнэ.
+- **PDF үүсгэгч** (`internal/apps/events/pdfdoc`): детерминист A4 PDF, Inter (SIL OFL) фонт subset-ээр
+  суулгагдсан, Монгол кирилл (Ө, Ү) хайгдаж хуулагдана.
+
 ### Added — eID гарын үсгийн (PIN2) туршилт (events 1.6.1)
 
 - `POST /api/v1/events/sign-test` ба `/sign-test/poll`: гишүүн өөрийн eID-ээр хор хөнөөлгүй баримт
