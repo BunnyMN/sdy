@@ -203,6 +203,85 @@ final class PushAndIdentityTests: XCTestCase {
         XCTAssertEqual(seen.count("GET /api/v1/auth/me"), 1)
     }
 
+    /// After a partial switch the app is in t-2; the offline copy of /auth/me
+    /// is still t-1's. A refresh with no connection must not move it back.
+    func testRefreshIdentityOfflineKeepsTheNewBranch() async throws {
+        let api = stubClient()
+        api.tokens.save("tok")
+        StubProtocol.handler = { _ in (200, [:], json(meT1)) }
+        _ = try await api.me()  // cached under the person's scope
+        let app = AppModel(api: api)
+        app.me = decodeMe(meT2)
+        app.phase = .signedIn
+        api.cacheScope = "t-2"
+        let seen = Seen()
+        StubProtocol.handler = { request in seen.add(request.url!.path); return (-1, [:], Data()) }
+        await app.refreshIdentity()
+        XCTAssertEqual(app.me?.tenantId, "t-2")
+        XCTAssertEqual(api.cacheScope, "t-2")
+        XCTAssertEqual(app.epoch, 0)
+        XCTAssertEqual(seen.count("/api/v1/auth/me"), 1, "asked the server, not the cache")
+    }
+
+    /// Signed out while the member record was on its way: the late answer is
+    /// not written into the next person's session.
+    func testRefreshIdentityLateAnswerAfterSignOutWritesNothing() async {
+        let api = stubClient()
+        api.tokens.save("tok")
+        let app = AppModel(api: api)
+        app.me = decodeMe(meT1)
+        app.phase = .signedIn
+        let seen = Seen()
+        StubProtocol.handler = { request in
+            let path = request.url!.path
+            seen.add(path)
+            if path == "/api/v1/auth/me" { return (200, [:], json(meT1)) }
+            if path == "/api/v1/me/member-record" { Thread.sleep(forTimeInterval: 0.3); return (200, [:], json(recordJSON)) }
+            return (200, [:], json("{}"))
+        }
+        let refresh = Task { await app.refreshIdentity() }
+        await waitUntil { seen.count("/api/v1/me/member-record") == 1 }
+        app.clearLocal()
+        await refresh.value
+        XCTAssertNil(app.record)
+        XCTAssertNil(app.me)
+        XCTAssertEqual(app.phase, .signedOut)
+    }
+
+    /// A branch switch while /auth/me was on its way: its answer (the old
+    /// branch) does not overwrite the new one.
+    func testRefreshIdentityLateAnswerAfterSwitchWritesNothing() async {
+        let api = stubClient()
+        api.tokens.save("tok")
+        let app = AppModel(api: api)
+        app.me = decodeMe(meT1)
+        app.phase = .signedIn
+        let seen = Seen()
+        StubProtocol.handler = { request in
+            seen.add(request.url!.path)
+            Thread.sleep(forTimeInterval: 0.3)
+            return (200, [:], json(meT1))
+        }
+        let refresh = Task { await app.refreshIdentity() }
+        await waitUntil { seen.count("/api/v1/auth/me") == 1 }
+        app.me = decodeMe(meT2)   // what switchBranch leaves behind
+        app.epoch += 1
+        await refresh.value
+        XCTAssertEqual(app.me?.tenantId, "t-2")
+        XCTAssertEqual(app.epoch, 1)
+        XCTAssertEqual(seen.count("/api/v1/me/member-record"), 0)
+    }
+
+    /// A session that ended on a 401 (clearLocal, not signOut) drops the tap too.
+    func testSessionEndDropsAPendingPush() {
+        let app = AppModel(api: stubClient())
+        app.phase = .signedOut
+        app.openPushed(path: "/member/history", notificationID: "n1")
+        XCTAssertNotNil(app.pendingPush)
+        app.clearLocal()
+        XCTAssertNil(app.pendingPush)
+    }
+
     /// Read only when the server agreed (Low: read mark on failure).
     func testNotificationMarkedReadOnlyOnSuccess() async {
         let api = stubClient()
@@ -422,6 +501,17 @@ final class IdempotencyTests: XCTestCase {
         XCTAssertNotEqual(changed, first, "a different decision gets a new key")
         intent.reset()
         XCTAssertNotEqual(intent.key(for: "u1|6|late"), changed)
+    }
+
+    /// A (answer lost) → B → back to A: A keeps its key, so the server can
+    /// see it is the same decision and not record it twice.
+    func testReturningToAnEarlierDecisionReusesItsKey() {
+        var intent = IntentKey()
+        let a = intent.key(for: "u1|5|late")
+        let b = intent.key(for: "u2|5|late")
+        XCTAssertNotEqual(a, b)
+        XCTAssertEqual(intent.key(for: "u1|5|late"), a)
+        XCTAssertEqual(intent.key(for: "u2|5|late"), b)
     }
 
     func testSanctionSendsTheKeyOnEveryRetry() async throws {

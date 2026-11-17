@@ -63,7 +63,7 @@ xcodebuild test -project SDYMember.xcodeproj -scheme SDYMember \
   -destination 'platform=iOS Simulator,name=iPhone 16e'
 ```
 
-2026-11-17: 95 тест. `CODE_SIGNING_ALLOWED=NO`-оор ажиллуулбал Keychain-ийн тест (`testBindingRoundTripsThroughTheKeychain`)
+2026-11-17: 100 тест. `CODE_SIGNING_ALLOWED=NO`-оор ажиллуулбал Keychain-ийн тест (`testBindingRoundTripsThroughTheKeychain`)
 алгасагдана (гарын үсэггүй build-д Keychain алга).
 
 ### Backend-гүй харах (зөвхөн Debug)

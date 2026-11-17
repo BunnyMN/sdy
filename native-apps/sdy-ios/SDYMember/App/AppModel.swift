@@ -125,6 +125,9 @@ final class AppModel: ObservableObject {
     }
 
     func clearLocal() {
+        // Also a 401-ended session: one person's tapped push is never opened
+        // (and marked read) for whoever signs in next.
+        pendingPush = nil
         api.tokens.clear()
         api.cache.clearAll()
         me = nil
@@ -200,7 +203,14 @@ final class AppModel: ObservableObject {
     func refreshIdentity(minimumInterval: TimeInterval = 0) async {
         guard phase == .signedIn, Date().timeIntervalSince(identityCheckedAt) >= minimumInterval else { return }
         identityCheckedAt = Date()
-        guard let identity = try? await api.me(), phase == .signedIn else { return }
+        // Whatever happens while this waits (a branch switch, a sign-out, the
+        // next person signing in) wins: a late answer writes nothing then.
+        let startEpoch = epoch
+        let startTenant = me?.tenantId
+        func stillCurrent() -> Bool { phase == .signedIn && epoch == startEpoch && me?.tenantId == startTenant }
+        // Fresh from the server only. Offline (or any failure) changes nothing:
+        // a cached /auth/me may be of the branch before a switch.
+        guard let identity = try? await api.me(cached: false), stillCurrent() else { return }
         if identity.tenantId != me?.tenantId {
             // Moved elsewhere (another device switched branch): rebuild.
             api.cacheScope = identity.tenantId
@@ -209,7 +219,10 @@ final class AppModel: ObservableObject {
             epoch += 1
         }
         if identity != me { me = identity }
-        if let record = try? await api.memberRecord(), record != self.record { self.record = record }
+        let tenantNow = me?.tenantId, epochNow = epoch
+        guard let record = try? await api.memberRecord(cached: false),
+              phase == .signedIn, epoch == epochNow, me?.tenantId == tenantNow else { return }
+        if record != self.record { self.record = record }
     }
 
     /// Marks one notification read; the count drops only once the server agreed.

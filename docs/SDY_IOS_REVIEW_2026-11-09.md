@@ -121,7 +121,7 @@ Dynamic Type; VoiceOver; баталгаажуулалтгүй устгах/цу�
 ## 2026-11-17 засвар — `fix/ios-audit-2026-11`
 
 Салбар `fix/ios-audit-2026-11` (`origin/main`-аас), PR-аар `main` руу (merge хийгээгүй). Тест: 95/95
-(`xcodebuild test`, iPhone 16e; шинэ тест `SDYMemberTests/AuditFixTests.swift`). Хувилбар өөрчлөөгүй, TestFlight-д илгээгээгүй.
+(`xcodebuild test`, iPhone 16e; review-ийн дараа 100/100; шинэ тест `SDYMemberTests/AuditFixTests.swift`). Хувилбар өөрчлөөгүй, TestFlight-д илгээгээгүй.
 Зургууд: `/private/tmp/claude-501/-Users-bunny-Documents-Projects-Sdy/a34f4016-e95a-4e7f-b225-4a7ce81f3ab1/scratchpad/ios-ux/`.
 
 Кодын шалгалт (Medium):
@@ -138,7 +138,7 @@ Dynamic Type; VoiceOver; баталгаажуулалтгүй устгах/цу�
 - **#7** `AppModel.refreshIdentity`: апп foreground-д ирэх, push ирэх (5 с throttle), ямар ч 403 хариу (`APIClient.onForbidden`, 30 с throttle)
   бүрт `me()` + гишүүнчлэлийг дахин уншина. Тест `testRefreshIdentityPicksUpNewPermissions`, `testForbiddenAnswerRereadsIdentity`.
 - **#8** Хяналтын хорооны шийдвэр `Idempotency-Key: <UUID>` толгойтой; нэг шийдвэрт нэг түлхүүр, дахин оролдоход ижил,
-  гишүүн/оноо/шалтгаан өөрчлөгдвөл шинэ (`IntentKey`). Backend талын дэмжлэг өөр PR-т. Тест `IdempotencyTests`.
+  шинэ шийдвэрт шинэ, A→B→A үед A-ийн түлхүүр хэвээр (`IntentKey`). Backend талын дэмжлэг өөр PR-т. Тест `IdempotencyTests`.
 - **#9** Бүртгэгдсэн ирцийг өөрчлөхөд `ReasonSheet` (шалтгаан заавал) — шалтгаан нь `note`. Анхны тэмдэглэгээ шууд.
 - **#10** «Оролцогч нэмэх» нь хайлттай бүтэн жагсаалт (`PersonPicker`). Тест `ScreenLogicTests.testPersonPickerSearches`.
 - **#11** Арга хэмжээний маягтын `DatePicker` Улаанбаатарын цагийн бүсээр.

@@ -13,22 +13,19 @@ extension Array where Element: Identifiable {
 }
 
 /// One idempotency key per thing the person means to do: the same while they
-/// retry it, a new one as soon as what they are sending changes.
+/// retry it — also after trying something else in between (A → B → A keeps
+/// A's key, so A whose answer was lost is not recorded twice) — and a new one
+/// for anything they have not sent before. Lives as long as the sheet.
 struct IntentKey {
-    private(set) var key = UUID().uuidString
-    private var fingerprint: String?
+    private var keys: [String: String] = [:]
 
     mutating func key(for fingerprint: String) -> String {
-        if fingerprint != self.fingerprint {
-            if self.fingerprint != nil { key = UUID().uuidString }
-            self.fingerprint = fingerprint
-        }
+        if let key = keys[fingerprint] { return key }
+        let key = UUID().uuidString
+        keys[fingerprint] = key
         return key
     }
 
-    /// After the server has recorded it: the next intent gets a new key.
-    mutating func reset() {
-        key = UUID().uuidString
-        fingerprint = nil
-    }
+    /// After the server has recorded it: the next intent gets new keys.
+    mutating func reset() { keys = [:] }
 }
