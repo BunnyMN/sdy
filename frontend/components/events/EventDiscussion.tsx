@@ -330,6 +330,7 @@ export default function EventDiscussion({ eventID, onSummary }: {
             {signing.phase === "refused" && <p role="alert" className="text-danger">{t("events.discussion.signing_failed")}</p>}
             {signing.phase === "timeout" && <p role="alert" className="text-danger">{t("events.discussion.signing_timeout")}</p>}
             {signing.phase === "error" && <p role="alert" className="text-danger">{signing.message || t("events.discussion.signing_failed")}</p>}
+            {signing.phase !== "waiting" && signing.phase !== "done" && <p className="mt-2 text-xs"><Link href="/member/eid-test" className="underline">{t("events.sign_test.link")}</Link></p>}
           </div>
           {signing.phase !== "waiting" && <div className="flex flex-wrap justify-center gap-2">
             {signing.phase !== "done" && <button type="button" onClick={() => { const { motion, choice } = signing; setSigning(null); void vote(motion, choice); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 font-semibold text-on-accent"><RotateCcw aria-hidden="true" className="h-4 w-4" />{t("membership.retry")}</button>}

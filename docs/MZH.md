@@ -216,6 +216,40 @@ API: `/api/v1/events`, `/api/v1/events/{id}`, `…/register`, `…/attendance`,
   жагсаалтын «Мэдээлсэн асуудлууд» самбар.
 - Нэг арга хэмжээнд 100 асуудлын хязгаар зэрэг илгээлтэд ч давагдахгүй (advisory lock).
 
+### eID гарын үсгийн (PIN2) туршилт — `1.6.1`
+
+Хэлэлцүүлгийн санал зурагдахгүй байхад шалтгааныг олох оношлогоо. Гишүүн `/member/eid-test`
+хуудсан дээр (гишүүний нүүр → «eID гарын үсэг (PIN2) турших», мөн «Миний бүртгэл» болон
+санал зурагдаагүй үеийн цонхноос) «Туршилт эхлүүлэх» дарна. Сервер «E-sdy — eID гарын үсгийн
+туршилт» гэсэн хор хөнөөлгүй баримт (нэр, Улаанбаатарын цаг, «Энэ бол туршилт; ямар нэг санал,
+шийдвэр биш.») бэлдэж, түүний SHA-256-г санал өгөхтэй яг ижил eID ёслолоор зуруулна. Утсан дээр
+eID апп шууд нээгдэж (`/auth/eid/callback?return=/member/eid-test`), компьютер дээр баталгаажуулах
+код гарч, утас руу PIN2 хүсэлт очно. Ямар ч санал, шийдвэр, migration үүсэхгүй; сесс серверийн
+санах ойд 15 минут л хадгалагдана (аудит: `events.sign_test`).
+
+- `POST /api/v1/events/sign-test` `{callback_url?}` → 202 `{session_id, verification_code, app_link, expires_at, state, diagnostic, mode}`
+  (эхлэж чадаагүй бол 200 + `state: "failed"`).
+- `POST /api/v1/events/sign-test/poll` `{session_id?}` (хоосон бол сүүлийн туршилт) → 200
+  `{session_id, state, diagnostic, mode}`; олдоогүй/хугацаа дууссан/өөр хүнийх бол 404.
+- `diagnostic = {state: signing|signed|failed, stage, detail, eid_state?}`,
+  `mode = {signer_enabled, flow: device|push, reg_number: "УБ****"}`. `detail` нь eID-ийн жинхэнэ
+  алдааны текст (500 тэмдэгт хүртэл, token/secret/Bearer утгыг нуусан).
+
+| `stage` | Утга |
+| --- | --- |
+| `signer_disabled` | `EID_RP_UUID`/`EID_RP_SECRET` тохируулаагүй |
+| `identity_missing` | Бүртгэлд eID-тэй холбогдсон регистр алга — eID-ээр нэг удаа нэвтэрнэ |
+| `start_failed` | eID ёслол эхлүүлэхээс татгалзсан (жишээ нь `eID answered 401/403/4xx`, TLS алдаа) |
+| `waiting` | PIN2 хүлээж байна |
+| `poll_failed` | Төлөв асуух үед алдаа |
+| `refused` | eID гарын үсэггүй дуусгасан (`eid_state`: `rejected`, `failed`, `expired`) |
+| `digest_unavailable` | Дууссан ч зурсан digest ирээгүй |
+| `digest_mismatch` | Өөр digest зурсан |
+| `ok` | Зурсан баримт таарч байна |
+
+Санал өгөх (`…/vote`, `…/vote/poll`) алдаа бүр одоо `slog.Warn`-оор жинхэнэ шалтгаантайгаа
+лог-д бичигдэнэ (`docker logs sdy_backend | grep "events: eID"`); HTTP хариу өөрчлөгдөөгүй.
+
 ### Аппуудын харгалзуулах алдааны мөрүүд
 
 API алдааны текст англиар, тогтвортой. iOS/Android/вэб эдгээрийг өөрийн үгээр харуулна:

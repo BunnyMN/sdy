@@ -57,6 +57,7 @@ export default function MemberRecordPage() {
         {saved && <p role="status" className="text-success">{t("dues.saved")}</p>}
         <button disabled={busy} className="min-h-11 rounded-md bg-accent px-5 font-medium text-on-accent disabled:opacity-50">{t("dues.save")}</button>
         <Link href="/profile" className="ml-4 inline-flex min-h-11 items-center text-accent underline">{t("membership.record.identity")}</Link>
+        <Link href="/member/eid-test" className="ml-4 inline-flex min-h-11 items-center text-accent underline">{t("events.sign_test.link")}</Link>
       </form>
       <section className="space-y-4 rounded-lg border border-line bg-surface p-4 sm:p-6">
         <h2>{t("membership.record.history")}</h2>
