@@ -39,6 +39,9 @@ BEGIN
     WITH due AS (
         SELECT n.id FROM registry.member_notifications n
          WHERE n.pushed_at IS NULL
+           -- Five attempts is the cap even when the fifth never reported back
+           -- (the sender died mid-round): the hour sweep above settles it.
+           AND n.push_attempts < 5
            AND (n.push_next_attempt_at IS NULL OR n.push_next_attempt_at <= now())
            AND EXISTS (SELECT 1 FROM workspace.push_tokens t WHERE t.user_id = n.user_id AND t.provider = 'APNS')
          ORDER BY n.created_at

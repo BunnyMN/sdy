@@ -229,6 +229,12 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	sent := 0
+	// What is learnt from APNs is written down even when the round's own
+	// deadline has passed: a delivered notification left uncompleted would be
+	// leased again and resent every five minutes for an hour. Its own short
+	// deadline keeps a stuck database from holding the round.
+	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	// One notification can go to several phones. It is retried if any of
 	// them met a temporary failure; the phones that already have it get it
 	// again under the same collapse id, which replaces rather than repeats.
@@ -238,6 +244,12 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 		if _, seen := retry[d.notificationID]; !seen {
 			retry[d.notificationID] = false
 			order = append(order, d.notificationID)
+		}
+		// Out of time: nothing more is sent this round. What is left is
+		// retried, not completed — it was never tried.
+		if ctx.Err() != nil {
+			retry[d.notificationID] = true
+			continue
 		}
 		device, err := devices.DecryptPushToken(d.ciphertext)
 		if err != nil {
@@ -249,7 +261,7 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 		case delivered:
 			sent++
 		case tokenGone:
-			if _, err := s.db.Exec(nexus.WithoutWorkspace(ctx), `SELECT registry.forget_push_token($1)`, d.tokenHash); err != nil {
+			if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.forget_push_token($1)`, d.tokenHash); err != nil {
 				slog.Warn("push: could not forget a dead token", "error", err)
 			}
 		case temporary:
@@ -268,12 +280,12 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 		}
 	}
 	if len(done) > 0 {
-		if _, err := s.db.Exec(nexus.WithoutWorkspace(ctx), `SELECT registry.complete_pushes($1::uuid[])`, done); err != nil {
+		if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.complete_pushes($1::uuid[])`, done); err != nil {
 			return sent, err
 		}
 	}
 	if len(again) > 0 {
-		if _, err := s.db.Exec(nexus.WithoutWorkspace(ctx), `SELECT registry.retry_pushes($1::uuid[])`, again); err != nil {
+		if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.retry_pushes($1::uuid[])`, again); err != nil {
 			return sent, err
 		}
 	}
