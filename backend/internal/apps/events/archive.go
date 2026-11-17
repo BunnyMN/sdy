@@ -915,6 +915,11 @@ func writePDF(w http.ResponseWriter, r *http.Request, pdf []byte, filename strin
 	disposition := "attachment"
 	if r.URL.Query().Get("inline") == "1" {
 		disposition = "inline"
+		// The member area previews the PDF in a frame on the same site; the
+		// platform's DENY would leave that frame empty. Nothing else changes:
+		// only this site may frame it, and the document runs no script.
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
 	}
 	sum := sha256.Sum256(pdf)
 	w.Header().Set("Content-Type", "application/pdf")

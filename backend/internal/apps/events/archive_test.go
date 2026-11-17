@@ -337,6 +337,10 @@ func TestArchiveDocumentIsSignedInTurn(t *testing.T) {
 	if !bytes.Equal(pdf.Body.Bytes(), final) || pdf.Header().Get("Content-Type") != "application/pdf" {
 		t.Fatal("the download is not the final revision")
 	}
+	inline := f.call("GET", "/api/v1/archive/"+doc.ID+"/pdf?inline=1", ``, f.tenant, member, false)
+	if inline.Header().Get("X-Frame-Options") != "SAMEORIGIN" || !strings.HasPrefix(inline.Header().Get("Content-Disposition"), "inline") {
+		t.Fatal("the inline preview cannot be framed by the member area")
+	}
 	first0 := f.call("GET", "/api/v1/archive/"+doc.ID+"/pdf?revision=0", ``, f.tenant, member, false)
 	if !bytes.Equal(first0.Body.Bytes(), revs[0]) {
 		t.Fatal("revision 0 is not the frozen PDF")

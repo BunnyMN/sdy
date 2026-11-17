@@ -119,7 +119,13 @@ func (m *Module) archiveSign(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusForbidden, errArchiveNotYourTurn)
 		return
 	}
-	if !m.isMember(ctx, claims.WorkspaceID, claims.UserID) {
+	var usable bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workspace.memberships m
+		WHERE m.tenant_id = $1::uuid AND m.user_id = $2::uuid AND `+usableMember+`)`, claims.WorkspaceID, claims.UserID).Scan(&usable); err != nil {
+		archiveError(w, err)
+		return
+	}
+	if !usable {
 		nexus.Error(w, http.StatusForbidden, "only an active member of this branch may sign")
 		return
 	}
