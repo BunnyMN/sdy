@@ -91,6 +91,11 @@ var (
 	ErrBadDigest = errors.New("eidsign: the document hash must be a 64-character SHA-256 hex string")
 	// ErrNoRegNumber is a ceremony with nobody to sign it.
 	ErrNoRegNumber = errors.New("eidsign: the signer's registration number is missing")
+	// ErrStampUnavailable is a rail-only ceremony (DocumentInit.RailOnly)
+	// whose PDF eID's stamp endpoint could not produce. Nothing else is put in
+	// its place: the server's own certification would lock a document that
+	// more people still have to sign, and is not the citizen's signature.
+	ErrStampUnavailable = errors.New("eidsign: eID could not stamp the signed document")
 )
 
 // cache is the session store: a string round trip, holding the document and its
@@ -127,6 +132,10 @@ type Usecase interface {
 	// Init signs a PDF. An empty onBehalfOfOrg is a personal signature; an
 	// NTRMN-<register> is one made in that organisation's name.
 	Init(ctx context.Context, regNo, fullName, filename string, pdf []byte, onBehalfOfOrg, signatureURL, stampURL string) (InitResult, error)
+	// InitDocument signs a PDF exactly as given — no overlay is applied, so
+	// the bytes hashed are the caller's — optionally on the citizen's own
+	// device, and optionally rail-only (no fallback signature on download).
+	InitDocument(ctx context.Context, in DocumentInit) (InitResult, error)
 	// InitDigest signs a bare SHA-256 digest, with no document at all.
 	//
 	// A payment app uses this: it hashes the canonical content of a transfer
@@ -158,6 +167,26 @@ type InitResult struct {
 type DownloadResult struct {
 	PDF      []byte
 	Filename string
+	// The certificate eID reported when the ceremony completed.
+	SignerName   string
+	SignerSerial string
+	SignerIssuer string
+}
+
+// DocumentInit is one PDF ceremony as InitDocument takes it.
+type DocumentInit struct {
+	RegNo    string
+	FullName string
+	FileName string
+	PDF      []byte
+	// DisplayText is what the citizen reads on their phone before PIN2.
+	DisplayText string
+	// CallbackURL, when set, opens a device-link session (see
+	// InitDigestOnDevice); the result carries the AppLink.
+	CallbackURL string
+	// RailOnly makes Download fail with ErrStampUnavailable instead of
+	// embedding this server's own signature when eID cannot stamp.
+	RailOnly bool
 }
 
 type usecase struct {
@@ -188,7 +217,10 @@ type signState struct {
 	State        string `json:"state"` // running | completed | failed | expired | rejected
 	SignerName   string `json:"signer_name"`
 	SignerSerial string `json:"signer_serial"`
+	SignerIssuer string `json:"signer_issuer,omitempty"`
 	CompletedAt  string `json:"completed_at"`
+	// RailOnly: no fallback signature on download (DocumentInit.RailOnly).
+	RailOnly bool `json:"rail_only,omitempty"`
 	// OnBehalfOfOrg is the organisation's ETSI id; empty for a personal signature.
 	OnBehalfOfOrg string `json:"on_behalf_of_org"`
 	// OnBehalfOfOrgName is the name eID *confirmed* when polling — not the one
@@ -403,6 +435,41 @@ func (u *usecase) Init(ctx context.Context, regNo, fullName, filename string, pd
 	}, nil
 }
 
+// InitDocument hashes the PDF exactly as given and opens the ceremony.
+func (u *usecase) InitDocument(ctx context.Context, in DocumentInit) (InitResult, error) {
+	if len(in.PDF) == 0 || len(in.PDF) > maxPDFBytes {
+		return InitResult{}, ErrBadDocument
+	}
+	if strings.TrimSpace(in.RegNo) == "" {
+		return InitResult{}, ErrNoRegNumber
+	}
+	// No overlay: a document that already carries signatures must not be
+	// rewritten, and what the caller stored is what gets signed.
+	sum := sha256.Sum256(in.PDF)
+	digestB64 := base64.StdEncoding.EncodeToString(sum[:])
+	displayText := in.DisplayText
+	if strings.TrimSpace(displayText) == "" {
+		displayText = "Gerege — баримтад гарын үсэг"
+	}
+	started, err := u.startV3Signature(ctx, toEtsi(in.RegNo), digestB64, "", displayText, in.FileName, strings.TrimSpace(in.CallbackURL))
+	if err != nil {
+		return InitResult{}, err
+	}
+	sessionID := randID()
+	if err := u.saveState(ctx, sessionID, signState{
+		RegNo: in.RegNo, FullName: in.FullName, Filename: in.FileName,
+		PDFBase64:  base64.StdEncoding.EncodeToString(in.PDF),
+		DocHashB64: digestB64, V3SessionID: started.SessionID, State: "running",
+		RailOnly: in.RailOnly,
+	}); err != nil {
+		return InitResult{}, fmt.Errorf("eidsign: store the session: %w", err)
+	}
+	return InitResult{
+		SessionID: sessionID, DocumentHash: digestB64,
+		VerificationCode: started.Code, Filename: in.FileName, AppLink: started.AppLink,
+	}, nil
+}
+
 // applyVisualAssets overlays the organisation's stamp and the citizen's
 // signature on the last page, bottom right, stamp to the left of the signature.
 func (u *usecase) applyVisualAssets(ctx context.Context, pdfBytes []byte, signatureURL, stampURL string) []byte {
@@ -576,6 +643,10 @@ func (u *usecase) Download(ctx context.Context, ownerRegNo, sessionID string) (D
 	// page anybody can verify against. This server's own signature is the
 	// fallback for when that endpoint is unavailable.
 	signed, err := u.stampV3(ctx, st.V3SessionID, st.Filename, pdfBytes)
+	if err != nil && st.RailOnly {
+		slog.WarnContext(ctx, "eidsign: eID could not stamp a rail-only document", "error", err)
+		return DownloadResult{}, fmt.Errorf("%w: %w", ErrStampUnavailable, err)
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "eidsign: eID could not stamp the document; embedding our own signature",
 			"error", err)
@@ -585,8 +656,11 @@ func (u *usecase) Download(ctx context.Context, ownerRegNo, sessionID string) (D
 		}
 	}
 	return DownloadResult{
-		PDF:      signed,
-		Filename: strings.TrimSuffix(st.Filename, ".pdf") + "-signed.pdf",
+		PDF:          signed,
+		Filename:     strings.TrimSuffix(st.Filename, ".pdf") + "-signed.pdf",
+		SignerName:   st.SignerName,
+		SignerSerial: st.SignerSerial,
+		SignerIssuer: st.SignerIssuer,
 	}, nil
 }
 
@@ -855,6 +929,7 @@ type v3PollResult struct {
 	EndResult     string
 	SubjectName   string
 	SubjectSerial string
+	IssuerName    string
 	// OrgName is the organisation eID *confirmed* the citizen signed for.
 	OrgName string
 }
@@ -905,6 +980,7 @@ func (u *usecase) pollV3(ctx context.Context, v3SessionID string) (v3PollResult,
 			if cert, err := x509.ParseCertificate(der); err == nil {
 				out.SubjectName = strings.TrimSpace(cert.Subject.CommonName)
 				out.SubjectSerial = cert.Subject.SerialNumber
+				out.IssuerName = strings.TrimSpace(cert.Issuer.CommonName)
 			}
 		}
 	}

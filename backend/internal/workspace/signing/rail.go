@@ -10,7 +10,10 @@ package signing
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/eidsign"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/workspace/identity/eidmongolia"
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
 )
@@ -67,10 +70,13 @@ func (r signingRail) SignDocument(ctx context.Context, request nexus.DocumentSig
 		return nexus.SignatureSession{}, nexus.ErrPDFSigningUnavailable
 	}
 	started, err := r.eid.SignPDF(ctx, eidmongolia.SignRequest{
-		RegNo:    request.RegNumber,
-		FullName: request.FullName,
-		FileName: request.FileName,
-		PDF:      request.PDF,
+		RegNo:       request.RegNumber,
+		FullName:    request.FullName,
+		FileName:    request.FileName,
+		PDF:         request.PDF,
+		DisplayText: request.DisplayText,
+		CallbackURL: request.CallbackURL,
+		RailOnly:    request.RailSignatureOnly,
 	})
 	if err != nil {
 		return nexus.SignatureSession{}, err
@@ -78,6 +84,7 @@ func (r signingRail) SignDocument(ctx context.Context, request nexus.DocumentSig
 	return nexus.SignatureSession{
 		SessionID:        started.SessionID,
 		VerificationCode: started.VerificationCode,
+		AppLink:          started.AppLink,
 	}, nil
 }
 
@@ -86,10 +93,15 @@ func (r signingRail) SignedDocument(ctx context.Context, ownerRegNumber, session
 		return nexus.SignedDocument{}, nexus.ErrSigningUnavailable
 	}
 	signed, err := r.eid.DownloadSigned(ctx, ownerRegNumber, sessionID)
+	if errors.Is(err, eidsign.ErrStampUnavailable) {
+		// Both: a module matches the SDK's sentinel, a log keeps eID's reason.
+		return nexus.SignedDocument{}, fmt.Errorf("%w: %w", nexus.ErrSignedDocumentUnavailable, err)
+	}
 	if err != nil {
 		return nexus.SignedDocument{}, err
 	}
-	return nexus.SignedDocument{PDF: signed.PDF, FileName: signed.Filename}, nil
+	return nexus.SignedDocument{PDF: signed.PDF, FileName: signed.Filename,
+		SignerName: signed.SignerName, SignerSerial: signed.SignerSerial, SignerIssuer: signed.SignerIssuer}, nil
 }
 
 func (r signingRail) PollSignature(ctx context.Context, ownerRegNumber, sessionID string) (nexus.SignatureState, error) {

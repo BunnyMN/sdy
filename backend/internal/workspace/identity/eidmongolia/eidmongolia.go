@@ -160,6 +160,14 @@ func (s *Service) SignPDF(ctx context.Context, in SignRequest) (InitResult, erro
 	if s.mock {
 		return s.mockStart(ctx, in)
 	}
+	// A document signed as given: no overlay, the citizen's own text, on
+	// their phone when a callback is named, and no fallback when RailOnly.
+	if in.Exact() {
+		return s.sign.InitDocument(ctx, signuc.DocumentInit{
+			RegNo: in.RegNo, FullName: in.FullName, FileName: in.FileName, PDF: in.PDF,
+			DisplayText: firstNonEmpty(in.DisplayText, s.displayText), CallbackURL: in.CallbackURL, RailOnly: in.RailOnly,
+		})
+	}
 	return s.sign.Init(ctx, in.RegNo, in.FullName, in.FileName, in.PDF,
 		in.OnBehalfOfOrg, in.SignatureURL, in.StampURL)
 }
@@ -175,6 +183,20 @@ type SignRequest struct {
 	OnBehalfOfOrg string
 	SignatureURL  string
 	StampURL      string
+	// DisplayText is what the citizen reads before PIN2.
+	DisplayText string
+	// CallbackURL asks for a same-device ceremony.
+	CallbackURL string
+	// RailOnly: the signed PDF comes from eID's stamp or not at all.
+	RailOnly bool
+}
+
+// Exact reports whether the document is to be signed byte for byte as given —
+// any of the newer options asks for that; the overlay ceremony is the older
+// one, kept for the callers that use the images.
+func (in SignRequest) Exact() bool {
+	return in.OnBehalfOfOrg == "" && in.SignatureURL == "" && in.StampURL == "" &&
+		(in.DisplayText != "" || in.CallbackURL != "" || in.RailOnly)
 }
 
 // SignDigest starts a ceremony over an arbitrary SHA-256 digest rather than a
@@ -216,6 +238,12 @@ func (s *Service) DownloadSigned(ctx context.Context, ownerRegNo, sessionID stri
 // VerifiedDigest returns the digest a completed ceremony actually signed,
 // base64. It is how a caller confirms that what was approved is what it sent.
 func (s *Service) VerifiedDigest(ctx context.Context, ownerRegNo, sessionID string) (string, error) {
+	if s.mock {
+		// Only PDF ceremonies are mocked; a digest one went to eID itself.
+		if digest, err := s.mockVerifiedDigest(ctx, sessionID); err == nil {
+			return digest, nil
+		}
+	}
 	return s.sign.VerifiedDigest(ctx, ownerRegNo, sessionID)
 }
 

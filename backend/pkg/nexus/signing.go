@@ -30,6 +30,13 @@ var ErrSigningUnavailable = errors.New("nexus: this installation has no signing 
 // format rather than sign what it could.
 var ErrPDFSigningUnavailable = errors.New("nexus: this signing rail cannot sign PDFs")
 
+// ErrSignedDocumentUnavailable is what SignedDocument answers for a ceremony
+// started with RailSignatureOnly when the rail could not produce the signed
+// PDF itself. The citizen did sign — the digest is confirmed — but there is no
+// PDF to keep yet; the caller may ask again while the ceremony is still held,
+// and must not substitute anything else for it.
+var ErrSignedDocumentUnavailable = errors.New("nexus: the rail could not produce the signed PDF")
+
 // Signer is the installation's qualified signing rail, as a module sees it.
 //
 // It is a platform capability for the same reason the Өртөө ring is: an
@@ -154,12 +161,30 @@ type DocumentSignatureRequest struct {
 	// DisplayText is the only thing the citizen sees about what they are
 	// approving.
 	DisplayText string
+	// CallbackURL, when set, asks for a same-device ceremony, as in
+	// SignatureRequest.
+	CallbackURL string
+	// RailSignatureOnly asks for the PDF to come back carrying the citizen's
+	// signature as the rail itself produces it, appended to the document as an
+	// incremental revision — and for SignedDocument to fail with
+	// ErrSignedDocumentUnavailable rather than fall back to anything else.
+	//
+	// A document several people sign in turn needs exactly this: every
+	// signature covers the bytes before it, so a fallback that certified the
+	// document with the installation's own key would lock it against the next
+	// signer, and would not be the citizen's signature at all.
+	RailSignatureOnly bool
 }
 
 // SignedDocument is a finished PDF.
 type SignedDocument struct {
 	PDF      []byte
 	FileName string
+	// Who the signing certificate names, as the rail read it when the ceremony
+	// completed; empty when the rail did not say.
+	SignerName   string
+	SignerSerial string
+	SignerIssuer string
 }
 
 // SignatureSession is a started ceremony.
