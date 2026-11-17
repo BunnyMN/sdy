@@ -33,6 +33,8 @@ var defaultGrants = map[string]string{
 	"events.read":        "manager,user",
 	"events.manage":      "admin only",
 	"events.discipline":  "admin only",
+	"archive.read":       "manager,user",
+	"archive.manage":     "admin only",
 	"membership.read":    "manager,user",
 	"membership.finance": "admin only",
 }

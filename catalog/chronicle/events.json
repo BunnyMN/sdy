@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.7.0",
+      "released_at": "2026-11-17",
+      "kind": "feature",
+      "summary": {
+        "mn": "Гарын үсэгтэй архив: хурлын тэмдэглэл, шийдвэр, саналын протокол PDF-ийг шаардлагатай хүн бүр eID-ээр дараалан зурна; санал бүрийн хуудас PDF.",
+        "en": "Signed archive: minutes, decisions and vote protocols as PDFs every required person signs with eID in turn; every ballot is a signed PDF."
+      },
+      "details": {
+        "mn": "Нарийн бичиг, Тэргүүн төсөл бичиж, гарын үсэг зурагчдыг («Бүх тэргүүлэгч» эсвэл гараар) сонгоно. Илгээхэд PDF хөлдөж дугаар авна; зурагч бүр өмнөх зурагчийн eID-ээр тамгалуулсан PDF-ийг зурж, өмнөх гарын үсгүүд хүчинтэй хэвээр үлдэнэ. Санал хураалт хаагдахад протокол автоматаар үүсч Тэргүүн, Нарийн бичигт очно. Гишүүн бүрийн санал PDF хуудас болж PIN2-оор зурагдана. PDF нь Adobe Reader зэрэгт шалгагдана.",
+        "en": "The secretary or chair drafts a document and chooses its signers (every board member, or by hand). Sending freezes the PDF and numbers it; each signer signs the previous signer's eID-stamped PDF, so earlier signatures stay valid. Closing a vote creates its protocol for the chair and the secretary. Each member's ballot is a PDF signed with PIN2. The PDFs verify in Adobe Reader and similar readers."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.6.1",
       "released_at": "2026-11-17",
       "kind": "feature",

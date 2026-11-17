@@ -29,6 +29,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/pkg/nexus"
@@ -45,6 +46,10 @@ const (
 	PermRead       = "events.read"
 	PermManage     = "events.manage"
 	PermDiscipline = "events.discipline"
+	// The signed archive (archive.go): members read it and sign what they are
+	// asked to; Тэргүүн and Нарийн бичиг prepare documents and pick signers.
+	PermArchiveRead   = "archive.read"
+	PermArchiveManage = "archive.manage"
 )
 
 // Module is the app.
@@ -53,6 +58,9 @@ type Module struct {
 	permissions nexus.PermissionStore
 	// signTests are the eID signature tests in flight (signtest.go).
 	signTests signTestStore
+	// background is the work started after a request answered — fetching a
+	// stamped ballot (archive_votes.go) — so a test can wait for it.
+	background sync.WaitGroup
 }
 
 // New constructs and registers the module. Called once, from apps.Bootstrap.
@@ -69,7 +77,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.6.1" }
+func (m *Module) Version() string { return "1.7.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -94,6 +102,17 @@ func (m *Module) Permissions() []nexus.PermissionDefinition {
 			Description: "Deduct a member's points with a reason and record a warning",
 			AdminOnly:   true,
 		},
+		{
+			Code: PermArchiveRead, Name: "See the signed archive",
+			Description:  "See the branch's minutes, decisions and vote protocols, and sign the ones addressed to you",
+			DefaultRoles: []string{nexus.DefaultRoleManager, nexus.DefaultRoleUser},
+		},
+		// Тэргүүн and Нарийн бичиг, from their position (platform migration 00125).
+		{
+			Code: PermArchiveManage, Name: "Prepare archive documents",
+			Description: "Draft minutes and decisions, choose who signs them, send them for signature and cancel them",
+			AdminOnly:   true,
+		},
 	}
 }
 
@@ -102,6 +121,12 @@ func (m *Module) Menus() []nexus.MenuDefinition {
 		ID: "events", Label: "Events", Path: "/module/events", Icon: "calendar-days", Order: 10,
 		Labels: map[string]string{
 			"mn": "Арга хэмжээ", "ar": "الفعاليات", "zh": "活动", "fr": "Événements", "ru": "Мероприятия", "es": "Eventos",
+		},
+	}, {
+		// The signed archive lives in the member area beside the dues.
+		ID: "archive", Label: "Archive", Path: "/member/archive", Icon: "archive", Order: 12,
+		Labels: map[string]string{
+			"mn": "Архив", "en": "Archive", "ar": "الأرشيف", "zh": "档案", "fr": "Archives", "ru": "Архив", "es": "Archivo",
 		},
 	}}
 }
@@ -161,6 +186,11 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/vote", m.vote)
 			one.With(read).Post("/motions/{motionID}/vote/poll", m.pollVote)
 			one.With(read).Get("/motions/{motionID}/votes", m.votes)
+			// Ballots as signed PDF: one's own, or anyone's where the roll is visible.
+			one.With(read).Get("/motions/{motionID}/ballot", m.myBallot)
+			one.With(read).Get("/motions/{motionID}/votes/{userID}/ballot", m.ballot)
+			// The vote protocol, made again if closing could not make it.
+			one.With(manage).Post("/motions/{motionID}/protocol", m.ensureProtocol)
 			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/report", m.report)
 			one.With(manage).Post("/motions/{motionID}/reports/dismiss", m.dismissReports)
 
@@ -178,6 +208,7 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 			one.With(manage).Delete("/tasks/{taskID}/assignments/{userID}", m.removeAssignment)
 		})
 	})
+	m.registerArchiveRoutes(r, gate)
 }
 
 // ─── Shapes ──────────────────────────────────────────────────────────────────

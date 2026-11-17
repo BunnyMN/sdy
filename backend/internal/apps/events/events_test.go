@@ -19,10 +19,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type testPermissions struct{}
+// testPermissions gives every member the read permissions and whoever the
+// test granted more (eventFixture.grant) those too.
+type testPermissions struct{ extra *sync.Map }
 
-func (testPermissions) GetUserPermissions(context.Context, string, string) (map[string]bool, error) {
-	return map[string]bool{PermRead: true}, nil
+func (p testPermissions) GetUserPermissions(_ context.Context, _ string, user string) (map[string]bool, error) {
+	out := map[string]bool{PermRead: true, PermArchiveRead: true}
+	if p.extra != nil {
+		if codes, ok := p.extra.Load(user); ok {
+			for _, code := range codes.([]string) {
+				out[code] = true
+			}
+		}
+	}
+	return out, nil
 }
 
 type eventFixture struct {
@@ -31,7 +41,12 @@ type eventFixture struct {
 	tenant, other string
 	users         []string
 	application   string
+	grants        *sync.Map
+	module        *Module
 }
+
+// grant gives a user permissions beyond reading, as a position would.
+func (f *eventFixture) grant(user string, codes ...string) { f.grants.Store(user, codes) }
 
 // Run against a migrated, disposable database. The guard is the same one the
 // host uses, so assertions exercise PostgreSQL RLS, not just tenant WHEREs.
@@ -78,7 +93,7 @@ func newEventFixture(t *testing.T) *eventFixture {
 	if _, err := pool.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON events_events, events_attendance TO gerege_nexus_tenant`); err != nil {
 		t.Fatal(err)
 	}
-	f := &eventFixture{pool: pool, tenant: uuid.NewString(), other: uuid.NewString(), application: application}
+	f := &eventFixture{pool: pool, tenant: uuid.NewString(), other: uuid.NewString(), application: application, grants: &sync.Map{}}
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM registry.tenants WHERE id = ANY($1::uuid[])`, []string{f.tenant, f.other})
 		_, _ = pool.Exec(context.Background(), `DELETE FROM registry.users WHERE id = ANY($1::uuid[])`, f.users)
@@ -98,14 +113,20 @@ func newEventFixture(t *testing.T) *eventFixture {
 			t.Fatal(err)
 		}
 	}
-	m := &Module{db: pool, permissions: testPermissions{}}
+	m := &Module{db: pool, permissions: testPermissions{extra: f.grants}}
+	f.module = m
+	t.Cleanup(m.background.Wait)
 	f.router = chi.NewRouter()
 	m.RegisterRoutes(f.router, func(next http.Handler) http.Handler { return next })
 	return f
 }
 
 func (f *eventFixture) request(method, path, body, tenant, user string, admin bool) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, "/api/v1/events"+path, strings.NewReader(body))
+	return f.call(method, "/api/v1/events"+path, body, tenant, user, admin)
+}
+
+func (f *eventFixture) call(method, path, body, tenant, user string, admin bool) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	ctx := nexus.WithWorkspaceID(r.Context(), tenant)
 	if user != "" {
 		ctx = nexus.WithUser(ctx, nexus.UserClaims{WorkspaceID: tenant, UserID: user, IsAdmin: admin})

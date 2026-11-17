@@ -70,10 +70,12 @@
   DocumentDraft.Type string
   DocumentFiler.Document(ctx context.Context, workspaceID, documentID string) (FiledDocument, error)
   DocumentFiler.File(ctx context.Context, workspaceID string, draft DocumentDraft) (FiledDocument, error)
+  DocumentSignatureRequest.CallbackURL string
   DocumentSignatureRequest.DisplayText string
   DocumentSignatureRequest.FileName string
   DocumentSignatureRequest.FullName string
   DocumentSignatureRequest.PDF []byte
+  DocumentSignatureRequest.RailSignatureOnly bool
   DocumentSignatureRequest.RegNumber string
   EIDSigner.Mode() string
   EIDSigner.Poll(ctx context.Context, sessionID string) (*CeremonyState, error)
@@ -300,6 +302,9 @@
   SignatureSession.VerificationCode string
   SignedDocument.FileName string
   SignedDocument.PDF []byte
+  SignedDocument.SignerIssuer string
+  SignedDocument.SignerName string
+  SignedDocument.SignerSerial string
   Signer.Enabled() bool
   Signer.PollSignature(ctx context.Context, ownerRegNumber, sessionID string) (SignatureState, error)
   Signer.SignDigest(ctx context.Context, request SignatureRequest) (SignatureSession, error)
@@ -508,6 +513,7 @@ var ErrReportGrantNotFound
 var ErrReportGrantNotPending
 var ErrReportScheduleNotFound
 var ErrSSOClientNotFound
+var ErrSignedDocumentUnavailable
 var ErrSigningUnavailable
 var ErrStaffCredentialRejected
 var ErrUnauthenticated

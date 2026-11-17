@@ -66,3 +66,14 @@ Session  pending → completed | failed | expired | rejected
 
 Session-ий төлөв нь жижиг үсгээр — браузерын poll хийдэг үгсийн сан яг тийм
 байдаг.
+
+## Олон хүний дараалсан гарын үсэг
+
+`nexus.DocumentSignatureRequest.RailSignatureOnly` нь PDF-ийг яг өгсөн байтаар нь (overlay-гүй)
+зуруулж, `SignedDocument`-ийг eID-ийн stamp-аас өөр юугаар ч орлуулахгүй: stamp амжилтгүй бол
+`nexus.ErrSignedDocumentUnavailable`. Энгийн ёслолын fallback (серверийн Document-Signer-ийн
+*certification* гарын үсэг, DocMDP) олон хүний баримтыг түгжиж, дараагийн гарын үсгийг хүчингүй
+болгох тул тийм баримтад хэзээ ч хэрэглэгдэхгүй. `CallbackURL` нь PDF ёслолыг утсан дээр (device-link)
+явуулна. Хэрэглээ: МЗХ-ны архив ба саналын хуудас ([МЗХ](MZH.md#гарын-үсэгтэй-архив--mnsdyevents-170)).
+Зурагч N+1 нь N-ийн тамгалсан PDF-ийг зурна; хадгалахаас өмнө шинэ PDF өмнөхийг яг эхэндээ
+агуулсан (incremental) эсэхийг шалгана.
