@@ -25,8 +25,10 @@
 #   PGHOST, PGUSER, PGPASSWORD, PGDATABASE  — анхдагч postgres / postgres / - / platform_db
 #   BACKUP_DIR        — анхдагч /backups (хостын ${APP_DIR}/backups)
 #   BACKUP_MIN_BYTES  — үүнээс жижиг dump-ийг бүтэлгүйтэл гэж үзнэ (10240)
-#   TEXTFILE_DIR      — node_exporter textfile хавтас; хоосон эсвэл байхгүй бол
+#   TEXTFILE_DIR      — node_exporter textfile хавтас; байхгүй бол үүсгэнэ, хоосон бол
 #                       хэмжүүр бичихгүй (deploy/monitoring/prometheus/rules/backups.yml)
+#   BACKUP_UID / BACKUP_GID — dump ба хавтсыг энэ эзэнд шилжүүлнэ (хостын `deploy`
+#                       хэрэглэгч уншиж, хуулж чадна). Хоосон бол root-д үлдэнэ.
 #
 # Dump бүр хувийн мэдээлэл, нууц үгийн хэш агуулна: umask 077.
 
@@ -39,15 +41,29 @@ BACKUP_KEEP_COUNT="${BACKUP_KEEP_COUNT:-10}"
 BACKUP_MIN_BYTES="${BACKUP_MIN_BYTES:-10240}"
 BACKUP_AT_UTC="${BACKUP_AT_UTC:-19:15}"
 TEXTFILE_DIR="${TEXTFILE_DIR:-}"
+BACKUP_UID="${BACKUP_UID:-}"
+BACKUP_GID="${BACKUP_GID:-}"
 export PGHOST="${PGHOST:-postgres}"
 export PGUSER="${PGUSER:-postgres}"
 export PGDATABASE="${PGDATABASE:-platform_db}"
 
 log() { echo "backup: $*"; }
 
+# own PATH — hands a dump or a directory to the host user who restores from
+# it. The container runs as root; without this every dump is root's 0600 and
+# the deploy user cannot even copy it off the host. Permissions stay owner-only.
+own() {
+    [ -n "${BACKUP_UID}" ] || return 0
+    chown "${BACKUP_UID}:${BACKUP_GID:-${BACKUP_UID}}" "$@" 2>/dev/null \
+        || log "could not hand $* to ${BACKUP_UID}:${BACKUP_GID:-${BACKUP_UID}}" >&2
+}
+
 write_metrics() {
     ok="$1" size="$2"
-    [ -n "${TEXTFILE_DIR}" ] && [ -d "${TEXTFILE_DIR}" ] || return 0
+    [ -n "${TEXTFILE_DIR}" ] || return 0
+    # Created, not assumed: a mounted directory that does not exist yet would
+    # otherwise mean the metrics are never written and the alert never fires.
+    mkdir -p "${TEXTFILE_DIR}" 2>/dev/null || return 0
     out="${TEXTFILE_DIR}/nexus_backup.prom"
     previous=""
     [ -f "${out}" ] && previous="$(awk '/^nexus_backup_last_success_timestamp_seconds /{print $2}' "${out}" 2>/dev/null || true)"
@@ -87,6 +103,7 @@ dump() {
     kind="$1"
     dir="${BACKUP_DIR}/${kind}"
     mkdir -p "${dir}"
+    own "${BACKUP_DIR}" "${dir}"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     target="${dir}/nexus-${kind}-${stamp}.sql.gz"
@@ -114,6 +131,7 @@ dump() {
         return 1
     fi
     mv -f "${part}" "${target}"
+    own "${target}"
     record true "${size}" "${target}" "${started}"
     write_metrics true "${size}"
     log "${kind}: ${target} (${size} bytes)"

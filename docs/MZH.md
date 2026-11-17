@@ -379,17 +379,29 @@ wizard-аар, эсвэл хост дээр `docker exec sdy_backend /app/operat
   **03:15 (Улаанбаатар) = 19:15 UTC** (`BACKUP_AT_UTC`) `pg_dump` авч
   `/opt/sdy/backups/daily/nexus-daily-<UTC>.sql.gz` болгоно, **14 хоног** (`BACKUP_KEEP_DAYS`)
   хадгална. Үр дүн `platform_backups` хүснэгтэд (консолын «Нөөцлөлт»), хэмжүүр
-  `/opt/sdy/backups/metrics/nexus_backup.prom`-д (node_exporter-ийн textfile хавтас болговол
-  `deploy/monitoring/prometheus/rules/backups.yml`-ийн сэрэмжлүүлэг ажиллана).
+  `/var/lib/node_exporter/nexus_backup.prom`-д (`BACKUP_TEXTFILE_HOST_DIR`; скрипт хавтсыг
+  үүсгэнэ). Энэ нь `deploy/docker-compose.monitoring.yml`-ийн node_exporter-ийн textfile
+  хавтас тул тэр stack хост дээр асаалттай бол `backups.yml`-ийн сэрэмжлүүлэг ажиллана;
+  асаагүй бол сэрэмжлүүлэг байхгүй — консолын «Нөөцлөлт»-ийг харна.
 - **Migrate-ийн өмнөх dump.** deploy.yml image татсаны дараа, контейнерт хүрэхээс өмнө
   `docker compose run --rm -T --no-deps backup once predeploy` ажиллуулна →
   `/opt/sdy/backups/predeploy/`, сүүлийн **10** (`BACKUP_KEEP_COUNT`) үлдэнэ. Dump амжилтгүй эсвэл
   10 KB-аас бага бол **rollout зогсоно**, ажиллаж буй систем хэвээр. Анхны суулгацад (ажиллаж буй
   `sdy_postgres` байхгүй) алгасна.
-- Хязгаар: нөөц нь **ижил дискэн дээр**, шифрлэгдээгүй (зөвхөн `root` уншина, `umask 077`) —
-  хост алдагдвал хамт алга болно. Өөр байршилд хуулах (`backup.sh`-ийн age + S3) нь дараагийн алхам.
-- Сэргээх: `gunzip -c /opt/sdy/backups/predeploy/<файл>.sql.gz | docker exec -i sdy_postgres psql -U postgres -d platform_db`
-  (dump нь `--clean --if-exists`-тэй; эхлээд backend-ийг зогсооно).
+- Эзэмшил: dump ба хавтсыг `deploy` хэрэглэгчид шилжүүлнэ (`BACKUP_UID`/`BACKUP_GID` = deploy.yml-ийн
+  `id -u`/`id -g`), эрх нь зөвхөн эзэмшигчийнх (файл 0600, хавтас 0700) — `deploy` уншиж, хуулж
+  чадна, бусад хэрэглэгч чадахгүй.
+- Хязгаар: нөөц нь **ижил дискэн дээр**, шифрлэгдээгүй — хост алдагдвал хамт алга болно. Өөр
+  байршилд хуулах (`backup.sh`-ийн age + S3 эсвэл `scp deploy@5.45.65.164:/opt/sdy/backups/...`)
+  нь дараагийн алхам.
+- **Сэргээх** (`deploy` хэрэглэгчээр, `/opt/sdy`-д):
+  1. Файлаа сонгоно: `ls -lt backups/predeploy backups/daily | head`.
+  2. Бичилтийг зогсооно: `docker compose -f docker-compose.prod.yml stop backend frontend backup`.
+  3. Сэргээнэ (dump нь `--clean --if-exists`-тэй тул объектуудыг устгаад дахин үүсгэнэ):
+     `gunzip -c backups/predeploy/<файл>.sql.gz | docker exec -i sdy_postgres psql -v ON_ERROR_STOP=1 -U postgres -d platform_db`.
+  4. Буцаан асаана: `docker compose -f docker-compose.prod.yml up -d` (migrate эхэлж ажиллана).
+     Буруу migration-ийн дараа сэргээж байгаа бол эхлээд өмнөх `IMAGE_TAG`-ийг deploy хийнэ
+     (Actions → Run workflow → tag), эс бөгөөс migrate тэр migration-ийг дахин хийнэ.
 
 **eID-ийн binding-гүй fallback.** App Store-ийн iOS 1.0 eID poll-доо binding явуулдаггүй тул
 `EID_ALLOW_UNBOUND_BEARER` (анхдагч `true`, GitHub variable → deploy.yml → `.env`) асаалттай байхад

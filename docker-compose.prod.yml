@@ -121,9 +121,17 @@ services:
       BACKUP_KEEP_COUNT: ${BACKUP_KEEP_COUNT:-10}
       # 19:15 UTC is 03:15 in Ulaanbaatar.
       BACKUP_AT_UTC: ${BACKUP_AT_UTC:-19:15}
-      TEXTFILE_DIR: /backups/metrics
+      # node_exporter's textfile collector (deploy/docker-compose.monitoring.yml)
+      # reads the host's /var/lib/node_exporter; deploy.yml points
+      # BACKUP_TEXTFILE_HOST_DIR there. The script creates the directory.
+      TEXTFILE_DIR: /metrics
+      # The host user dumps are handed to (deploy.yml: the deploy user), so it
+      # can read and copy them. Empty leaves them root's.
+      BACKUP_UID: ${BACKUP_UID:-}
+      BACKUP_GID: ${BACKUP_GID:-}
     volumes:
       - ${BACKUP_HOST_DIR:-./backups}:/backups
+      - ${BACKUP_TEXTFILE_HOST_DIR:-./backups/metrics}:/metrics
       - ./deploy/scripts/scheduled-backup.sh:/scripts/scheduled-backup.sh:ro
     depends_on:
       postgres:

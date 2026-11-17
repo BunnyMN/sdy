@@ -23,8 +23,8 @@ class ScheduledBackupTest(unittest.TestCase):
         self.bin = root / "bin"
         self.bin.mkdir()
         self.backups = root / "backups"
-        self.metrics = root / "metrics"
-        self.metrics.mkdir()
+        # Not created here: the script must create it (a fresh bind mount).
+        self.metrics = root / "metrics" / "textfile"
         self.recorded = root / "recorded.sql"
         self.stub("psql", f'echo "$@" >> "{self.recorded}"\n')
         self.dump_ok()
@@ -50,6 +50,8 @@ class ScheduledBackupTest(unittest.TestCase):
             BACKUP_KEEP_COUNT="3",
             TEXTFILE_DIR=str(self.metrics),
             PGPASSWORD="unused",
+            BACKUP_UID=str(os.getuid()),
+            BACKUP_GID=str(os.getgid()),
         )
         return subprocess.run(["sh", str(SCRIPT), *args], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=30)
 
@@ -64,6 +66,22 @@ class ScheduledBackupTest(unittest.TestCase):
         self.assertFalse(list((self.backups / "predeploy").glob("*.part")))
         self.assertIn("platform_backups", self.recorded.read_text())
         self.assertIn("nexus_backup_last_ok 1", (self.metrics / "nexus_backup.prom").read_text())
+
+    def test_the_dump_is_handed_to_the_configured_owner(self):
+        # Chowning to oneself is the one chown an unprivileged test can do;
+        # what is checked is that the path is taken and does not fail.
+        result = self.run_script("once", "predeploy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("could not hand", result.stderr)
+        dump = next((self.backups / "predeploy").glob("*.sql.gz"))
+        self.assertEqual(dump.stat().st_uid, os.getuid())
+        self.assertEqual(dump.stat().st_mode & 0o077, 0, "a dump must stay owner-only")
+
+    def test_a_missing_metrics_directory_is_created(self):
+        self.assertFalse(self.metrics.exists())
+        result = self.run_script("once", "predeploy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.metrics / "nexus_backup.prom").exists())
 
     def test_a_failed_dump_fails_the_run_and_leaves_nothing(self):
         self.stub("pg_dump", "echo 'connection refused' >&2; exit 2\n")

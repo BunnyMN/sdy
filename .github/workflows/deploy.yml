@@ -290,6 +290,12 @@ jobs:
             # `up -d` бүр түүнийг асаана — суулгах тусдаа алхам байхгүй.
             COMPOSE_PROFILES=backup
             BACKUP_HOST_DIR=${APP_DIR}/backups
+            # node_exporter-ийн textfile хавтас (deploy/docker-compose.monitoring.yml);
+            # docker хавтсыг өөрөө үүсгэнэ, sudo хэрэггүй.
+            BACKUP_TEXTFILE_HOST_DIR=/var/lib/node_exporter
+            # Dump-ийг deploy хэрэглэгчид шилжүүлнэ — уншиж, хуулж, сэргээж чадна.
+            BACKUP_UID=$(id -u)
+            BACKUP_GID=$(id -g)
             REDIS_URL=${REDIS_URL}
             GITHUB_REPOSITORY=${REPO}
             APPLE_TEAM_ID=${APPLE_TEAM_ID}
