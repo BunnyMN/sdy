@@ -164,6 +164,7 @@ func maskReg(reg string) string {
 }
 
 var (
+	// #nosec G101 -- the names of credentials to redact, not a credential.
 	secretWords = `[a-z_\-]*(?:token|secret|password|passwd|api_?key|apikey|authorization|signature|sig|code_verifier)`
 	// key=value, as in a query string or a form.
 	secretParam = regexp.MustCompile(`(?i)(\b` + secretWords + `=)[^&\s"]+`)
