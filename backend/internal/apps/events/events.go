@@ -51,6 +51,8 @@ const (
 type Module struct {
 	db          nexus.DB
 	permissions nexus.PermissionStore
+	// signTests are the eID signature tests in flight (signtest.go).
+	signTests signTestStore
 }
 
 // New constructs and registers the module. Called once, from apps.Bootstrap.
@@ -67,7 +69,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.6.0" }
+func (m *Module) Version() string { return "1.6.1" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -129,6 +131,9 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		// Moderation: issues members reported, for an organiser to review.
 		er.With(manage).Get("/reported", m.reported)
 		er.With(read).Get("/leaderboard", m.leaderboard)
+		// A member's own eID (PIN2) signature test, with the reason it stopped.
+		er.With(read, nexus.RateLimit(10, 2)).Post("/sign-test", m.signTest)
+		er.With(read).Post("/sign-test/poll", m.pollSignTest)
 		// Blocking: a member stops seeing the issues one person raises.
 		er.With(read).Get("/blocks", m.blocks)
 		er.With(read).Post("/blocks/{userID}", m.block)

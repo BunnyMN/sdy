@@ -280,6 +280,8 @@ TRACE /metrics
 [app] POST /api/v1/events/
 [app] POST /api/v1/events/blocks/{userID}
 [app] POST /api/v1/events/sanctions
+[app] POST /api/v1/events/sign-test
+[app] POST /api/v1/events/sign-test/poll
 [app] POST /api/v1/events/{id}/attendance
 [app] POST /api/v1/events/{id}/check-in
 [app] POST /api/v1/events/{id}/check-in-code

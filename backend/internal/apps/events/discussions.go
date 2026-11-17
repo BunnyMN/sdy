@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -502,6 +503,7 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 	}
 	regNumber, name, err := m.signerIdentity(ctx, claims.UserID)
 	if err != nil {
+		slog.WarnContext(ctx, "events: vote could not read the signer's eID identity", "error", err, "motion_id", motionID)
 		nexus.Error(w, http.StatusInternalServerError, "could not read your eID identity")
 		return
 	}
@@ -519,6 +521,8 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 		CallbackURL:  callback,
 	})
 	if err != nil {
+		slog.WarnContext(ctx, "events: eID could not start a vote signature", "error", diagnosticText(err.Error()),
+			"motion_id", motionID, "device", callback != "")
 		nexus.Error(w, http.StatusBadGateway, "eID Mongolia could not start the signature")
 		return
 	}
@@ -599,11 +603,14 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	}
 	regNumber, _, err := m.signerIdentity(ctx, claims.UserID)
 	if err != nil || regNumber == "" {
+		slog.WarnContext(ctx, "events: vote poll has no eID identity", "error", err, "motion_id", motionID, "session_id", in.SessionID)
 		nexus.Error(w, http.StatusConflict, "your eID identity is not linked")
 		return
 	}
 	state, err := signer.PollSignature(ctx, regNumber, in.SessionID)
 	if err != nil {
+		slog.WarnContext(ctx, "events: eID could not poll a vote signature", "error", diagnosticText(err.Error()),
+			"motion_id", motionID, "session_id", in.SessionID)
 		nexus.Error(w, http.StatusBadGateway, "could not reach eID Mongolia")
 		return
 	}
@@ -613,6 +620,8 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 		return
 	case nexus.SignatureCompleted:
 	default:
+		slog.WarnContext(ctx, "events: eID ended a vote signature without signing", "eid_state", string(state),
+			"motion_id", motionID, "session_id", in.SessionID)
 		m.failVote(ctx, claims, motionID, in.SessionID)
 		nexus.JSON(w, http.StatusOK, map[string]any{"state": "failed", "reason": string(state)})
 		return
@@ -621,6 +630,12 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	want, _ := hex.DecodeString(digestHex)
 	if err != nil || signed != base64.StdEncoding.EncodeToString(want) {
 		// The signature is over something else. It is not a vote on this text.
+		if err != nil {
+			slog.WarnContext(ctx, "events: eID returned no verified digest for a vote", "error", diagnosticText(err.Error()),
+				"motion_id", motionID, "session_id", in.SessionID)
+		} else {
+			slog.WarnContext(ctx, "events: eID signed a different digest than the vote's", "motion_id", motionID, "session_id", in.SessionID)
+		}
 		m.failVote(ctx, claims, motionID, in.SessionID)
 		nexus.Error(w, http.StatusConflict, "the signature does not cover this vote")
 		return

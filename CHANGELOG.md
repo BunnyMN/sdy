@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — eID гарын үсгийн (PIN2) туршилт (events 1.6.1)
+
+- `POST /api/v1/events/sign-test` ба `/sign-test/poll`: гишүүн өөрийн eID-ээр хор хөнөөлгүй баримт
+  зурж, ёслол аль шатанд (`signer_disabled`, `identity_missing`, `start_failed`, `poll_failed`,
+  `refused`, `digest_unavailable`, `digest_mismatch`, `ok`) зогссоныг болон eID-ийн алдааны текстийг
+  (нууц утгыг нуусан) харна. Санах ойд 15 минут, migration-гүй; аудит `events.sign_test`.
+- Вэб: `/member/eid-test` хуудас («Туршилт эхлүүлэх», утсан дээр eID апп, компьютер дээр код,
+  алдааг «Хуулах»). Гишүүний нүүр, «Миний бүртгэл», санал зурагдаагүй цонхноос холбоостой.
+- Санал өгөх үеийн eID алдаа (эхлүүлэх, poll, verified digest, identity) одоо `slog.Warn`-оор
+  логт бичигдэнэ; HTTP хариу хэвээр.
+
 ### Fixed — 2026-11 шалгалтын засварууд (events 1.6.0, membership 1.2.0, 00123–00124)
 
 - **Хураамж:** санхүүч өөрийн төлөлтийг батлах/татгалзах/буцаах, өөрийн хураамжийг чөлөөлөх боломжгүй

@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.6.1",
+      "released_at": "2026-11-17",
+      "kind": "feature",
+      "summary": {
+        "mn": "eID гарын үсгийн (PIN2) туршилт: гишүүн өөрийн eID-ээр хор хөнөөлгүй баримт зурж, хаана зогссоныг харна.",
+        "en": "eID signature (PIN2) test: a member signs a harmless document with their own eID and sees where it stopped."
+      },
+      "details": {
+        "mn": "POST /events/sign-test ба /sign-test/poll нь санал өгөхтэй яг ижил eID ёслолыг туршиж, үе шат бүрийн оношлогоо (signer_disabled, identity_missing, start_failed, poll_failed, refused, digest_unavailable, digest_mismatch, ok) ба eID-ийн алдааны текстийг (нууц утгыг нуусан) буцаана. Санал өгөх алдаа бүр лог-д үлдэнэ.",
+        "en": "POST /events/sign-test and /sign-test/poll run the same eID ceremony a vote does and answer a per-stage diagnostic (signer_disabled, identity_missing, start_failed, poll_failed, refused, digest_unavailable, digest_mismatch, ok) with eID's error text, secrets redacted. Every vote signing failure is now logged."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.6.0",
       "released_at": "2026-11-17",
       "kind": "fix",

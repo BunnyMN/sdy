@@ -173,3 +173,28 @@ export const eventsApi = {
     }),
   members: () => request<{ members: { user_id: string; name: string; email: string }[] }>("/events/members"),
 };
+
+/** Where an eID signature test stopped (events 1.6.1). */
+export type SignTestStage =
+  | "signer_disabled" | "identity_missing" | "start_failed" | "waiting" | "poll_failed"
+  | "refused" | "digest_unavailable" | "digest_mismatch" | "session_missing" | "ok";
+export type SignTestAnswer = {
+  session_id?: string;
+  verification_code?: string;
+  app_link?: string;
+  expires_at?: string;
+  state: "signing" | "signed" | "failed";
+  diagnostic: { state: "signing" | "signed" | "failed"; stage: SignTestStage; detail: string; eid_state?: string };
+  mode?: { signer_enabled: boolean; flow: "device" | "push"; reg_number: string };
+};
+
+/**
+ * A member's own eID (PIN2) signature test: the same ceremony a vote uses,
+ * over a harmless document, answered with the stage it reached and the rail's
+ * own error text.
+ */
+export const signTestApi = {
+  start: (callbackUrl = "") => request<SignTestAnswer>("/events/sign-test", post({ callback_url: callbackUrl })),
+  /** An empty sessionID asks about the caller's latest test. */
+  poll: (sessionID = "") => request<SignTestAnswer>("/events/sign-test/poll", post({ session_id: sessionID })),
+};
