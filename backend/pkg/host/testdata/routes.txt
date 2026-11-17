@@ -313,6 +313,7 @@ TRACE /metrics
 [app] POST /api/v1/events/{id}/tasks/{taskID}/respond
 [app] POST /api/v1/events/{id}/tasks/{taskID}/volunteer
 [app] PUT /api/v1/archive/{docID}/
+[app] PUT /api/v1/archive/{docID}/signers
 [app] PUT /api/v1/dues/settings
 [app] PUT /api/v1/events/{id}/
 [app] PUT /api/v1/events/{id}/attendance/{userID}
