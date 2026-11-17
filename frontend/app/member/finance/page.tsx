@@ -9,7 +9,7 @@ import { memberApi } from "@/lib/api/member";
 import { monthOf } from "@/lib/datetime";
 import { useErrorMessage } from "@/lib/useErrorMessage";
 
-type Decision = { id: string; action: "approve" | "reject" | "reverse" | "waive"; title: string; reason: string };
+type Decision = { id: string; action: "approve" | "reject" | "reverse" | "waive" | "unwaive"; title: string; reason: string };
 const button = "min-h-11 rounded-lg border border-line px-4 disabled:opacity-50";
 import { memberMoney as money } from "@/lib/memberFormat";
 
@@ -61,6 +61,7 @@ export default function DuesFinance() {
     event.preventDefault(); if (!decision) return;
     void act(async () => {
       if (decision.action === "waive") await duesApi.waive(decision.id, decision.reason.trim());
+      else if (decision.action === "unwaive") await duesApi.unwaive(decision.id, decision.reason.trim());
       else await duesApi.review(decision.id, decision.action, decision.reason.trim());
       setDecision(null); setNotice(t("dues.saved")); await load();
     });
@@ -101,7 +102,7 @@ export default function DuesFinance() {
       <div className="flex flex-wrap justify-between gap-2"><strong>{payment.name} · {money(payment.amount)}</strong><span className="text-sm">{t(`dues.${payment.status}`)}</span></div><p className="break-all text-sm">{payment.reference}</p>{payment.review_note && <p className="text-sm text-muted">{payment.review_note}</p>}
       <div className="flex flex-wrap gap-3">{(payment.status === "pending" ? ["approve", "reject"] as const : payment.status === "approved" ? ["reverse"] as const : []).map(action => <button key={action} disabled={busy} className={button} onClick={() => setDecision({ id: payment.id, action, title: `${payment.name} · ${money(payment.amount)}`, reason: "" })}>{t(`dues.${action}`)}</button>)}</div>
     </article>)}</section>}
-    {!!data?.charges.length && <section className="space-y-3"><h2 className="text-lg font-semibold">{t("dues.charged")}</h2>{data.charges.map(charge => <article key={charge.id} className="space-y-3 rounded-xl border border-line p-4"><h3 className="font-medium">{charge.name} · {charge.period}</h3><p className="text-sm text-muted">{t("dues.paid")}: {money(charge.paid)} · {t("dues.balance")}: {money(charge.balance)}</p>{charge.waived && <p className="text-sm">{t("dues.waived")}: {charge.waiver_reason}</p>}{charge.balance > 0 && <button disabled={busy} className={button} onClick={() => setDecision({ id: charge.id, action: "waive", title: `${charge.name} · ${charge.period}`, reason: "" })}>{t("dues.waive")}</button>}</article>)}</section>}
+    {!!data?.charges.length && <section className="space-y-3"><h2 className="text-lg font-semibold">{t("dues.charged")}</h2>{data.charges.map(charge => <article key={charge.id} className="space-y-3 rounded-xl border border-line p-4"><h3 className="font-medium">{charge.name} · {charge.period}</h3><p className="text-sm text-muted">{t("dues.paid")}: {money(charge.paid)} · {t("dues.balance")}: {money(charge.balance)}</p>{charge.waived && <p className="text-sm">{t("dues.waived")}: {charge.waiver_reason}</p>}{charge.balance > 0 && <button disabled={busy} className={button} onClick={() => setDecision({ id: charge.id, action: "waive", title: `${charge.name} · ${charge.period}`, reason: "" })}>{t("dues.waive")}</button>}{charge.waived && <button disabled={busy} className={button} onClick={() => setDecision({ id: charge.id, action: "unwaive", title: `${charge.name} · ${charge.period}`, reason: "" })}>{t("dues.unwaive")}</button>}</article>)}</section>}
     {data?.has_more && <button disabled={busy} className={button} onClick={() => void act(async () => { const next = await duesApi.finance(period, data.next_offset); setData({ ...next, charges: [...data.charges, ...next.charges], payments: [...data.payments, ...next.payments] }); })}>{t("dues.more")}</button>}
   </div>;
 }

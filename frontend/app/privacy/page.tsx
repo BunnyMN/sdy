@@ -11,7 +11,7 @@ import { ContactEmail, LegalPage, LegalSection, legalStyles as styles } from "@/
  * бичсэн бөгөөд хуульч хянаагүй. Нийтлэхээс өмнө SDY-ийн удирдлага / хуулийн
  * зөвлөх дараахыг баталгаажуулна:
  *   - хариуцагч байгууллагын албан ёсны нэр, хаяг, улсын бүртгэлийн дугаар;
- *   - холбоо барих хаяг (SDY_CONTACT_EMAIL, components/legal/LegalPage.tsx);
+ *   - холбоо барих хаяг (LEGAL_CONTACT_EMAIL → contactEmail(), components/legal/LegalPage.tsx);
  *   - хууль ёсны үндэслэл, хадгалах хугацаа (ялангуяа санхүүгийн бүртгэл,
  *     аудитын бүртгэлийн хугацаа);
  *   - хостинг үйлчилгээ үзүүлэгчийн нэр, серверийн байршил;

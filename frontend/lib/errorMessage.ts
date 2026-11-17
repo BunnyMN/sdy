@@ -70,6 +70,17 @@ const KNOWN: Record<string, TranslationKey> = {
   "register for an open event before checking in": "base.error.checkin_not_registered",
   // apps/events/events.go
   "this event is full": "base.error.event_full",
+  // apps/events — stable strings the apps also map (docs/MZH.md)
+  "you cannot record your own attendance": "base.error.self_attendance",
+  "you cannot confirm your own task": "base.error.self_task",
+  "you cannot check in with a check-in code you issued": "base.error.self_checkin",
+  "this event is cancelled": "base.error.event_cancelled",
+  "check-in is open from 2 hours before the event starts until 2 hours after it ends": "base.error.checkin_window",
+  "provide a reason for the attendance correction": "base.error.correction_reason",
+  // apps/membership/dues.go
+  "you cannot review your own payment": "base.error.self_review",
+  "you cannot change the exemption of your own charge": "base.error.self_waive",
+  "this charge has a pending payment report; approve or reject it before exempting the charge": "base.error.waive_pending",
   // apps/events/discussions.go
   "you have already voted on this issue": "base.error.already_voted",
   "the vote on this issue has already been opened or closed": "base.error.vote_closed",

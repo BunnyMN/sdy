@@ -33,6 +33,16 @@ const member = {
   "events.tasks.delete_confirm": { mn: "«{title}» ажлыг устгах уу?", en: "Delete the task “{title}”?" },
   "events.tasks.members_failed": { mn: "Гишүүдийн жагсаалтыг ачаалж чадсангүй, тиймээс ажил оноох боломжгүй.", en: "Could not load the member list, so tasks cannot be assigned." },
   "events.leaderboard.period": { mn: "Хугацаа", en: "Period" },
+  "events.moderation.title": { mn: "Мэдээлсэн асуудлууд", en: "Reported issues" },
+  "events.moderation.hint": { mn: "Гишүүд мэдээлсэн асуудлууд. Санал хураалт нээгдээгүй асуудлыг {count} гишүүн мэдээлбэл гишүүдэд нуугдана. Мэдээллийг хэрэгсэхгүй болгоход асуудал дахин харагдана; устгах шаардлагатай бол хэлэлцүүлэг дээрээс татна.", en: "Issues members reported. An issue not yet under vote that {count} members reported is hidden from members. Dismissing the reports shows it again; to remove it, withdraw it in the discussion." },
+  "events.moderation.reports": { mn: "{count} мэдээлэл", en: "{count} reports" },
+  "events.moderation.hidden": { mn: "Гишүүдэд нуугдсан", en: "Hidden from members" },
+  "events.moderation.no_reason": { mn: "Шалтгаан бичээгүй", en: "No reason given" },
+  "events.moderation.open": { mn: "Хэлэлцүүлэг рүү", en: "Open discussion" },
+  "events.moderation.dismiss": { mn: "Мэдээллийг хэрэгсэхгүй болгох", en: "Dismiss reports" },
+  "events.moderation.dismiss_confirm": { mn: "«{title}» асуудлын мэдээллийг хэрэгсэхгүй болгох уу?", en: "Dismiss the reports on “{title}”?" },
+  "events.moderation.dismiss_reason": { mn: "Шалтгаан (заавал биш)", en: "Reason (optional)" },
+  "events.moderation.dismissed": { mn: "Мэдээллийг хэрэгсэхгүй болголоо.", en: "Reports dismissed." },
 };
 
 registerDictionary("events", source({ ...events, ...member }));

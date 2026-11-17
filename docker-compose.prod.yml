@@ -447,6 +447,9 @@ services:
       # was built with — see .env.example for why the maskable one is separate.
       BRAND_ICON_URL: ${BRAND_ICON_URL:-}
       BRAND_MASKABLE_ICON_URL: ${BRAND_MASKABLE_ICON_URL:-}
+      # The address /privacy and /support give. Empty keeps the built-in
+      # privacy@e-sdy.mn, which receives no mail until e-sdy.mn has an MX record.
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
       # Wording this deployment says differently — see .env.example. The path is
       # inside the container: put the file in ./brand beside this compose file
       # and name it BRAND_COPY_FILE=/brand/copy.json. The inline form needs no

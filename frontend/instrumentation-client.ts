@@ -28,6 +28,7 @@
  */
 
 import type * as Sentry from '@sentry/nextjs';
+import { sentryPrivacy } from './lib/sentryPrivacy';
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -50,7 +51,8 @@ if (dsn) {
       // The SDK's default attaches the request body, the URL and the headers of
       // every fetch that failed. On this platform a URL can carry a single-use
       // verification reference and a body can carry a national identifier.
-      sendDefaultPii: false,
+      // lib/sentryPrivacy.ts says "none of it" to SDK 10 and 11 alike.
+      ...sentryPrivacy,
 
       beforeSend(event) {
         if (event.request) {

@@ -20,12 +20,14 @@ export async function register() {
   // this application.
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const Sentry = await import('@sentry/nextjs');
+    const { sentryPrivacy } = await import('./lib/sentryPrivacy');
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.ENVIRONMENT ?? 'development',
       release: process.env.RELEASE_VERSION,
       tracesSampleRate: 0,
-      sendDefaultPii: false,
+      // Nothing about the person (lib/sentryPrivacy.ts).
+      ...sentryPrivacy,
     });
   }
 }

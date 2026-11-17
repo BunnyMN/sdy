@@ -14,13 +14,24 @@ import styles from "./legal.module.css";
  */
 
 /**
- * SDY-ийн холбоо барих и-мэйл.
+ * SDY-ийн холбоо барих и-мэйл — /privacy, /support хоёулаа эндээс уншина.
  *
- * TODO(SDY): ОРЛУУЛАХ ЁСТОЙ PLACEHOLDER. Энэ хаяг одоогоор баталгаажаагүй —
- * SDY-ийн бодит, хүлээн авдаг хаягаар солиод, App Store Connect-д илгээхээс
- * өмнө ажиллаж буйг шалгана. /privacy, /support хоёр хоёулаа эндээс уншдаг.
+ * Анхдагч `privacy@e-sdy.mn` нь ОДООГООР ЗАХИДАЛ ХҮЛЭЭН АВАХГҮЙ: e-sdy.mn
+ * домэйнд MX бичлэг байхгүй (2026-11-17-нд шалгасан). SDY бодит хаягаа гаргах
+ * хүртэл серверийн орчинд `LEGAL_CONTACT_EMAIL`-ийг хүлээн авдаг хаягаар
+ * тохируулна (docker-compose.prod.yml → frontend, deploy.yml); эсвэл
+ * e-sdy.mn-д MX нэмж энэ хаягийг ажилладаг болгоно. Дэлгэрэнгүй: docs/MZH.md.
+ *
+ * Layout нь force-dynamic тул утга хүсэлт бүрт уншигдана — image дахин
+ * бүтээх шаардлагагүй.
  */
 export const SDY_CONTACT_EMAIL = "privacy@e-sdy.mn";
+
+export function contactEmail(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = (env.LEGAL_CONTACT_EMAIL ?? "").trim();
+  // Only something that is an address: this lands in a mailto: link.
+  return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(configured) ? configured : SDY_CONTACT_EMAIL;
+}
 
 export function LegalPage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
   const brand = brandFromEnv();
@@ -71,9 +82,10 @@ export function LegalSection({ id, title, children }: { id?: string; title: stri
 }
 
 export function ContactEmail() {
+  const email = contactEmail();
   return (
     <>
-      <a href={`mailto:${SDY_CONTACT_EMAIL}`}>{SDY_CONTACT_EMAIL}</a>
+      <a href={`mailto:${email}`}>{email}</a>
     </>
   );
 }

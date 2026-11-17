@@ -120,6 +120,21 @@ export type Sanction = {
   event_id: string | null; event_title: string; points: number; reason: string; created_at: string;
 };
 
+/** An issue members reported, for an organiser to review (events 1.6.0). Reporters are not named. */
+export type ReportedIssue = {
+  motion_id: string; event_id: string; event_title: string; title: string; body: string;
+  proposer_id: string; proposer_name: string; status: MotionStatus; report_count: number;
+  /** Hidden from members while it stays reported (hide_after open reports, not yet under vote). */
+  hidden: boolean; reports: { reason: string; created_at: string }[];
+};
+
+export const moderationApi = {
+  reported: () => request<{ issues: ReportedIssue[]; hide_after: number }>("/events/reported"),
+  /** Resolves every open report on the issue; a hidden issue shows to members again. */
+  dismiss: (eventID: string, motionID: string, reason: string) =>
+    request<{ dismissed: number }>(`${one(eventID)}/motions/${encodeURIComponent(motionID)}/reports/dismiss`, post({ reason })),
+};
+
 export const sanctionsApi = {
   list: (offset = 0) => request<{ sanctions: Sanction[]; has_more: boolean; next_offset: number }>(`/events/sanctions?offset=${offset}`),
   mine: () => request<{ sanctions: Sanction[] }>("/events/sanctions/mine"),
@@ -147,9 +162,10 @@ export const eventsApi = {
     request<{ status: string; changed: boolean }>(`/events/${encodeURIComponent(id)}/register`, { method: "DELETE" }),
   participants: (id: string) =>
     request<{ participants: Participant[] }>(`/events/${encodeURIComponent(id)}/attendance`),
-  addParticipant: (id: string, userID: string, status: AttendanceStatus = "registered") =>
+  /** note is required by the server when it changes attendance already recorded (events 1.6.0). */
+  addParticipant: (id: string, userID: string, status: AttendanceStatus = "registered", note = "") =>
     request<{ status: string }>(`/events/${encodeURIComponent(id)}/attendance`, {
-      method: "POST", body: JSON.stringify({ user_id: userID, status }),
+      method: "POST", body: JSON.stringify({ user_id: userID, status, note }),
     }),
   mark: (id: string, userID: string, status: AttendanceStatus, note = "") =>
     request<{ status: string }>(`/events/${encodeURIComponent(id)}/attendance/${encodeURIComponent(userID)}`, {
