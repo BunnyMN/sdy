@@ -1,4 +1,4 @@
-DEMO ACCOUNT: sign in with email and password. New in 1.1.1, the sign-in screen shows a single eID Mongolia button; the email/password sign-in is the link "Нууц үгээр нэвтрэх" (Sign in with password) in the small text at the very bottom of the screen, under the button. The account is an approved member of a test branch with sample events, a discussion, a task and membership dues.
+DEMO ACCOUNT: sign in with email and password. The sign-in screen shows a single eID Mongolia button; under it, at the bottom of the screen, tap "Нууц үгээр нэвтрэх" (Sign in with password) to enter the demo email and password. The account is an approved member of a test branch with sample events, a discussion, a task and membership dues.
 
 The app's interface is in Mongolian. It is the member app of SDY (Social Democratic Youth Union of Mongolia).
 
@@ -10,7 +10,7 @@ PAYMENTS: the app takes no payments. Membership dues are paid by bank transfer o
 
 ACCOUNT DELETION: Profile (Профайл) -> Бүртгэл устгах (Delete account). The request is cancelled if the person signs in again within 30 days; after that personal data is anonymised.
 
-USER-GENERATED CONTENT (Guideline 1.2): only approved members of a branch can post discussion issues, and branch organisers moderate them. On every issue raised by another member, the "..." menu offers "Мэдээлэх" (Report, with a reason; the event organiser is notified at once) and "Гишүүнийг блоклох" (Block member; their issues are hidden from you). An issue reported by three members is hidden until an organiser reviews it. Blocked members: Profile (Профайл) -> Блоклосон гишүүд, where a block can be undone. Path: Events (Арга хэмжээ) -> an event -> Хэлэлцүүлэг (Discussion).
+USER-GENERATED CONTENT (Guideline 1.2): only approved members of a branch can post discussion issues, and branch organisers moderate them. On every issue raised by another member, the "..." menu offers "Мэдээлэх" (Report, with a reason; the event organiser is notified at once) and "Гишүүнийг блоклох" (Block member; their issues are hidden from you). An issue reported by three members is hidden until an organiser reviews it; organisers review reported issues and dismiss or act on the reports. Blocked members: Profile (Профайл) -> Блоклосон гишүүд, where a block can be undone. Path: Events (Арга хэмжээ) -> an event -> Хэлэлцүүлэг (Discussion).
 
 PUSH NOTIFICATIONS: the app asks for notification permission after sign-in. Notifications are sent only for the member's own branch activity (events, decisions, replies to their reports) — never marketing. Signing out removes the device from notifications.
 
