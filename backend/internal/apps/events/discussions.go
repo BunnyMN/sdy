@@ -48,11 +48,18 @@ type Motion struct {
 	ReportedByMe bool `json:"reported_by_me"`
 	// ReportCount is the open reports, told to managers only.
 	ReportCount int `json:"report_count"`
+	// ProtocolID is the archive document recording the decided vote (its
+	// signed protocol), when there is one that is not a draft.
+	ProtocolID *string `json:"protocol_id"`
 }
 
 type MyVote struct {
 	Choice string `json:"choice"`
 	Status string `json:"status"`
+	// Ballot: a ballot PDF is stored for this vote (GET …/ballot); Stamped:
+	// it carries eID's PAdES signature.
+	Ballot  bool `json:"ballot"`
+	Stamped bool `json:"ballot_signed"`
 }
 
 // The counts are the frozen ones once decided, and the live signed tally
@@ -67,7 +74,11 @@ const motionColumns = `
 	       COALESCE((SELECT v.choice FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), ''),
 	       COALESCE((SELECT v.status FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), ''),
 	       EXISTS (SELECT 1 FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.reporter_id = $2::uuid),
-	       (SELECT count(*) FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.resolved_at IS NULL)::int
+	       (SELECT count(*) FROM events_motion_reports rp WHERE rp.motion_id = mo.id AND rp.resolved_at IS NULL)::int,
+	       COALESCE((SELECT v.ballot_pdf IS NOT NULL FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), false),
+	       COALESCE((SELECT v.ballot_signed_pdf IS NOT NULL FROM events_motion_votes v WHERE v.motion_id = mo.id AND v.user_id = $2::uuid), false),
+	       (SELECT d.id::text FROM events_archive_documents d WHERE d.motion_id = mo.id AND d.status IN ('signing','signed')
+	         ORDER BY d.created_at DESC LIMIT 1)
 	  FROM events_motions mo LEFT JOIN registry.users u ON u.id = mo.proposer_id
 	 WHERE mo.tenant_id = $1::uuid`
 
@@ -76,14 +87,15 @@ func scanMotion(row pgx.Row) (Motion, error) {
 	var opened, closed *time.Time
 	var created time.Time
 	var choice, voteStatus string
+	var ballot, stamped bool
 	if err := row.Scan(&mo.ID, &mo.EventID, &mo.Title, &mo.Body, &mo.ProposerID, &mo.ProposerName,
 		&mo.Status, &mo.ContentHash, &opened, &closed, &mo.Result, &mo.Yes, &mo.No, &mo.Abstain,
-		&mo.Note, &created, &choice, &voteStatus, &mo.ReportedByMe, &mo.ReportCount); err != nil {
+		&mo.Note, &created, &choice, &voteStatus, &mo.ReportedByMe, &mo.ReportCount, &ballot, &stamped, &mo.ProtocolID); err != nil {
 		return mo, err
 	}
 	mo.OpenedAt, mo.ClosedAt, mo.CreatedAt = stampPtr(opened), stampPtr(closed), stamp(created)
 	if choice != "" {
-		mo.MyVote = &MyVote{Choice: choice, Status: voteStatus}
+		mo.MyVote = &MyVote{Choice: choice, Status: voteStatus, Ballot: ballot && voteStatus == "signed", Stamped: stamped}
 	}
 	return mo, nil
 }
@@ -366,7 +378,14 @@ func (m *Module) closeVote(w http.ResponseWriter, r *http.Request) {
 		_, err := tx.Exec(ctx, `UPDATE events_motions SET status='decided', result=$3, yes_count=$4, no_count=$5, abstain_count=$6,
 			closed_at=now(), closed_by=$7, updated_at=now() WHERE tenant_id=$1 AND id=$2`,
 			claims.WorkspaceID, mo.ID, result, mo.Yes, mo.No, mo.Abstain, claims.UserID)
-		return "events.motion.decide", err
+		if err != nil {
+			return "", err
+		}
+		// The protocol goes to the chair and the secretary. It is made in a
+		// savepoint: a vote closes even if its protocol cannot be made, and a
+		// manager makes it again with POST …/protocol.
+		m.protocolOnClose(ctx, tx, claims, mo.EventID, mo.ID)
+		return "events.motion.decide", nil
 	})
 }
 
@@ -511,29 +530,50 @@ func (m *Module) vote(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "sign in with eID Mongolia once so your vote can be signed")
 		return
 	}
-	document := voteDocument(claims.WorkspaceID, event, mo, claims.UserID, in.Choice, time.Now())
-	digest := sha256.Sum256([]byte(document))
+	// The ballot is a PDF the voter signs with PIN2; the digest recorded is
+	// that PDF's SHA-256, and the text document says the same in words.
+	at := time.Now().UTC().Truncate(time.Second)
+	document := voteDocument(claims.WorkspaceID, event, mo, claims.UserID, in.Choice, at)
+	ballot, err := m.ballotPDF(ctx, claims.WorkspaceID, event, mo, claims.UserID, name, in.Choice, at)
+	if err != nil {
+		slog.WarnContext(ctx, "events: could not render a ballot", "error", err, "motion_id", motionID)
+		nexus.Error(w, http.StatusInternalServerError, "could not prepare the ballot")
+		return
+	}
+	digest := sha256.Sum256(ballot)
 	digestHex := hex.EncodeToString(digest[:])
-	session, err := signer.SignDigest(ctx, nexus.SignatureRequest{
-		RegNumber: regNumber, FullName: name, DigestHex: digestHex,
-		DisplayText:  "Санал: " + choiceShort[in.Choice] + " — " + mo.Title,
-		DocumentName: "Хэлэлцүүлгийн санал",
-		CallbackURL:  callback,
+	display := clip("Санал: "+choiceShort[in.Choice]+" — "+mo.Title, 60)
+	mode := "pdf"
+	session, err := signer.SignDocument(ctx, nexus.DocumentSignatureRequest{
+		RegNumber: regNumber, FullName: name, FileName: "sdy-ballot-" + motionID[:8] + ".pdf", PDF: ballot,
+		DisplayText: display, CallbackURL: callback, RailSignatureOnly: true,
 	})
+	if errors.Is(err, nexus.ErrPDFSigningUnavailable) {
+		// A rail that signs only digests still signs this ballot's digest.
+		mode = "digest"
+		session, err = signer.SignDigest(ctx, nexus.SignatureRequest{
+			RegNumber: regNumber, FullName: name, DigestHex: digestHex,
+			DisplayText:  display,
+			DocumentName: "Хэлэлцүүлгийн санал",
+			CallbackURL:  callback,
+		})
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "events: eID could not start a vote signature", "error", diagnosticText(err.Error()),
-			"motion_id", motionID, "device", callback != "")
+			"motion_id", motionID, "device", callback != "", "mode", mode)
 		nexus.Error(w, http.StatusBadGateway, "eID Mongolia could not start the signature")
 		return
 	}
 	// One row per person and motion. A signed row is final (the trigger and the
 	// WHERE below both say so); an unsigned one is replaced by this attempt.
-	tag, err := m.db.Exec(ctx, `INSERT INTO events_motion_votes (tenant_id, motion_id, event_id, user_id, choice, status, document, digest_hex, sign_session_id)
-		VALUES ($1, $2, $3, $4, $5, 'signing', $6, $7, $8)
+	tag, err := m.db.Exec(ctx, `INSERT INTO events_motion_votes (tenant_id, motion_id, event_id, user_id, choice, status, document, digest_hex, sign_session_id,
+		    ballot_pdf, ballot_signing)
+		VALUES ($1, $2, $3, $4, $5, 'signing', $6, $7, $8, $9, $10)
 		ON CONFLICT (motion_id, user_id) DO UPDATE SET choice=EXCLUDED.choice, status='signing', document=EXCLUDED.document,
-		    digest_hex=EXCLUDED.digest_hex, sign_session_id=EXCLUDED.sign_session_id, updated_at=now()
+		    digest_hex=EXCLUDED.digest_hex, sign_session_id=EXCLUDED.sign_session_id, ballot_pdf=EXCLUDED.ballot_pdf,
+		    ballot_signing=EXCLUDED.ballot_signing, ballot_signed_pdf=NULL, ballot_error='', updated_at=now()
 		WHERE events_motion_votes.status <> 'signed'`,
-		claims.WorkspaceID, motionID, eventID, claims.UserID, in.Choice, document, digestHex, session.SessionID)
+		claims.WorkspaceID, motionID, eventID, claims.UserID, in.Choice, document, digestHex, session.SessionID, ballot, mode)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not record the vote")
 		return
@@ -580,10 +620,14 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	_ = decode(r, &in)
 	ctx := r.Context()
 	eventID, motionID := chi.URLParam(r, "id"), chi.URLParam(r, "motionID")
-	var status, digestHex string
-	err := m.db.QueryRow(ctx, `SELECT status, digest_hex, COALESCE(sign_session_id,'') FROM events_motion_votes
+	var status, digestHex, mode string
+	var ballot []byte
+	var stampedAlready bool
+	err := m.db.QueryRow(ctx, `SELECT status, digest_hex, COALESCE(sign_session_id,''), COALESCE(ballot_signing,''), ballot_pdf,
+		ballot_signed_pdf IS NOT NULL FROM events_motion_votes
 		WHERE tenant_id=$1 AND motion_id=$2 AND event_id=$3 AND user_id=$4 AND ($5 = '' OR sign_session_id=$5)`,
-		claims.WorkspaceID, motionID, eventID, claims.UserID, strings.TrimSpace(in.SessionID)).Scan(&status, &digestHex, &in.SessionID)
+		claims.WorkspaceID, motionID, eventID, claims.UserID, strings.TrimSpace(in.SessionID)).
+		Scan(&status, &digestHex, &in.SessionID, &mode, &ballot, &stampedAlready)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, http.StatusNotFound, "no such signature")
 		return
@@ -591,6 +635,11 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not read the vote")
 		return
+	}
+	if status == "signed" && mode == "pdf" && !stampedAlready {
+		// The vote was counted but eID's stamped ballot did not arrive then;
+		// while eID still holds the ceremony, it can be attached now.
+		m.attachBallot(ctx, claims, motionID, in.SessionID, ballot)
 	}
 	if status != "signing" {
 		nexus.JSON(w, http.StatusOK, map[string]any{"state": status})
@@ -640,7 +689,14 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "the signature does not cover this vote")
 		return
 	}
-	points, err := m.countVote(ctx, claims, eventID, motionID, in.SessionID)
+	// The vote counts on the confirmed digest, as it always has; the stamped
+	// PDF is the artifact the member keeps, and is stored when eID gives it.
+	var stamped []byte
+	ballotErr := ""
+	if mode == "pdf" {
+		stamped, ballotErr = m.fetchBallot(ctx, signer, regNumber, in.SessionID, ballot)
+	}
+	points, err := m.countVote(ctx, claims, eventID, motionID, in.SessionID, stamped, ballotErr)
 	var conflict conflictError
 	if errors.As(err, &conflict) {
 		m.failVote(ctx, claims, motionID, in.SessionID)
@@ -657,7 +713,7 @@ func (m *Module) pollVote(w http.ResponseWriter, r *http.Request) {
 
 // countVote marks the vote signed under the motion's lock, so a vote whose
 // signature arrives after the vote was closed is not added to a decided count.
-func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID, motionID, sessionID string) (int, error) {
+func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID, motionID, sessionID string, stamped []byte, ballotErr string) (int, error) {
 	tx, err := m.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return 0, err
@@ -672,9 +728,10 @@ func (m *Module) countVote(ctx context.Context, claims nexus.UserClaims, eventID
 	if status != "voting" {
 		return 0, errConflict("the vote closed before your signature arrived")
 	}
-	tag, err := tx.Exec(ctx, `UPDATE events_motion_votes SET status='signed', signed_at=now(), points_awarded=$5, updated_at=now()
+	tag, err := tx.Exec(ctx, `UPDATE events_motion_votes SET status='signed', signed_at=now(), points_awarded=$5,
+		ballot_signed_pdf=$6, ballot_error=$7, updated_at=now()
 		WHERE tenant_id=$1 AND motion_id=$2 AND user_id=$3 AND sign_session_id=$4 AND status='signing'`,
-		claims.WorkspaceID, motionID, claims.UserID, sessionID, points)
+		claims.WorkspaceID, motionID, claims.UserID, sessionID, points, stamped, clip(ballotErr, 300))
 	if err != nil {
 		return 0, err
 	}

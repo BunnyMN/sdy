@@ -3,15 +3,15 @@
     "id": "mn.sdy.events",
     "slug": "events",
     "name": "Events",
-    "description": "Announce the organisation's events, let members register and mark who came.",
+    "description": "Announce the organisation's events, let members register and mark who came; keep signed minutes, decisions and vote protocols.",
     "icon_url": "/icons/events.png",
     "category": "Union",
     "visibility": "public",
-    "version": "1.6.1",
+    "version": "1.7.0",
     "translations": {
       "mn": {
         "name": "Арга хэмжээ",
-        "description": "Байгууллагын арга хэмжээг зарлах, гишүүдийг бүртгэх, ирцийг тэмдэглэх.",
+        "description": "Байгууллагын арга хэмжээг зарлах, гишүүдийг бүртгэх, ирцийг тэмдэглэх; хурлын тэмдэглэл, шийдвэр, саналын протоколыг eID гарын үсэгтэй архивлах.",
         "category": "Холбоо"
       },
       "ru": {

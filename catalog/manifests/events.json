@@ -1,7 +1,7 @@
 {
   "id": "mn.sdy.events",
   "name": "Events",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "platform": ">=1.0.0",
   "order": 10,
   "publisher": "sdy",
@@ -40,6 +40,21 @@
       "name": "Deduct points and warn",
       "description": "Deduct a member's points with a reason and record a warning",
       "admin_only": true
+    },
+    {
+      "code": "archive.read",
+      "name": "See the signed archive",
+      "description": "See the branch's minutes, decisions and vote protocols, and sign the ones addressed to you",
+      "default_roles": [
+        "manager",
+        "user"
+      ]
+    },
+    {
+      "code": "archive.manage",
+      "name": "Prepare archive documents",
+      "description": "Draft minutes and decisions, choose who signs them, send them for signature and cancel them",
+      "admin_only": true
     }
   ],
   "menus": [
@@ -49,6 +64,22 @@
       "path": "/module/events",
       "icon": "calendar-days",
       "order": 10
+    },
+    {
+      "id": "archive",
+      "label": "Archive",
+      "path": "/member/archive",
+      "icon": "archive",
+      "order": 12,
+      "labels": {
+        "mn": "Архив",
+        "en": "Archive",
+        "ar": "الأرشيف",
+        "zh": "档案",
+        "fr": "Archives",
+        "ru": "Архив",
+        "es": "Archivo"
+      }
     }
   ]
 }

@@ -20,7 +20,7 @@ import (
 // use the form the database itself returns.
 
 // idParams are the path parameters that name a row.
-var idParams = map[string]bool{"id": true, "userID": true, "taskID": true, "motionID": true}
+var idParams = map[string]bool{"id": true, "userID": true, "taskID": true, "motionID": true, "docID": true}
 
 const errInvalidID = "invalid id"
 
