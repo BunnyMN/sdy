@@ -123,6 +123,11 @@ final class StubProtocol: URLProtocol {
     override func startLoading() {
         guard let handler = Self.handler else { return }
         let (status, headers, data) = handler(request)
+        // A negative status plays a dropped connection.
+        if status < 0 {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
