@@ -64,6 +64,13 @@ var (
 	// kind: copilot|chat|stt|tts|translate|forecast.
 	aiRequestsTotal = mustCounter("ai_requests", "",
 		"Requests handled by the AI endpoints, by kind")
+
+	// eidUnboundBearerTotal counts eID polls from an app that presented no
+	// session binding (the App Store's 1.0 build), by whether the fallback
+	// let them through: allowed|refused. When it stays at zero for a
+	// release cycle EID_ALLOW_UNBOUND_BEARER can be turned off.
+	eidUnboundBearerTotal = mustCounter("eid_unbound_bearer_polls", "",
+		"eID polls without a session binding, by whether the legacy fallback allowed them")
 )
 
 // Login methods and outcomes, as attribute values rather than strings typed at
@@ -105,6 +112,16 @@ func RecordDocumentSigned(rail string, ok bool) {
 func RecordAIRequest(kind string) {
 	aiRequestsTotal.Add(context.Background(), 1,
 		metric.WithAttributes(attribute.String("kind", kind)))
+}
+
+// RecordEIDUnboundBearer counts one eID poll that carried no binding.
+func RecordEIDUnboundBearer(allowed bool) {
+	result := "refused"
+	if allowed {
+		result = "allowed"
+	}
+	eidUnboundBearerTotal.Add(context.Background(), 1,
+		metric.WithAttributes(attribute.String("result", result)))
 }
 
 func resultLabel(ok bool) string {

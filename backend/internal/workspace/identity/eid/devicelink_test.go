@@ -70,3 +70,29 @@ func TestDeviceLinkStartWithoutCallbackHasNoAppLink(t *testing.T) {
 		t.Errorf("%+v", started)
 	}
 }
+
+// A device-link start tells the client when eID drops the session — ten
+// minutes from when it was started — as RFC 3339, so an app can count down.
+func TestDeviceLinkStartSaysWhenItExpires(t *testing.T) {
+	svc := &EIDService{rpClient: &qrOnlyClient{}, links: map[string]*coreeid.DeviceLinkSession{}}
+	before := time.Now()
+	started, err := svc.StartDeviceLink(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires, err := time.Parse(time.RFC3339, started.ExpiresAt)
+	if err != nil {
+		t.Fatalf("expires_at %q: %v", started.ExpiresAt, err)
+	}
+	if d := expires.Sub(before); d < deviceLinkLifetime-2*time.Second || d > deviceLinkLifetime+2*time.Second {
+		t.Fatalf("expires in %v, want about %v", d, deviceLinkLifetime)
+	}
+	mock := &EIDService{mockMode: true, mockSessions: map[string]mockSession{}}
+	m, err := mock.StartDeviceLink(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := time.Parse(time.RFC3339, m.ExpiresAt); err != nil {
+		t.Fatalf("mock expires_at %q", m.ExpiresAt)
+	}
+}

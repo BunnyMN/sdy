@@ -41,3 +41,32 @@ func TestAnEIDSessionIsFinishedOnlyWhereItStarted(t *testing.T) {
 		}
 	}
 }
+
+// The binding-less fallback for the App Store's 1.0 is a switch: on by
+// default, and off when EID_ALLOW_UNBOUND_BEARER says so. A bound app and a
+// browser are unaffected either way.
+func TestTheUnboundBearerFallbackIsASwitch(t *testing.T) {
+	session := "session-456"
+	poll := func(bearer bool) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/eid/poll", nil)
+		if bearer {
+			r.Header.Set(auth.SessionTransportHeader, "bearer")
+		}
+		return r
+	}
+	for _, c := range []struct {
+		env  string
+		want bool
+	}{{"", true}, {"true", true}, {"1", true}, {"false", false}, {"0", false}, {"OFF", false}, {"no", false}} {
+		t.Setenv("EID_ALLOW_UNBOUND_BEARER", c.env)
+		if got := boundToCaller(poll(true), session, ""); got != c.want {
+			t.Errorf("EID_ALLOW_UNBOUND_BEARER=%q: unbound app allowed=%v, want %v", c.env, got, c.want)
+		}
+		if !boundToCaller(poll(true), session, eidBinding(session)) {
+			t.Errorf("EID_ALLOW_UNBOUND_BEARER=%q: a bound app was refused", c.env)
+		}
+		if boundToCaller(poll(false), session, "") {
+			t.Errorf("EID_ALLOW_UNBOUND_BEARER=%q: a browser without a binding was let through", c.env)
+		}
+	}
+}
