@@ -296,6 +296,11 @@ func (m *Module) assignTask(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
+	var valid bool
+	if in.UserID, valid = canonicalID(in.UserID); !valid {
+		nexus.Error(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
 	if !m.isActiveMember(r.Context(), claims.WorkspaceID, in.UserID) {
 		nexus.Error(w, http.StatusBadRequest, "that person is not a member of this branch")
 		return
@@ -384,6 +389,11 @@ func (m *Module) completeTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	member := chi.URLParam(r, "userID")
+	// Confirming the work awards its points; one does not award oneself.
+	if member == claims.UserID {
+		nexus.Error(w, http.StatusForbidden, ErrSelfTask)
+		return
+	}
 	m.withTask(w, r, claims, "events.task.done", func(ctx context.Context, tx pgx.Tx, task Task) error {
 		tag, err := tx.Exec(ctx, `UPDATE events_task_assignments SET status='done', points_awarded=$3, completed_at=now(), completed_by=$4, updated_at=now()
 			WHERE task_id=$1 AND user_id=$2 AND status='accepted'`, task.ID, member, task.Points, claims.UserID)

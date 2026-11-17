@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -39,6 +39,48 @@ func syncPoints(ctx context.Context, tx pgx.Tx, event Event, tenant, user, actor
 	return err
 }
 
+// Check-in is open in a window around the event: from checkinLead before it
+// starts until checkinTrail after it ends. An event without an end time is
+// taken to end at the close of its day in Ulaanbaatar — and never sooner than
+// checkinTrail after it starts, so an evening event still gets its window.
+// A code issued outside the window could otherwise be photographed today and
+// used for a meeting next month, and a code is never valid past the window.
+const (
+	checkinLead     = 2 * time.Hour
+	checkinTrail    = 2 * time.Hour
+	checkinValidity = 5 * time.Minute
+)
+
+func checkinWindow(e Event) (open, closes time.Time, err error) {
+	start, err := time.Parse(time.RFC3339, e.StartsAt)
+	if err != nil {
+		return open, closes, err
+	}
+	open = start.Add(-checkinLead)
+	if e.EndsAt != nil {
+		end, err := time.Parse(time.RFC3339, *e.EndsAt)
+		if err != nil {
+			return open, closes, err
+		}
+		return open, end.Add(checkinTrail), nil
+	}
+	local := start.In(ulaanbaatar)
+	closes = time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, ulaanbaatar)
+	if floor := start.Add(checkinTrail); closes.Before(floor) {
+		closes = floor
+	}
+	return open, closes, nil
+}
+
+func checkinOpen(e Event, now time.Time) (time.Time, bool) {
+	open, closes, err := checkinWindow(e)
+	return closes, err == nil && !now.Before(open) && now.Before(closes)
+}
+
+// issueCheckin shows a fresh code for the organiser's QR screen. Each
+// organiser has their own code (migration 00009): a new one replaces only the
+// caller's previous code, so two organisers at two doors do not invalidate
+// each other's screens.
 func (m *Module) issueCheckin(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
@@ -55,6 +97,12 @@ func (m *Module) issueCheckin(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "this event is closed")
 		return
 	}
+	now := time.Now().UTC()
+	closes, open := checkinOpen(event, now)
+	if !open {
+		nexus.Error(w, http.StatusConflict, ErrCheckinWindow)
+		return
+	}
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not create a check-in code")
@@ -62,9 +110,19 @@ func (m *Module) issueCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 	token := hex.EncodeToString(raw)
 	hash := sha256.Sum256([]byte(token))
-	expires := time.Now().UTC().Add(5 * time.Minute)
-	if _, err := tx.Exec(r.Context(), `UPDATE events_events SET checkin_hash=$3,checkin_expires_at=$4
-		WHERE tenant_id=$1 AND id=$2`, claims.WorkspaceID, id, hash[:], expires); err != nil {
+	expires := now.Add(checkinValidity)
+	if closes.Before(expires) {
+		expires = closes.UTC()
+	}
+	if _, err := tx.Exec(r.Context(), `DELETE FROM events_checkin_codes WHERE tenant_id=$1 AND event_id=$2 AND expires_at <= now()`,
+		claims.WorkspaceID, id); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not create a check-in code")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO events_checkin_codes (tenant_id,event_id,issued_by,code_hash,expires_at)
+		VALUES ($1,$2,$3,$4,$5)
+		ON CONFLICT (event_id,issued_by) DO UPDATE SET code_hash=EXCLUDED.code_hash, expires_at=EXCLUDED.expires_at, created_at=now()`,
+		claims.WorkspaceID, id, claims.UserID, hash[:], expires); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not create a check-in code")
 		return
 	}
@@ -77,6 +135,11 @@ func (m *Module) issueCheckin(w http.ResponseWriter, r *http.Request) {
 	nexus.JSON(w, http.StatusOK, map[string]any{"event_id": id, "token": token, "expires_at": expires})
 }
 
+// checkIn is a registered member scanning an organiser's code. A code is
+// good for any number of members until it expires — it is on a screen in the
+// room — but each member's attendance and points move once: the update below
+// only takes a row that is still 'registered', and the event row lock
+// serialises a member's concurrent scans.
 func (m *Module) checkIn(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
@@ -104,16 +167,26 @@ func (m *Module) checkIn(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusConflict, "register for an open event before checking in")
 		return
 	}
-	var stored []byte
-	var valid bool
-	if err := tx.QueryRow(r.Context(), `SELECT checkin_hash, COALESCE(checkin_expires_at > now(),false)
-		FROM events_events WHERE tenant_id=$1 AND id=$2`, claims.WorkspaceID, id).Scan(&stored, &valid); err != nil {
-		nexus.Error(w, http.StatusInternalServerError, "could not check the code")
+	if _, open := checkinOpen(event, time.Now()); !open {
+		nexus.Error(w, http.StatusConflict, ErrCheckinWindow)
 		return
 	}
 	hash := sha256.Sum256([]byte(input.Token))
-	if !valid || subtle.ConstantTimeCompare(stored, hash[:]) != 1 {
+	var issuer string
+	err = tx.QueryRow(r.Context(), `SELECT issued_by::text FROM events_checkin_codes
+		WHERE tenant_id=$1 AND event_id=$2 AND code_hash=$3 AND expires_at > now()`, claims.WorkspaceID, id, hash[:]).Scan(&issuer)
+	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, http.StatusConflict, "the check-in code is invalid or expired")
+		return
+	}
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not check the code")
+		return
+	}
+	// The organiser showing the code does not check themselves in with it:
+	// another organiser's code, or another organiser's mark, records them.
+	if issuer == claims.UserID {
+		nexus.Error(w, http.StatusForbidden, ErrSelfCheckin)
 		return
 	}
 	if _, err := tx.Exec(r.Context(), `UPDATE events_attendance SET status='attended',checked_at=now(),checked_by=$3
@@ -129,7 +202,7 @@ func (m *Module) checkIn(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusInternalServerError, "could not record attendance")
 		return
 	}
-	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.checkin", id, nil)
+	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.checkin", id, map[string]any{"issued_by": issuer})
 	nexus.JSON(w, http.StatusOK, map[string]any{"status": "attended", "changed": true, "points": event.PointsValue})
 }
 

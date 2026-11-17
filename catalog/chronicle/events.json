@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.events",
   "entries": [
     {
+      "version": "1.6.0",
+      "released_at": "2026-11-17",
+      "kind": "fix",
+      "summary": {
+        "mn": "Өөртөө оноо олгохыг хориглов; мэдээлсэн асуудлыг хянах; QR код зохион байгуулагч бүрт тусдаа.",
+        "en": "No self-awarded points; organisers review reported issues; one check-in code per organiser."
+      },
+      "details": {
+        "mn": "Зохион байгуулагч өөрийнхөө ирц, даалгаврыг батлах, өөрийн гаргасан QR кодоор бүртгүүлэхгүй. Бүртгэгдсэн ирцийг өөрчлөхөд шалтгаан шаардана, цуцлагдсан арга хэмжээний ирц өөрчлөгдөхгүй. QR код арга хэмжээ эхлэхээс 2 цагийн өмнөөс дуусснаас хойш 2 цаг хүртэл хүчинтэй, хоёр зохион байгуулагчийн код зэрэг ажиллана. Мэдээлсэн асуудлын жагсаалтыг удирдагч харж, мэдээллийг хэрэгсэхгүй болгоно. Хяналтын хорооны шийдвэрийг Idempotency-Key-ээр давхар бүртгэхээс хамгаална.",
+        "en": "Organisers cannot confirm their own attendance or task, or check in with a code they issued. Changing recorded attendance needs a reason and a cancelled event's list is closed. Check-in codes are valid from 2 hours before the start until 2 hours after the end, and two organisers' codes work side by side. Organisers review reported issues and dismiss the reports. Committee decisions accept an Idempotency-Key so a resend is recorded once."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.5.0",
       "released_at": "2026-11-02",
       "kind": "feature",

@@ -218,6 +218,17 @@ func (s *EIDService) startDeviceLink(ctx context.Context, callbackURL string) (*
 	}
 	out := normalizeStart(started)
 	if dl := started.DeviceLink; dl != nil {
+		// Unlike a push session, a device-link session's end is known here:
+		// the QR material is good for deviceLinkLifetime from when it
+		// arrived, and QRLinks refuses after that. Told to the client so an
+		// app can count down instead of guessing.
+		if out.ExpiresAt == "" {
+			received := dl.ReceivedAt
+			if received.IsZero() {
+				received = time.Now()
+			}
+			out.ExpiresAt = received.Add(deviceLinkLifetime).UTC().Format(time.RFC3339)
+		}
 		s.keepDeviceLink(started.SessionID, dl)
 		if out.QRLinks, err = qrLinks(dl, time.Now()); err != nil {
 			return nil, err
@@ -368,6 +379,7 @@ func (s *EIDService) startMock(nationalID string, deviceLink bool) *StartResult 
 	s.mockMu.Unlock()
 	result := &StartResult{SessionID: sessionID, VerificationCode: "2026", ExpiresAt: time.Now().Add(2 * time.Minute).Format(time.RFC3339)}
 	if deviceLink {
+		result.ExpiresAt = time.Now().Add(deviceLinkLifetime).UTC().Format(time.RFC3339)
 		result.DeviceLinkURL = sessionID
 		result.QRLinks = []string{sessionID}
 	}

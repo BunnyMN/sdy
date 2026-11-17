@@ -18,6 +18,7 @@ import { Screen, Panel, Empty, ErrorNote, Chip, useAccess } from "@/components/m
 import { LoadingBlock, Modal } from "@/components/ui";
 import { useErrorMessage } from "@/lib/useErrorMessage";
 import { EventForm, eventCounts, eventStatusTone, formatWhen } from "./shared";
+import { ReportedIssues } from "./ReportedIssues";
 
 export default function EventsPage() {
   const { t } = useI18n();
@@ -87,6 +88,7 @@ export default function EventsPage() {
       ) : undefined}
     >
       {!canManage && <p className="text-xs text-muted">{t("events.message.read_only")}</p>}
+      {canManage && <ReportedIssues />}
       <div role="group" aria-label={t("events.field.status")} className="flex flex-wrap gap-2">
         {(["", "planned", "done", "cancelled"] as const).map((s) => (
           <button

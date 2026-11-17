@@ -261,6 +261,7 @@ TRACE /metrics
 [app] GET /api/v1/events/members
 [app] GET /api/v1/events/mine
 [app] GET /api/v1/events/points
+[app] GET /api/v1/events/reported
 [app] GET /api/v1/events/sanctions
 [app] GET /api/v1/events/sanctions/mine
 [app] GET /api/v1/events/summary
@@ -272,6 +273,7 @@ TRACE /metrics
 [app] GET /api/v1/me/dues-history
 [app] GET /api/v1/me/participation-history
 [app] POST /api/v1/dues/charges
+[app] POST /api/v1/dues/charges/{id}/unwaive
 [app] POST /api/v1/dues/charges/{id}/waive
 [app] POST /api/v1/dues/payments
 [app] POST /api/v1/dues/payments/{id}/review
@@ -285,6 +287,7 @@ TRACE /metrics
 [app] POST /api/v1/events/{id}/motions/{motionID}/close
 [app] POST /api/v1/events/{id}/motions/{motionID}/open
 [app] POST /api/v1/events/{id}/motions/{motionID}/report
+[app] POST /api/v1/events/{id}/motions/{motionID}/reports/dismiss
 [app] POST /api/v1/events/{id}/motions/{motionID}/vote
 [app] POST /api/v1/events/{id}/motions/{motionID}/vote/poll
 [app] POST /api/v1/events/{id}/motions/{motionID}/withdraw

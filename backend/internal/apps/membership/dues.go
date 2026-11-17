@@ -213,12 +213,12 @@ func (m *Module) mine(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	start := offset(r)
-	charges, more, err := m.charges(r.Context(), c.WorkspaceID, c.UserID, "", start)
+	page := pageOf(r)
+	charges, more, err := m.charges(r.Context(), c.WorkspaceID, c.UserID, "", page.charges)
 	if fail(w, err) {
 		return
 	}
-	payments, pMore, err := m.payments(r.Context(), c.WorkspaceID, c.UserID, "", start)
+	payments, pMore, err := m.payments(r.Context(), c.WorkspaceID, c.UserID, "", page.payments)
 	if fail(w, err) {
 		return
 	}
@@ -239,14 +239,16 @@ func (m *Module) mine(w http.ResponseWriter, r *http.Request) {
 	if fail(w, err) {
 		return
 	}
-	nexus.JSON(w, 200, map[string]any{"charges": charges, "payments": payments, "totals": totals, "has_more": more || pMore, "next_offset": start + 50})
+	body := page.body(more, pMore)
+	body["charges"], body["payments"], body["totals"] = charges, payments, totals
+	nexus.JSON(w, 200, body)
 }
 func (m *Module) finance(w http.ResponseWriter, r *http.Request) {
 	c, ok := who(w, r)
 	if !ok {
 		return
 	}
-	start := offset(r)
+	page := pageOf(r)
 	period := r.URL.Query().Get("period")
 	if period != "" {
 		if _, err := parsePeriod(period); err != nil {
@@ -254,11 +256,11 @@ func (m *Module) finance(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	charges, more, err := m.charges(r.Context(), c.WorkspaceID, "", period, start)
+	charges, more, err := m.charges(r.Context(), c.WorkspaceID, "", period, page.charges)
 	if fail(w, err) {
 		return
 	}
-	payments, pMore, err := m.payments(r.Context(), c.WorkspaceID, "", period, start)
+	payments, pMore, err := m.payments(r.Context(), c.WorkspaceID, "", period, page.payments)
 	if fail(w, err) {
 		return
 	}
@@ -270,7 +272,10 @@ func (m *Module) finance(w http.ResponseWriter, r *http.Request) {
 	if fail(w, err) {
 		return
 	}
-	nexus.JSON(w, 200, map[string]any{"charges": charges, "payments": payments, "has_more": more || pMore, "next_offset": start + 50, "totals": map[string]int64{"charged": charged, "received": received, "outstanding": outstanding, "waived": waived}})
+	body := page.body(more, pMore)
+	body["charges"], body["payments"] = charges, payments
+	body["totals"] = map[string]int64{"charged": charged, "received": received, "outstanding": outstanding, "waived": waived}
+	nexus.JSON(w, 200, body)
 }
 
 func conflict(w http.ResponseWriter, err error) bool {
@@ -296,23 +301,44 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Reference = strings.TrimSpace(input.Reference)
-	if _, err := uuid.Parse(input.ChargeID); err != nil {
+	// Canonical forms: the advisory-lock key and the retry comparison below
+	// must not depend on how the client spelled the uuid.
+	charge, err := uuid.Parse(input.ChargeID)
+	if err != nil {
 		nexus.Error(w, 400, "invalid charge")
 		return
 	}
-	if _, err := uuid.Parse(input.RequestKey); err != nil {
+	input.ChargeID = charge.String()
+	key, err := uuid.Parse(input.RequestKey)
+	if err != nil {
 		nexus.Error(w, 400, "invalid request key")
 		return
 	}
+	input.RequestKey = key.String()
 	if input.Amount < 1 || input.Amount > 1000000000 || input.Reference == "" || !validText(input.Reference, 128) {
 		nexus.Error(w, 400, "enter the amount and transfer reference")
 		return
 	}
 	// A submission is only a pending report. The finance review takes a row
 	// lock and checks the balance again before recognising any money.
+	//
+	// Two reports racing for the same charge must not both pass the balance
+	// check below. The member cannot take a row lock on the charge — FOR
+	// UPDATE needs the finance UPDATE policy — so submissions for one charge
+	// are serialised on a transaction-scoped advisory lock instead. Finance
+	// mutations still lock the charge row; this lock only orders reports
+	// against each other.
+	tx, err := m.db.Begin(r.Context())
+	if fail(w, err) {
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1::uuid::text,0))`, input.ChargeID); fail(w, err) {
+		return
+	}
 	var amount, paid, pending int64
 	var waived bool
-	err := m.db.QueryRow(r.Context(), `SELECT c.amount,`+paidSQL+`,`+pendingSQL+`,c.waived FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.id=$2 AND c.user_id=$3`, c.WorkspaceID, input.ChargeID, c.UserID).Scan(&amount, &paid, &pending, &waived)
+	err = tx.QueryRow(r.Context(), `SELECT c.amount,`+paidSQL+`,`+pendingSQL+`,c.waived FROM membership_dues_charges c WHERE c.tenant_id=$1 AND c.id=$2 AND c.user_id=$3`, c.WorkspaceID, input.ChargeID, c.UserID).Scan(&amount, &paid, &pending, &waived)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, 404, "no such charge")
 		return
@@ -321,11 +347,11 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Return a retry's existing receipt even if it was approved in between.
-	var existingID, charge, reference string
+	var existingID, existingCharge, reference string
 	var previous int64
-	err = m.db.QueryRow(r.Context(), `SELECT id::text,charge_id::text,amount,reference FROM membership_dues_payments WHERE tenant_id=$1 AND user_id=$2 AND request_key=$3`, c.WorkspaceID, c.UserID, input.RequestKey).Scan(&existingID, &charge, &previous, &reference)
+	err = tx.QueryRow(r.Context(), `SELECT id::text,charge_id::text,amount,reference FROM membership_dues_payments WHERE tenant_id=$1 AND user_id=$2 AND request_key=$3`, c.WorkspaceID, c.UserID, input.RequestKey).Scan(&existingID, &existingCharge, &previous, &reference)
 	if err == nil {
-		if charge != input.ChargeID || previous != input.Amount || reference != input.Reference {
+		if existingCharge != input.ChargeID || previous != input.Amount || reference != input.Reference {
 			nexus.Error(w, 409, "request key was used for a different payment")
 			return
 		}
@@ -343,13 +369,18 @@ func (m *Module) submitPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id string
-	err = m.db.QueryRow(r.Context(), `INSERT INTO membership_dues_payments(tenant_id,charge_id,user_id,request_key,amount,reference)
+	// On the transaction: the insert must be covered by the lock it holds,
+	// not run on a second pooled connection beside it.
+	err = tx.QueryRow(r.Context(), `INSERT INTO membership_dues_payments(tenant_id,charge_id,user_id,request_key,amount,reference)
 		VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,user_id,request_key) DO NOTHING RETURNING id::text`, c.WorkspaceID, input.ChargeID, c.UserID, input.RequestKey, input.Amount, input.Reference).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		nexus.Error(w, 409, "this submission is already recorded; refresh your payment history")
 		return
 	}
 	if conflict(w, err) {
+		return
+	}
+	if fail(w, tx.Commit(r.Context())) {
 		return
 	}
 	nexus.Audit(r.Context(), c.WorkspaceID, c.UserID, "membership.dues.report", id, map[string]any{"amount": input.Amount})
@@ -360,11 +391,12 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id := chi.URLParam(r, "id")
-	if _, err := uuid.Parse(id); err != nil {
+	parsed, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
 		nexus.Error(w, 400, "invalid payment")
 		return
 	}
+	id := parsed.String()
 	var input struct {
 		Action string `json:"action"`
 		Reason string `json:"reason"`
@@ -402,6 +434,13 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	err = tx.QueryRow(r.Context(), `SELECT user_id::text,amount,status FROM membership_dues_payments WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, c.WorkspaceID, id).Scan(&user, &amount, &state)
 	if fail(w, err) {
+		return
+	}
+	// Finance does not sign off on its own money: approving, rejecting or
+	// reversing one's own transfer is left to another finance holder, so
+	// every recognised payment has a second person behind it.
+	if user == c.UserID {
+		nexus.Error(w, http.StatusForbidden, ErrSelfReview)
 		return
 	}
 	target := map[string]string{"approve": "approved", "reject": "rejected", "reverse": "reversed"}[input.Action]
@@ -444,16 +483,33 @@ func (m *Module) reviewPayment(w http.ResponseWriter, r *http.Request) {
 	nexus.Audit(r.Context(), c.WorkspaceID, c.UserID, "membership.dues."+input.Action, id, map[string]any{"amount": amount, "reason": input.Reason})
 	nexus.JSON(w, 200, map[string]any{"status": target, "changed": true})
 }
-func (m *Module) waive(w http.ResponseWriter, r *http.Request) {
+
+// Stable error strings the apps map to their own wording.
+const (
+	ErrSelfReview       = "you cannot review your own payment"
+	ErrSelfWaive        = "you cannot change the exemption of your own charge"
+	ErrWaivePending     = "this charge has a pending payment report; approve or reject it before exempting the charge"
+	errNoWaivableCharge = "no unwaived charge with that id"
+	errNoWaivedCharge   = "no waived charge with that id"
+)
+
+func (m *Module) waive(w http.ResponseWriter, r *http.Request)   { m.setWaiver(w, r, true) }
+func (m *Module) unwaive(w http.ResponseWriter, r *http.Request) { m.setWaiver(w, r, false) }
+
+// setWaiver exempts a charge from its unpaid balance, or withdraws that
+// exemption. Both are finance decisions with a recorded reason, and neither
+// may be taken on one's own charge.
+func (m *Module) setWaiver(w http.ResponseWriter, r *http.Request, waive bool) {
 	c, ok := who(w, r)
 	if !ok {
 		return
 	}
-	id := chi.URLParam(r, "id")
-	if _, err := uuid.Parse(id); err != nil {
+	parsed, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
 		nexus.Error(w, 400, "invalid charge")
 		return
 	}
+	id := parsed.String()
 	var input struct {
 		Reason string `json:"reason"`
 	}
@@ -462,17 +518,105 @@ func (m *Module) waive(w http.ResponseWriter, r *http.Request) {
 	}
 	input.Reason = strings.TrimSpace(input.Reason)
 	if input.Reason == "" || !validText(input.Reason, 500) {
-		nexus.Error(w, 400, "provide the reason for exemption")
+		if waive {
+			nexus.Error(w, 400, "provide the reason for exemption")
+		} else {
+			nexus.Error(w, 400, "provide the reason for withdrawing the exemption")
+		}
 		return
 	}
-	tag, err := m.db.Exec(r.Context(), `UPDATE membership_dues_charges SET waived=true,waiver_reason=$3 WHERE tenant_id=$1 AND id=$2 AND NOT waived`, c.WorkspaceID, id, input.Reason)
+	tx, err := m.db.Begin(r.Context())
 	if fail(w, err) {
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		nexus.Error(w, 404, "no unwaived charge with that id")
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	// Same order as a submission — advisory lock, then the charge row (a
+	// payment insert takes its FK lock on the charge) — so the two cannot
+	// deadlock.
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('membership.charge:'||$1::uuid::text,0))`, id); fail(w, err) {
 		return
 	}
-	nexus.Audit(r.Context(), c.WorkspaceID, c.UserID, "membership.dues.waive", id, map[string]any{"reason": input.Reason})
-	nexus.JSON(w, 200, map[string]any{"ok": true})
+	var owner string
+	var waived bool
+	err = tx.QueryRow(r.Context(), `SELECT user_id::text,waived FROM membership_dues_charges WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, c.WorkspaceID, id).Scan(&owner, &waived)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && waived == waive) {
+		if waive {
+			nexus.Error(w, 404, errNoWaivableCharge)
+		} else {
+			nexus.Error(w, 404, errNoWaivedCharge)
+		}
+		return
+	}
+	if fail(w, err) {
+		return
+	}
+	if owner == c.UserID {
+		nexus.Error(w, http.StatusForbidden, ErrSelfWaive)
+		return
+	}
+	if waive {
+		// A pending report is money the member says they sent. Exempting the
+		// charge underneath it would leave finance approving a transfer
+		// against a charge that no longer asks for anything, so the report is
+		// decided first. The advisory lock taken above is the one
+		// submissions hold, so no report can appear between this check and
+		// the update.
+		var pending bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM membership_dues_payments WHERE tenant_id=$1 AND charge_id=$2 AND status='pending')`, c.WorkspaceID, id).Scan(&pending); fail(w, err) {
+			return
+		}
+		if pending {
+			nexus.Error(w, http.StatusConflict, ErrWaivePending)
+			return
+		}
+		_, err = tx.Exec(r.Context(), `UPDATE membership_dues_charges SET waived=true,waiver_reason=$3 WHERE tenant_id=$1 AND id=$2`, c.WorkspaceID, id, input.Reason)
+	} else {
+		_, err = tx.Exec(r.Context(), `UPDATE membership_dues_charges SET waived=false,waiver_reason='' WHERE tenant_id=$1 AND id=$2`, c.WorkspaceID, id)
+	}
+	if fail(w, err) || fail(w, tx.Commit(r.Context())) {
+		return
+	}
+	action := "membership.dues.waive"
+	if !waive {
+		action = "membership.dues.unwaive"
+	}
+	nexus.Audit(r.Context(), c.WorkspaceID, c.UserID, action, id, map[string]any{"reason": input.Reason, "user_id": owner})
+	nexus.JSON(w, 200, map[string]any{"ok": true, "waived": waive})
+}
+
+// duesPage carries one offset per list. The charges and the payments are
+// paged independently: a member with three charges and two hundred payment
+// reports pages through the payments without re-reading empty charge pages,
+// and the client is told separately when each list has run out.
+type duesPage struct{ charges, payments int }
+
+func pageOf(r *http.Request) duesPage {
+	shared := offset(r)
+	p := duesPage{charges: shared, payments: shared}
+	if r.URL.Query().Has("charges_offset") {
+		p.charges = namedOffset(r, "charges_offset")
+	}
+	if r.URL.Query().Has("payments_offset") {
+		p.payments = namedOffset(r, "payments_offset")
+	}
+	return p
+}
+
+// body keeps has_more/next_offset for clients that page both lists with one
+// offset, and adds the per-list cursors.
+func (p duesPage) body(chargesMore, paymentsMore bool) map[string]any {
+	next := func(start int, more bool) any {
+		if !more {
+			return nil
+		}
+		return start + 50
+	}
+	return map[string]any{
+		"has_more":             chargesMore || paymentsMore,
+		"next_offset":          max(p.charges, p.payments) + 50,
+		"charges_has_more":     chargesMore,
+		"payments_has_more":    paymentsMore,
+		"next_charges_offset":  next(p.charges, chargesMore),
+		"next_payments_offset": next(p.payments, paymentsMore),
+	}
 }

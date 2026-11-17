@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/cache"
 	"github.com/gerege-systems/open-gerege-nexus/backend/internal/kernel/config"
@@ -178,7 +179,7 @@ func runSDYMembershipJourney(t *testing.T, transfers bool) {
 	}
 	do(member, "GET", "/api/v1/events/", "", 200)
 	do(member, "POST", "/api/v1/events/", "{}", 403)
-	created := do(manager, "POST", "/api/v1/events/", `{"title":"SDY бүтэн урсгал","starts_at":"2026-10-01T10:00:00+08:00","capacity":2,"points_value":10}`, 201)
+	created := do(manager, "POST", "/api/v1/events/", `{"title":"SDY бүтэн урсгал","starts_at":"`+time.Now().Add(time.Hour).UTC().Format(time.RFC3339)+`","capacity":2,"points_value":10}`, 201)
 	var event struct {
 		ID string `json:"id"`
 	}
@@ -199,10 +200,16 @@ func runSDYMembershipJourney(t *testing.T, transfers bool) {
 	if !strings.Contains(points.Body.String(), `"total":10`) {
 		t.Fatal(points.Body.String())
 	}
-	for _, month := range []string{"2026-09", "2026-10"} {
+	// The event starts within the hour (check-in is only open around it), so
+	// its month is the one it starts in; the month before it holds nothing.
+	ub := time.FixedZone("Asia/Ulaanbaatar", 8*60*60)
+	startMonth := time.Now().Add(time.Hour).In(ub)
+	eventMonth := startMonth.Format("2006-01")
+	before := time.Date(startMonth.Year(), startMonth.Month()-1, 1, 0, 0, 0, 0, ub).Format("2006-01")
+	for _, month := range []string{before, eventMonth} {
 		summary := do(manager, "GET", "/api/v1/events/summary?period="+month, "", 200)
 		want := `"attended":0`
-		if month == "2026-10" {
+		if month == eventMonth {
 			want = `"attended":1`
 		}
 		if !strings.Contains(summary.Body.String(), want) {

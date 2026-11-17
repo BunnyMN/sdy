@@ -144,3 +144,102 @@ func (m *Module) unblock(w http.ResponseWriter, r *http.Request) {
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.member.unblock", chi.URLParam(r, "userID"), nil)
 	nexus.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// ReportedIssue is one issue with open reports, for the organisers' review.
+// Who reported is not shown — only how many and why — so that reporting a
+// colleague's issue stays safe to do.
+type ReportedIssue struct {
+	MotionID     string        `json:"motion_id"`
+	EventID      string        `json:"event_id"`
+	EventTitle   string        `json:"event_title"`
+	Title        string        `json:"title"`
+	Body         string        `json:"body"`
+	ProposerID   string        `json:"proposer_id"`
+	ProposerName string        `json:"proposer_name"`
+	Status       string        `json:"status"`
+	ReportCount  int           `json:"report_count"`
+	Hidden       bool          `json:"hidden"`
+	Reports      []IssueReport `json:"reports"`
+}
+
+type IssueReport struct {
+	Reason    string `json:"reason"`
+	CreatedAt string `json:"created_at"`
+}
+
+// reported lists the branch's issues with unresolved reports, most reported
+// first. events.manage.
+func (m *Module) reported(w http.ResponseWriter, r *http.Request) {
+	claims, ok := who(w, r)
+	if !ok {
+		return
+	}
+	rows, err := m.db.Query(r.Context(), `
+		SELECT mo.id::text, mo.event_id::text, COALESCE(e.title,''), mo.title, mo.body, mo.proposer_id::text, COALESCE(u.name,''), mo.status,
+		       count(rp.id)::int,
+		       jsonb_agg(jsonb_build_object('reason', rp.reason, 'created_at', to_char(rp.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')) ORDER BY rp.created_at)
+		  FROM events_motion_reports rp
+		  JOIN events_motions mo ON mo.id = rp.motion_id AND mo.tenant_id = rp.tenant_id
+		  LEFT JOIN events_events e ON e.id = mo.event_id AND e.tenant_id = mo.tenant_id
+		  LEFT JOIN registry.users u ON u.id = mo.proposer_id
+		 WHERE rp.tenant_id = $1::uuid AND rp.resolved_at IS NULL
+		 GROUP BY mo.id, e.title, u.name
+		 ORDER BY count(rp.id) DESC, max(rp.created_at) DESC
+		 LIMIT 200`, claims.WorkspaceID)
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not list the reported issues")
+		return
+	}
+	defer rows.Close()
+	list := make([]ReportedIssue, 0, 8)
+	for rows.Next() {
+		var it ReportedIssue
+		if err := rows.Scan(&it.MotionID, &it.EventID, &it.EventTitle, &it.Title, &it.Body, &it.ProposerID, &it.ProposerName,
+			&it.Status, &it.ReportCount, &it.Reports); err != nil {
+			nexus.Error(w, http.StatusInternalServerError, "could not list the reported issues")
+			return
+		}
+		it.Hidden = it.Status == "proposed" && it.ReportCount >= hideAfterReports
+		list = append(list, it)
+	}
+	if rows.Err() != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not list the reported issues")
+		return
+	}
+	nexus.JSON(w, http.StatusOK, map[string]any{"issues": list, "hide_after": hideAfterReports})
+}
+
+// dismissReports is an organiser deciding that an issue's open reports do
+// not call for removing it: every open report is resolved, which shows the
+// issue to members again. A report made after this counts afresh. Withdrawing
+// the issue instead is the existing withdraw action.
+func (m *Module) dismissReports(w http.ResponseWriter, r *http.Request) {
+	claims, ok := who(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	_ = decode(r, &in)
+	reason := strings.TrimSpace(in.Reason)
+	if len([]rune(reason)) > 500 {
+		nexus.Error(w, http.StatusBadRequest, "reason is too long")
+		return
+	}
+	eventID, motionID := chi.URLParam(r, "id"), chi.URLParam(r, "motionID")
+	mo, err := m.loadMotion(r.Context(), m.db, claims, eventID, motionID, false)
+	if err != nil {
+		motionError(w, err)
+		return
+	}
+	tag, err := m.db.Exec(r.Context(), `UPDATE events_motion_reports SET resolved_at = now(), resolved_by = $3
+		WHERE tenant_id = $1::uuid AND motion_id = $2::uuid AND resolved_at IS NULL`, claims.WorkspaceID, mo.ID, claims.UserID)
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not dismiss the reports")
+		return
+	}
+	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.motion.reports.dismiss", mo.ID,
+		map[string]any{"event_id": eventID, "dismissed": tag.RowsAffected(), "reason": reason})
+	nexus.JSON(w, http.StatusOK, map[string]any{"dismissed": tag.RowsAffected()})
+}

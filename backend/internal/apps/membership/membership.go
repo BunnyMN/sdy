@@ -38,7 +38,7 @@ func New(p nexus.Platform) *Module {
 }
 func (*Module) ID() string                       { return ID }
 func (*Module) Name() string                     { return "Membership" }
-func (*Module) Version() string                  { return "1.1.0" }
+func (*Module) Version() string                  { return "1.2.0" }
 func (*Module) Dependencies() []nexus.Dependency { return nil }
 func (*Module) Permissions() []nexus.PermissionDefinition {
 	return []nexus.PermissionDefinition{
@@ -63,6 +63,7 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		dr.With(finance).Get("/finance", m.finance)
 		dr.With(finance).Post("/payments/{id}/review", m.reviewPayment)
 		dr.With(finance).Post("/charges/{id}/waive", m.waive)
+		dr.With(finance).Post("/charges/{id}/unwaive", m.unwaive)
 	})
 }
 func who(w http.ResponseWriter, r *http.Request) (nexus.UserClaims, bool) {
@@ -87,8 +88,9 @@ func fail(w http.ResponseWriter, err error) bool {
 	}
 	return false
 }
-func offset(r *http.Request) int {
-	n, err := strconv.Atoi(r.URL.Query().Get("offset"))
+func offset(r *http.Request) int { return namedOffset(r, "offset") }
+func namedOffset(r *http.Request, name string) int {
+	n, err := strconv.Atoi(r.URL.Query().Get(name))
 	if err != nil || n < 0 || n > 100000 {
 		return 0
 	}

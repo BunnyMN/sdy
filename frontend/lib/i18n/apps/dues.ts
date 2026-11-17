@@ -43,6 +43,7 @@ registerDictionary("dues", source({
   "dues.reject": { mn: "Татгалзах", en: "Reject" },
   "dues.reverse": { mn: "Баталгаажуулалтыг буцаах", en: "Reverse verification" },
   "dues.waive": { mn: "Үлдэгдлээс чөлөөлөх", en: "Exempt remaining balance" },
+  "dues.unwaive": { mn: "Чөлөөлөлтийг буцаах", en: "Withdraw exemption" },
   "dues.no_access": { mn: "Санхүүгийн эрх шаардлагатай.", en: "Finance permission is required." },
   "dues.more": { mn: "Цааш үзэх", en: "Load more" },
   "dues.summary_title": { mn: "Миний төлөлт", en: "My payments" },

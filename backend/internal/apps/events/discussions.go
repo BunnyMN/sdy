@@ -199,6 +199,9 @@ func (m *Module) motions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// maxMotionsPerEvent bounds one event's discussion.
+const maxMotionsPerEvent = 100
+
 func (m *Module) propose(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
@@ -227,15 +230,37 @@ func (m *Module) propose(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusForbidden, "only members of this branch may raise an issue")
 		return
 	}
+	// The cap is a count followed by an insert; two members proposing at
+	// once would both see 99. A transaction-scoped advisory lock per event
+	// makes the pair atomic without locking the event row every attendance
+	// change also waits on.
+	tx, err := m.db.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('events.motions:'||$1::uuid::text,0))`, eventID); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
+		return
+	}
 	var count int
-	if err := m.db.QueryRow(r.Context(), `SELECT count(*) FROM events_motions WHERE tenant_id=$1 AND event_id=$2`,
-		claims.WorkspaceID, eventID).Scan(&count); err != nil || count >= 100 {
+	if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM events_motions WHERE tenant_id=$1 AND event_id=$2`,
+		claims.WorkspaceID, eventID).Scan(&count); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
+		return
+	}
+	if count >= maxMotionsPerEvent {
 		nexus.Error(w, http.StatusConflict, "this event already has the most issues it can hold")
 		return
 	}
 	var id string
-	if err := m.db.QueryRow(r.Context(), `INSERT INTO events_motions (tenant_id, event_id, title, body, proposer_id)
+	if err := tx.QueryRow(r.Context(), `INSERT INTO events_motions (tenant_id, event_id, title, body, proposer_id)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id::text`, claims.WorkspaceID, eventID, in.Title, in.Body, claims.UserID).Scan(&id); err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not record the issue")
 		return
 	}

@@ -146,4 +146,13 @@ export const base = {
   "base.error.eid_failed": { mn: "eID-аар баталгаажуулж чадсангүй. Дахин оролдоно уу.", en: "eID verification failed. Please try again." },
   "base.error.eid_unavailable": { mn: "eID үйлчилгээтэй холбогдож чадсангүй. Түр хүлээгээд дахин оролдоно уу.", en: "Could not reach the eID service. Wait a moment and try again." },
   "base.error.link_expired": { mn: "Холбоосын хугацаа дууссан эсвэл аль хэдийн ашиглагдсан байна.", en: "This link has expired or has already been used." },
+  "base.error.self_attendance": { mn: "Өөрийн ирцийг өөрөө бүртгэх боломжгүй. Өөр зохион байгуулагч бүртгэнэ.", en: "You cannot record your own attendance. Another organiser records it." },
+  "base.error.self_task": { mn: "Өөрийн даалгаврыг өөрөө батлах боломжгүй.", en: "You cannot confirm your own task." },
+  "base.error.self_checkin": { mn: "Өөрийн гаргасан QR кодоор ирц бүртгүүлэх боломжгүй.", en: "You cannot check in with a code you issued." },
+  "base.error.event_cancelled": { mn: "Энэ арга хэмжээ цуцлагдсан.", en: "This event is cancelled." },
+  "base.error.checkin_window": { mn: "Ирц бүртгэл арга хэмжээ эхлэхээс 2 цагийн өмнөөс дууссанаас хойш 2 цаг хүртэл нээлттэй.", en: "Check-in is open from 2 hours before the event starts until 2 hours after it ends." },
+  "base.error.correction_reason": { mn: "Бүртгэгдсэн ирцийг өөрчлөх шалтгааныг бичнэ үү.", en: "Give a reason for changing recorded attendance." },
+  "base.error.self_review": { mn: "Өөрийн төлөлтийг өөрөө шийдвэрлэх боломжгүй. Өөр санхүүч шийднэ.", en: "You cannot decide your own payment. Another finance holder does." },
+  "base.error.self_waive": { mn: "Өөрийн хураамжийн чөлөөлөлтийг өөрөө өөрчлөх боломжгүй.", en: "You cannot change the exemption of your own charge." },
+  "base.error.waive_pending": { mn: "Энэ хураамжид шийдвэрлээгүй төлөлтийн мэдээлэл байна. Эхлээд батлах эсвэл татгалзана уу.", en: "This charge has a pending payment report. Approve or reject it first." },
 } as const;

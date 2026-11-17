@@ -2,6 +2,22 @@
   "app_id": "mn.sdy.membership",
   "entries": [
     {
+      "version": "1.2.0",
+      "released_at": "2026-11-17",
+      "kind": "fix",
+      "summary": {
+        "mn": "Санхүүч өөрийн төлөлтийг батлахгүй; чөлөөлөлтийг буцаах боломжтой.",
+        "en": "Finance cannot decide their own dues; an exemption can be withdrawn."
+      },
+      "details": {
+        "mn": "Санхүүгийн эрхтэй хүн өөрийн төлөлтийг батлах, татгалзах, буцаах, өөрийн хураамжийг чөлөөлөх боломжгүй. Хүлээгдэж буй төлөлттэй хураамжийг чөлөөлөхгүй. Чөлөөлөлтийг шалтгаантай буцаана. Зэрэг илгээсэн төлөлтийн мэдээлэл үлдэгдлээс хэтрэхгүй.",
+        "en": "A finance holder cannot approve, reject or reverse their own payment, or exempt their own charge. A charge with a pending report cannot be exempted. An exemption can be withdrawn with a reason. Concurrent payment reports cannot exceed the balance."
+      },
+      "authors": [
+        "sdy"
+      ]
+    },
+    {
       "version": "1.1.0",
       "released_at": "2026-09-15",
       "kind": "feature",

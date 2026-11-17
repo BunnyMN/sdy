@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// A notification is handed to the sender once, with the person's tokens, and
-// a stale one is skipped rather than sent late.
+// A notification is leased to the sender once at a time, with the person's
+// tokens, and a stale one is skipped rather than sent late.
 func TestPushesAreClaimedOnceAndNeverLate(t *testing.T) {
 	pool := migrationsPool(t)
 	ctx := t.Context()
@@ -61,9 +61,17 @@ func TestPushesAreClaimedOnceAndNeverLate(t *testing.T) {
 	if got := claim(); len(got) != 0 {
 		t.Fatalf("second claim = %v, want nothing", got)
 	}
+	// Claimed is leased, not delivered (00123): the fresh one stays open
+	// until the sender completes it, and the stale one is settled.
 	var unpushed int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM registry.member_notifications WHERE user_id=$1 AND pushed_at IS NULL`, user).Scan(&unpushed); err != nil || unpushed != 1 {
+		t.Fatalf("%d left unpushed (%v), want the leased one", unpushed, err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT registry.complete_pushes(array_agg(id)) FROM registry.member_notifications WHERE user_id=$1 AND pushed_at IS NULL`, user); err != nil {
+		t.Fatal(err)
+	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM registry.member_notifications WHERE user_id=$1 AND pushed_at IS NULL`, user).Scan(&unpushed); err != nil || unpushed != 0 {
-		t.Fatalf("%d left unpushed (%v)", unpushed, err)
+		t.Fatalf("%d left unpushed after completion (%v)", unpushed, err)
 	}
 	if _, err := pool.Exec(ctx, `SELECT registry.forget_push_token($1)`, "hash-"+user); err != nil {
 		t.Fatal(err)

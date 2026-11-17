@@ -38,8 +38,22 @@ import (
 // an HMAC of the session id — as an HttpOnly cookie for a browser and in the
 // body for an app, and poll issues a session only to a caller presenting it.
 // An app that sends X-Session-Transport: bearer without one (the App Store's
-// 1.0, before it learned this) is still served; a browser never is.
+// 1.0, before it learned this) is still served while EID_ALLOW_UNBOUND_BEARER
+// is on (the default); a browser never is. Every such poll is logged and
+// counted (eid_unbound_bearer_polls_total), so the fallback can be switched
+// off — EID_ALLOW_UNBOUND_BEARER=false — once nobody uses it.
 const eidBindingCookie = "eid_binding"
+
+// allowUnboundBearer reads EID_ALLOW_UNBOUND_BEARER on every call: it is a
+// switch an operator flips in the environment, and a test sets it per case.
+// Anything but an explicit false/0/no/off keeps the fallback on.
+func allowUnboundBearer() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("EID_ALLOW_UNBOUND_BEARER"))) {
+	case "false", "0", "no", "off":
+		return false
+	}
+	return true
+}
 
 var (
 	eidBindingKeyOnce sync.Once
@@ -86,7 +100,14 @@ func boundToCaller(r *http.Request, sessionID, presented string) bool {
 		}
 	}
 	if presented == "" {
-		return auth.WantsBearerSession(r)
+		if !auth.WantsBearerSession(r) {
+			return false
+		}
+		allowed := allowUnboundBearer()
+		telemetry.RecordEIDUnboundBearer(allowed)
+		slog.Warn("eID poll without a session binding (legacy app)",
+			"allowed", allowed, "user_agent", r.UserAgent(), "remedy", "update the app; set EID_ALLOW_UNBOUND_BEARER=false once unused")
+		return allowed
 	}
 	return hmac.Equal([]byte(presented), []byte(eidBinding(sessionID)))
 }

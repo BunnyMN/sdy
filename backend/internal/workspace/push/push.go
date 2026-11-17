@@ -7,11 +7,16 @@
  * their phone through APNs.
  *
  * Woken by every new notification (LISTEN, migration 00121) and every thirty
- * seconds besides, registry.claim_pushes (migration 00120) hands over the
- * notifications nobody has sent yet, each with the person's registered device
- * tokens, and marks them sent. A notification is attempted once: one that
- * fails is still in the person's list in the app, which is where it always
- * was. A token APNs says is gone is forgotten.
+ * seconds besides, registry.claim_pushes (migrations 00120, 00123) leases the
+ * notifications nobody has delivered yet, each with the person's APNs device
+ * tokens. Delivery is at least once: a notification APNs accepted, or refused
+ * in a way a retry will not change, is completed; one that met a network
+ * error, a 429 or a 5xx is retried after 30s, 1m, 2m and 4m, and given up
+ * after the fifth attempt (it is still in the person's list in the app).
+ * A resend to a token that already had it replaces it on the phone
+ * (apns-collapse-id is the notification id). A token APNs says is gone
+ * (410, BadDeviceToken, DeviceTokenNotForTopic) is forgotten and not retried.
+ * A person with only FCM tokens is not claimed at all: there is no FCM sender.
  *
  * Off until configured. With no APNs key the loop does not start and nothing
  * is marked, so turning it on later sends only what is new (claim_pushes
@@ -224,25 +229,96 @@ func (s *Sender) Deliver(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	sent := 0
+	// What is learnt from APNs is written down even when the round's own
+	// deadline has passed: a delivered notification left uncompleted would be
+	// leased again and resent every five minutes for an hour. Its own short
+	// deadline keeps a stuck database from holding the round.
+	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	// One notification can go to several phones. It is retried if any of
+	// them met a temporary failure; the phones that already have it get it
+	// again under the same collapse id, which replaces rather than repeats.
+	retry := map[string]bool{}
+	order := make([]string, 0, len(list))
 	for _, d := range list {
+		if _, seen := retry[d.notificationID]; !seen {
+			retry[d.notificationID] = false
+			order = append(order, d.notificationID)
+		}
+		// Out of time: nothing more is sent this round. What is left is
+		// retried, not completed — it was never tried.
+		if ctx.Err() != nil {
+			retry[d.notificationID] = true
+			continue
+		}
 		device, err := devices.DecryptPushToken(d.ciphertext)
 		if err != nil {
 			slog.Warn("push: unreadable token", "user_id", d.userID, "error", err)
 			continue
 		}
-		gone, err := s.send(ctx, device, strings.HasSuffix(d.appID, ":sandbox"), d)
-		switch {
-		case gone:
-			if _, err := s.db.Exec(nexus.WithoutWorkspace(ctx), `SELECT registry.forget_push_token($1)`, d.tokenHash); err != nil {
+		outcome, err := s.send(ctx, device, strings.HasSuffix(d.appID, ":sandbox"), d)
+		switch outcome {
+		case delivered:
+			sent++
+		case tokenGone:
+			if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.forget_push_token($1)`, d.tokenHash); err != nil {
 				slog.Warn("push: could not forget a dead token", "error", err)
 			}
-		case err != nil:
-			slog.Warn("push: not delivered", "user_id", d.userID, "notification_id", d.notificationID, "error", err)
+		case temporary:
+			retry[d.notificationID] = true
+			slog.Warn("push: not delivered; will retry", "user_id", d.userID, "notification_id", d.notificationID, "error", err)
 		default:
-			sent++
+			slog.Warn("push: not delivered", "user_id", d.userID, "notification_id", d.notificationID, "error", err)
+		}
+	}
+	var done, again []string
+	for _, id := range order {
+		if retry[id] {
+			again = append(again, id)
+		} else {
+			done = append(done, id)
+		}
+	}
+	if len(done) > 0 {
+		if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.complete_pushes($1::uuid[])`, done); err != nil {
+			return sent, err
+		}
+	}
+	if len(again) > 0 {
+		if _, err := s.db.Exec(nexus.WithoutWorkspace(settle), `SELECT registry.retry_pushes($1::uuid[])`, again); err != nil {
+			return sent, err
 		}
 	}
 	return sent, nil
+}
+
+// outcome is what one send means for the notification and the token.
+type outcome int
+
+const (
+	delivered outcome = iota
+	// tokenGone: the token will never work again; forget it, do not retry.
+	tokenGone
+	// temporary: the network, APNs throttling (429) or an APNs fault (5xx),
+	// or an expired provider token; worth another attempt.
+	temporary
+	// permanent: a refusal a retry would only repeat.
+	permanent
+)
+
+// classify maps an APNs answer to what is done next.
+func classify(status int, reason string) outcome {
+	switch {
+	case status == http.StatusOK:
+		return delivered
+	case status == http.StatusGone, reason == "BadDeviceToken", reason == "DeviceTokenNotForTopic", reason == "Unregistered":
+		return tokenGone
+	case status == http.StatusTooManyRequests, status >= 500,
+		reason == "ExpiredProviderToken", reason == "InvalidProviderToken", reason == "TooManyProviderTokenUpdates":
+		return temporary
+	default:
+		return permanent
+	}
 }
 
 // Payload is what the phone receives; path opens the screen it is about and
@@ -259,19 +335,19 @@ func Payload(id, title, body, path string, badge int) ([]byte, error) {
 	})
 }
 
-// send reports gone when APNs says the token will never work again.
-func (s *Sender) send(ctx context.Context, device string, sandbox bool, d due) (gone bool, err error) {
+// send delivers one notification to one phone and says what came of it.
+func (s *Sender) send(ctx context.Context, device string, sandbox bool, d due) (outcome, error) {
 	payload, err := Payload(d.notificationID, d.title, d.body, d.path, d.unread)
 	if err != nil {
-		return false, err
+		return permanent, err
 	}
 	jwt, err := s.bearer()
 	if err != nil {
-		return false, err
+		return temporary, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.hosts[sandbox]+"/3/device/"+device, bytes.NewReader(payload))
 	if err != nil {
-		return false, err
+		return permanent, err
 	}
 	req.Header.Set("authorization", "bearer "+jwt)
 	req.Header.Set("apns-topic", s.cfg.Topic)
@@ -280,22 +356,22 @@ func (s *Sender) send(ctx context.Context, device string, sandbox bool, d due) (
 	req.Header.Set("apns-collapse-id", d.notificationID[:min(len(d.notificationID), 64)])
 	res, err := s.client.Do(req)
 	if err != nil {
-		return false, err
+		return temporary, err
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode == http.StatusOK {
-		return false, nil
+		return delivered, nil
 	}
 	var reason struct {
 		Reason string `json:"reason"`
 	}
 	_ = json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&reason)
-	switch {
-	case res.StatusCode == http.StatusGone, reason.Reason == "BadDeviceToken", reason.Reason == "DeviceTokenNotForTopic":
-		return true, fmt.Errorf("apns %d %s", res.StatusCode, reason.Reason)
-	default:
-		return false, fmt.Errorf("apns %d %s", res.StatusCode, reason.Reason)
+	if reason.Reason == "ExpiredProviderToken" || reason.Reason == "InvalidProviderToken" {
+		s.mu.Lock()
+		s.token = ""
+		s.mu.Unlock()
 	}
+	return classify(res.StatusCode, reason.Reason), fmt.Errorf("apns %d %s", res.StatusCode, reason.Reason)
 }
 
 // bearer is the provider token, reused for fifty minutes (APNs refuses one

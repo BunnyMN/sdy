@@ -184,6 +184,69 @@ API: `/api/v1/events`, `/api/v1/events/{id}`, `…/register`, `…/attendance`,
   Блоклосон гишүүд. Хүснэгтүүд `events_motion_reports`, `events_member_blocks` (events migration 00006).
   App Store-ын 1.2-р заалт (хэрэглэгчийн контент) энэ хоёроор хангагдана.
 
+### Шалгалтын засварууд — `1.6.0` (2026-11-17)
+
+- **Өөртөө оноо олгохгүй.** `events.manage` эрхтэй хүн ч өөрийн ирцийг тэмдэглэх/өөрчлөх
+  (`POST …/attendance`, `PUT …/attendance/{userID}`), өөрийн даалгаврыг батлах
+  (`…/assignments/{userID}/done`), өөрийн гаргасан QR кодоор бүртгүүлэх боломжгүй (403). Өөрийгөө
+  `registered` төлөвөөр нэмэх нь бүртгүүлэхтэй ижил тул зөвшөөрнө. Энгийн гишүүний QR ирц хэвээр.
+  Зохион байгуулагчийн өөрийн ирцийг өөр зохион байгуулагч тэмдэглэнэ, эсвэл өөр хүний QR-ээр бүртгүүлнэ.
+- **Ирцийн засварт шалтгаан.** Бүртгэгдсэн (`attended`/`absent`) ирцийг өөр төлөвт шилжүүлэхэд
+  `POST …/attendance` дээр ч `note` заавал (өмнө нь зөвхөн `PUT` дээр).
+- **Цуцлагдсан арга хэмжээ** (`cancelled`)-ний ирц, оролцогч өөрчлөгдөхгүй (409). `done` бол болно.
+- `PUT /api/v1/events/{id}` нь `status`-гүй ирвэл одоогийн төлөвийг хадгална (өмнө нь `planned` болдог байв).
+- Оролцогчоор зөвхөн салбарт хандах эрхтэй (`memberships.active`), гишүүнчлэл нь
+  түдгэлзээгүй/дуусаагүй (`suspended`, `left`, `alumni` биш) хүнийг нэмнэ.
+- **QR код зохион байгуулагч бүрт тусдаа** (events migration 00009, `events_checkin_codes`). Хоёр
+  зохион байгуулагч зэрэг QR нээхэд аль аль нь ажиллана; шинэ код зөвхөн тухайн хүний өмнөх кодыг
+  солино. Код 5 минут хүчинтэй, зөвхөн хэш хадгалагдана; гишүүн бүрийн ирц, оноо нэг л удаа.
+  Код зөвхөн **арга хэмжээ эхлэхээс 2 цагийн өмнөөс, дууссанаас хойш 2 цаг хүртэл** гарна, хүлээн
+  авагдана; `ends_at` байхгүй бол Улаанбаатарын цагаар тухайн өдрийн төгсгөл хүртэл (эхэлснээс хойш
+  хамгийн багадаа 2 цаг).
+- **Хяналтын хорооны шийдвэрийн давхардал.** `POST /api/v1/events/sanctions` нь
+  `Idempotency-Key: <UUID>` толгойг (заавал биш) хүлээн авна (events migration 00008). Ижил түлхүүр,
+  ижил хорооны гишүүнээс дахин ирвэл шинэ мөр үүсэхгүй — анхны шийдвэрийг `200` +
+  `Idempotent-Replayed: true`-тэй буцаана, оноо дахин хасагдахгүй. Ижил түлхүүрээр өөр агуулга
+  ирвэл 409. Түлхүүргүй хүсэлт өмнөх шигээ.
+- **Мэдээлсэн асуудлыг хянах.** `GET /api/v1/events/reported` (`events.manage`) нь шийдэгдээгүй
+  мэдээлэлтэй асуудлуудыг (мэдээллийн тоо, шалтгаан, нуугдсан эсэх) харуулна — хэн мэдээлснийг
+  харуулахгүй. `POST /api/v1/events/{id}/motions/{motionID}/reports/dismiss` (`reason` заавал биш)
+  мэдээллийг шийдвэрлэсэн болгож (`resolved_at`, `resolved_by`), асуудал гишүүдэд дахин харагдана;
+  аудитад бичигдэнэ. Устгах шаардлагатай бол хэлэлцүүлэг дээрээс татна. Вэб: `/module/events`
+  жагсаалтын «Мэдээлсэн асуудлууд» самбар.
+- Нэг арга хэмжээнд 100 асуудлын хязгаар зэрэг илгээлтэд ч давагдахгүй (advisory lock).
+
+### Аппуудын харгалзуулах алдааны мөрүүд
+
+API алдааны текст англиар, тогтвортой. iOS/Android/вэб эдгээрийг өөрийн үгээр харуулна:
+
+| Код | `error` |
+| --- | --- |
+| 403 | `you cannot record your own attendance` |
+| 403 | `you cannot confirm your own task` |
+| 403 | `you cannot check in with a check-in code you issued` |
+| 409 | `this event is cancelled` |
+| 409 | `check-in is open from 2 hours before the event starts until 2 hours after it ends` |
+| 400 | `provide a reason for the attendance correction` |
+| 409 | `this Idempotency-Key was already used for a different decision` |
+| 400 | `Idempotency-Key must be a UUID` |
+| 403 | `you cannot review your own payment` |
+| 403 | `you cannot change the exemption of your own charge` |
+| 409 | `this charge has a pending payment report; approve or reject it before exempting the charge` |
+
+## Хураамж — `mn.sdy.membership` `1.2.0` (2026-11-17)
+
+- Санхүүгийн эрхтэй хүн (админ ч) **өөрийн** төлөлтийг батлах, татгалзах, буцаах, өөрийн хураамжийг
+  чөлөөлөх/чөлөөлөлтийг буцаах боломжгүй (403) — өөр санхүүч шийднэ.
+- Шийдвэрлээгүй (`pending`) төлөлтийн мэдээлэлтэй хураамжийг чөлөөлөхгүй (409): эхлээд батлах эсвэл татгалзана.
+- **Чөлөөлөлтийг буцаах:** `POST /api/v1/dues/charges/{id}/unwaive` (`membership.finance`, `reason`
+  заавал, аудитад `membership.dues.unwaive`). Вэб: `/member/finance` → «Чөлөөлөлтийг буцаах».
+- Нэг хураамжид зэрэг илгээсэн төлөлтийн мэдээлэл үлдэгдлээс хэтрэхгүй (хураамж бүрээр advisory lock).
+- `/dues/mine`, `/dues/finance`: хураамж, төлөлт хоёр тусдаа хуудаслагдана — `charges_offset`,
+  `payments_offset` параметр; хариуд `charges_has_more`, `payments_has_more`,
+  `next_charges_offset`, `next_payments_offset` (жагсаалт дууссан бол `null`). Хуучин `offset`,
+  `has_more`, `next_offset` хэвээр ажиллана.
+
 ## Албан тушаал ба эрх
 
 Гишүүнчлэл бүр албан тушаалтай (migration 00117), албан тушаал **эрх олгоно** (00119). Албан тушаал
@@ -219,8 +282,18 @@ API: `/api/v1/events`, `/api/v1/events/{id}`, `…/register`, `…/attendance`,
 
 Гишүүний мэдэгдэл бүр (`registry.member_notifications` — арга хэмжээ, ирц, оноо, албан тушаал,
 хяналтын хороо, гишүүнчлэл) утсанд APNs-ээр очно (`internal/workspace/push`, migration 00120).
-мэдэгдэл бичигдмэгц (`LISTEN member_notifications`, 00121) шууд, мөн 30 секунд тутам `registry.claim_pushes` илгээгдээгүйг нэг удаа авна; 15 минутаас хуучныг илгээхгүй,
-APNs «token байхгүй» гэвэл token устна. iOS: нэвтэрсний дараа зөвшөөрөл асууж token-ийг
+мэдэгдэл бичигдмэгц (`LISTEN member_notifications`, 00121) шууд, мөн 30 секунд тутам `registry.claim_pushes` илгээгдээгүйг авна.
+**Дор хаяж нэг удаа** (00123): авсан мөрийг 5 минутаар «түрээслэнэ»; APNs хүлээж авбал (эсвэл
+давтах утгагүй татгалзвал) `registry.complete_pushes` дуусгана, сүлжээний алдаа / 429 / 5xx бол
+`registry.retry_pushes` 30с, 1м, 2м, 4м-ийн дараа дахин оролдоно, 5 оролдлогын эсвэл 1 цагийн дараа
+орхино. Дахин илгээхэд `apns-collapse-id` нь мэдэгдлийн id тул утсан дээр давхардахгүй, солигдоно.
+Огт оролдоогүй, 15 минутаас хуучирсныг илгээхгүй. APNs 410 / `BadDeviceToken` /
+`DeviceTokenNotForTopic` бол token устгаж, давтахгүй. Зөвхөн APNs token-той хүний мэдэгдлийг авна —
+FCM token-той л хүнийх «илгээсэн» гэж тэмдэглэгдэхгүй.
+
+Token бүртгэл нь хүнийх (00124, `registry.register_my_push_token`): салбар солиход token шинэ
+салбарт шилжинэ (өмнө нь 503 өгдөг байв), салбаргүй хүн (элсэлтийн хүсэлт хүлээж буй) ч бүртгүүлнэ
+(`tenant_id` NULL) — түүнд мэдэгдэл очно. iOS: нэвтэрсний дараа зөвшөөрөл асууж token-ийг
 `POST /api/v1/push-tokens` руу (`app_id` нь `mn.esdy.member`, хөгжүүлэлтийн build-д `…:sandbox`),
 гарахад `DELETE /api/v1/push-tokens`. Мэдэгдэл дээр дарвал холбогдох дэлгэц нээгдэнэ.
 
@@ -296,6 +369,54 @@ wizard-аар, эсвэл хост дээр `docker exec sdy_backend /app/operat
 аппын `gerege-nexus://` scheme бүртгэгдсэн байх ёстой — үгүй бол QR/push
 нэвтрэлт ажиллаж, утасны App2App буцалт чимээгүй унана
 ([Танилт](IDENTITY.md#native-app2app-callback)).
+
+**Өгөгдлийн сангийн нөөцлөлт (2026-11-17-оос).** `deploy` хэрэглэгч sudo-гүй тул хостын cron
+(`deploy/scripts/backup.sh`) хэзээ ч суугаагүй байв. Одоо нөөцлөлт compose-ийн нэг хэсэг:
+
+- `docker-compose.prod.yml`-ийн `backup` үйлчилгээ (`profiles: [backup]`, `postgres:16-alpine` дотор
+  `deploy/scripts/scheduled-backup.sh loop`). deploy.yml `.env`-д `COMPOSE_PROFILES=backup` бичдэг
+  тул rollout бүрийн `up -d` түүнийг давхардалгүй асаана — суулгах тусдаа алхам байхгүй. Өдөр бүр
+  **03:15 (Улаанбаатар) = 19:15 UTC** (`BACKUP_AT_UTC`) `pg_dump` авч
+  `/opt/sdy/backups/daily/nexus-daily-<UTC>.sql.gz` болгоно, **14 хоног** (`BACKUP_KEEP_DAYS`)
+  хадгална. Үр дүн `platform_backups` хүснэгтэд (консолын «Нөөцлөлт»), хэмжүүр
+  `/var/lib/node_exporter/nexus_backup.prom`-д (`BACKUP_TEXTFILE_HOST_DIR`; скрипт хавтсыг
+  үүсгэнэ). Энэ нь `deploy/docker-compose.monitoring.yml`-ийн node_exporter-ийн textfile
+  хавтас тул тэр stack хост дээр асаалттай бол `backups.yml`-ийн сэрэмжлүүлэг ажиллана;
+  асаагүй бол сэрэмжлүүлэг байхгүй — консолын «Нөөцлөлт»-ийг харна.
+- **Migrate-ийн өмнөх dump.** deploy.yml image татсаны дараа, контейнерт хүрэхээс өмнө
+  `docker compose run --rm -T --no-deps backup once predeploy` ажиллуулна →
+  `/opt/sdy/backups/predeploy/`, сүүлийн **10** (`BACKUP_KEEP_COUNT`) үлдэнэ. Dump амжилтгүй эсвэл
+  10 KB-аас бага бол **rollout зогсоно**, ажиллаж буй систем хэвээр. Анхны суулгацад (ажиллаж буй
+  `sdy_postgres` байхгүй) алгасна.
+- Эзэмшил: dump ба хавтсыг `deploy` хэрэглэгчид шилжүүлнэ (`BACKUP_UID`/`BACKUP_GID` = deploy.yml-ийн
+  `id -u`/`id -g`), эрх нь зөвхөн эзэмшигчийнх (файл 0600, хавтас 0700) — `deploy` уншиж, хуулж
+  чадна, бусад хэрэглэгч чадахгүй.
+- Хязгаар: нөөц нь **ижил дискэн дээр**, шифрлэгдээгүй — хост алдагдвал хамт алга болно. Өөр
+  байршилд хуулах (`backup.sh`-ийн age + S3 эсвэл `scp deploy@5.45.65.164:/opt/sdy/backups/...`)
+  нь дараагийн алхам.
+- **Сэргээх** (`deploy` хэрэглэгчээр, `/opt/sdy`-д):
+  1. Файлаа сонгоно: `ls -lt backups/predeploy backups/daily | head`.
+  2. Бичилтийг зогсооно: `docker compose -f docker-compose.prod.yml stop backend frontend backup`.
+  3. Сэргээнэ (dump нь `--clean --if-exists`-тэй тул объектуудыг устгаад дахин үүсгэнэ):
+     `gunzip -c backups/predeploy/<файл>.sql.gz | docker exec -i sdy_postgres psql -v ON_ERROR_STOP=1 -U postgres -d platform_db`.
+  4. Буцаан асаана: `docker compose -f docker-compose.prod.yml up -d` (migrate эхэлж ажиллана).
+     Буруу migration-ийн дараа сэргээж байгаа бол эхлээд өмнөх `IMAGE_TAG`-ийг deploy хийнэ
+     (Actions → Run workflow → tag), эс бөгөөс migrate тэр migration-ийг дахин хийнэ.
+
+**eID-ийн binding-гүй fallback.** App Store-ийн iOS 1.0 eID poll-доо binding явуулдаггүй тул
+`EID_ALLOW_UNBOUND_BEARER` (анхдагч `true`, GitHub variable → deploy.yml → `.env`) асаалттай байхад
+зөвшөөрөгдөнө. Ийм poll бүр логт `eID poll without a session binding` гэж бичигдэж,
+`eid_unbound_bearer_polls_total{result="allowed|refused"}` тоологдоно. **Унтраах:** тоолуур нэг
+хувилбарын турш тэг байвал GitHub → Settings → Variables-д `EID_ALLOW_UNBOUND_BEARER=false`
+нэмээд дахин deploy хийнэ — тэр үед binding-гүй poll 403 `eid_session_other_device` авна.
+eID device-link эхлүүлэх хариу (`/api/v1/auth/eid/start`) одоо `expires_at`-ийг (RFC 3339, 10 минут)
+агуулна — апп тоолуур харуулна.
+
+**Холбоо барих и-мэйл.** `/privacy`, `/support` дээрх хаяг `LEGAL_CONTACT_EMAIL` (GitHub variable →
+deploy.yml → frontend). Анхдагч `privacy@e-sdy.mn` нь **захидал хүлээн авахгүй** — e-sdy.mn-д MX
+бичлэг байхгүй. SDY бодит хаягаа энэ variable-д оруулах, эсвэл e-sdy.mn-д MX нэмэх хүртэл App Store-ийн
+Privacy/Support хуудас ажиллахгүй хаяг заана. eID Mongolia аппын албан ёсны App Store / Google Play
+холбоос репо болон upstream-д олдоогүй тул `EIDLogin.tsx` дэлгүүрийн хайлтын холбоосоор үлдсэн.
 
 **Аюулгүй байдлын санамж.** Серверийн root нууц үг чатаар дамжсан тул түүнийг
 солих (`passwd`) эсвэл `PasswordAuthentication no` болгож зөвхөн SSH

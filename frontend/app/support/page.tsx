@@ -6,8 +6,8 @@ import { ContactEmail, LegalPage, LegalSection, legalStyles as styles } from "@/
 
 /*
  * Тусламж — App Store Connect-ийн «Support URL». Холбоо барих хаяг
- * SDY_CONTACT_EMAIL-ээс (components/legal/LegalPage.tsx) ирнэ; тэр нь одоогоор
- * placeholder тул SDY бөглөх ёстой.
+ * contactEmail()-ээс (components/legal/LegalPage.tsx, LEGAL_CONTACT_EMAIL) ирнэ;
+ * анхдагч хаяг нь MX-гүй тул SDY бодит хаягаа тохируулах ёстой.
  */
 
 export const metadata: Metadata = {

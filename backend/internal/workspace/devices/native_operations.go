@@ -135,8 +135,15 @@ func (h *Handlers) HandleRegisterPushToken(w http.ResponseWriter, r *http.Reques
 		httpx.Error(w, 503, "push registration is not configured")
 		return
 	}
-	_, err = h.db.Exec(r.Context(), `INSERT INTO workspace.push_tokens(tenant_id,user_id,provider,token_hash,token_ciphertext,app_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(token_hash) DO UPDATE SET user_id=EXCLUDED.user_id,tenant_id=EXCLUDED.tenant_id,provider=EXCLUDED.provider,token_ciphertext=EXCLUDED.token_ciphertext,app_id=EXCLUDED.app_id,updated_at=NOW()`, claims.WorkspaceID, claims.UserID, req.Provider, caseSensitiveSecretHash(req.Token), encrypted, req.AppID)
+	// A phone's token is the person's, wherever they are acting: it moves
+	// with them to the branch they now have open, and somebody in no branch
+	// yet registers it too (migration 00124). The upsert this replaced ran
+	// under the branch's policy and failed on the row an earlier branch
+	// held. The user and branch come from the connection's binding, not
+	// from the request.
+	_, err = h.db.Exec(r.Context(), `SELECT registry.register_my_push_token($1,$2,$3,$4)`, caseSensitiveSecretHash(req.Token), req.Provider, encrypted, req.AppID)
 	if err != nil {
+		slog.Warn("push registration failed", "user_id", claims.UserID, "error", err)
 		httpx.Error(w, 503, "push registration failed")
 		return
 	}

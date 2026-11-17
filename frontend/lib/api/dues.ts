@@ -29,4 +29,6 @@ export const duesApi = {
   finance: (period: string, offset = 0) => request<FinancePage>(`/dues/finance?period=${encodeURIComponent(period)}&offset=${offset}`),
   review: (id: string, action: "approve" | "reject" | "reverse", reason: string) => request(`/dues/payments/${encodeURIComponent(id)}/review`, post({ action, reason })),
   waive: (id: string, reason: string) => request(`/dues/charges/${encodeURIComponent(id)}/waive`, post({ reason })),
+  /** Withdraws an exemption; the charge asks for its balance again. */
+  unwaive: (id: string, reason: string) => request(`/dues/charges/${encodeURIComponent(id)}/unwaive`, post({ reason })),
 };
