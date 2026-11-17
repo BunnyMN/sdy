@@ -69,3 +69,6 @@ native-apps/desktop/windows/**/obj/
 services/*/.next/
 services/*/node_modules/
 __pycache__/
+
+# Local redis-server snapshot
+dump.rdb
