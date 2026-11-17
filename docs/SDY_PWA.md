@@ -3,8 +3,11 @@
 Гар утасны хөтөч болон нүүр дэлгэцэд суулгасан апп ижил сервер, session,
 байгууллагын role/permission, PostgreSQL RLS-ийг ашиглана.
 
-> 2026-09-15-ны локал хэрэгжилтийн шинэчлэл. Production rollout хийгдээгүй.
-> Хэрэгжилт, migration, тестийн нотолгоо: [SDY_IMPLEMENTATION_2026-09-15.md](SDY_IMPLEMENTATION_2026-09-15.md).
+> 2026-09-16-нд `72112a97` хувилбар production-д гарсан.
+> Өөрөө шалгах: [алхамчилсан заавар](SDY_MANUAL_TEST_2026-09-16.md),
+> [бөглөх checklist](SDY_MANUAL_TEST_CHECKLIST_2026-09-16.csv).
+> Runtime/backup: [production тайлан](SDY_PRODUCTION_2026-09-16.md).
+> Хэрэгжилт: [SDY_IMPLEMENTATION_2026-09-15.md](SDY_IMPLEMENTATION_2026-09-15.md).
 
 ## Хэрэглэгчийн урсгал
 

@@ -1,0 +1,93 @@
+{
+  "observed_on": "2026-09-15",
+  "timezone": "Asia/Ulaanbaatar",
+  "scope": "Read-only SDY runtime observations and repository review. No deployment or production mutation.",
+  "repository": {
+    "name": "BunnyMN/sdy",
+    "local_branch": "feat/admin-approved-transfers",
+    "local_head": "90745acc2fca9c17c79284ffbf660504cd31dc63",
+    "uncommitted_work": "Transfer regression tests and research/audit documents; not part of the production images."
+  },
+  "public_site": {
+    "url": "https://e-sdy.mn/",
+    "http_status": 200,
+    "check": "HTTP GET following redirects; does not verify authenticated workflows or visual rendering"
+  },
+  "backend_readiness": {
+    "endpoint": "http://127.0.0.1:8080/ready",
+    "response": {
+      "status": "ready"
+    }
+  },
+  "containers": [
+    {
+      "name": "sdy_frontend",
+      "image": "ghcr.io/bunnymn/sdy/frontend:2a4b2b33eca753763e21678eb28d741a5012103e",
+      "status": "Up 3 days"
+    },
+    {
+      "name": "sdy_backend",
+      "image": "ghcr.io/bunnymn/sdy/backend:cf09ae793f1fb30b53d5ab373994fb7f7d74d598",
+      "status": "Up 3 days (healthy)"
+    },
+    {
+      "name": "sdy_postgres",
+      "image": "postgres:16-alpine",
+      "status": "Up 4 days (healthy)"
+    },
+    {
+      "name": "sdy_redis",
+      "image": "redis:7-alpine",
+      "status": "Up 4 days (healthy)"
+    }
+  ],
+  "database_aggregates": {
+    "users": 3,
+    "active_organisations": 5,
+    "active_branches": 5,
+    "events": 1,
+    "dues_settings": 0,
+    "dues_charges": 0,
+    "transfers": 0,
+    "core_schema": 111
+  },
+  "database_aggregate_scope": "registry.users total; active organisation excludes suspended/deletion scheduled; active_branches additionally requires membership_branch; other counts are all rows in the named SDY module tables. Aggregate counts do not establish active usage.",
+  "backup_files_observed": [
+    {
+      "name": "nexus-20260914-191501.sql.gz",
+      "bytes": 56334
+    },
+    {
+      "name": "nexus-20260913-191501.sql.gz",
+      "bytes": 56617
+    },
+    {
+      "name": "nexus-20260912-191501.sql.gz",
+      "bytes": 56687
+    },
+    {
+      "name": "nexus-20260911-191501.sql.gz",
+      "bytes": 56642
+    }
+  ],
+  "backup_scope": "File presence and size in /var/backups/sdy. Contents, restore success, encryption and offsite replication were not checked in this review.",
+  "pull_request": {
+    "number": 9,
+    "url": "https://github.com/BunnyMN/sdy/pull/9",
+    "state": "OPEN",
+    "base": "main",
+    "head": "90745acc2fca9c17c79284ffbf660504cd31dc63"
+  },
+  "ci": {
+    "url": "https://github.com/BunnyMN/sdy/actions/runs/34580458632",
+    "conclusion": "failure",
+    "annotation_summary": "Jobs did not start because of account payment failure or a spending limit; GitHub's annotation lists these alternatives without identifying which one applies."
+  },
+  "limitations": [
+    "No interactive eID approval on a physical phone",
+    "No production data mutations",
+    "No load benchmark",
+    "No new full backend/frontend test run for this product review",
+    "External product feature descriptions are vendor claims, not independent validations"
+  ]
+}

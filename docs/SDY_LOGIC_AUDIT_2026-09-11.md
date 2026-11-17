@@ -1,5 +1,9 @@
 # SDY логик аудит ба дараагийн үйлдлүүд — 2026-09-11
 
+2026-09-15-нд үргэлжлүүлсэн шалгалт: [шилжилтийн зэрэгцээ хүсэлт ба
+байгууллагын төлөвийн тестүүд](SDY_LOGIC_AUDIT_2026-09-15.md).
+Доорх нь 2026-09-11-ний үнэлгээ; дараагийн шалгалтын үр дүнг шинэ баримтаас үзнэ.
+
 ## Одоогийн кодын дүгнэлт
 
 Шилжилт/элсэлтийн гол хамгаалалт зөв байна.
@@ -112,4 +116,3 @@ smoke PASS.
 - [Quorify — members, meetings, attendance, voting, recruitment, dues, projects and reports](https://www.usequorify.com/en)
 - [NDI Best Practices of Effective Parties](https://www.ndi.org/files/Best_Practices_of_Effective_Parties_English.pdf)
 - [Council of Europe — code of good practice for political parties](https://assembly.coe.int/Documents/WorkingDocs/2007/EDOC11210.pdf)
-
