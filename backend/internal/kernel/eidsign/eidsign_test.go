@@ -284,3 +284,41 @@ func TestDigestSignatureOnTheDeviceOpensTheApp(t *testing.T) {
 		t.Fatal("a device-link signature started without a callback")
 	}
 }
+
+// eID refusing the poll itself (credentials, mTLS, an unknown session) is not
+// a ceremony still running: the error reaches the caller, so a vote or the
+// signature test says why instead of waiting until it times out.
+func TestARefusedPollIsAnErrorNotRunning(t *testing.T) {
+	for status, wantErr := range map[int]bool{
+		http.StatusUnauthorized:       true,
+		http.StatusForbidden:          true,
+		http.StatusNotFound:           true,
+		http.StatusBadGateway:         false,
+		http.StatusServiceUnavailable: false,
+		http.StatusTooManyRequests:    false,
+	} {
+		u, _ := newTestUsecase(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/signature/notification/") {
+				_, _ = w.Write([]byte(`{"sessionID":"eid-1","vc":{"value":"4722"}}`))
+				return
+			}
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"error":"mTLS client certificate required"}`))
+		})
+		ctx := context.Background()
+		started, err := u.InitDigest(ctx, "МА74101813", "Иргэн", hex.EncodeToString(make([]byte, 32)), "Санал", "")
+		if err != nil {
+			t.Fatalf("%d: initiate: %v", status, err)
+		}
+		state, err := u.Poll(ctx, "МА74101813", started.SessionID)
+		if wantErr {
+			if err == nil || !strings.Contains(err.Error(), "mTLS client certificate required") {
+				t.Errorf("%d: got %q, %v; want the refusal with eID's words", status, state, err)
+			}
+			continue
+		}
+		if err != nil || state != "running" {
+			t.Errorf("%d: got %q, %v; want running (asked again later)", status, state, err)
+		}
+	}
+}

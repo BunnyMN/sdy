@@ -475,6 +475,25 @@ func overlayImageLastPage(pdfBytes, imageBytes []byte, description string) ([]by
 	return out.Bytes(), nil
 }
 
+// pollStatusError is eID's HTTP answer to a poll that was not a session state.
+type pollStatusError struct {
+	Status int
+	Body   string
+}
+
+func (e *pollStatusError) Error() string {
+	if e.Body == "" {
+		return fmt.Sprintf("eidsign: poll answered %d", e.Status)
+	}
+	return fmt.Sprintf("eidsign: poll answered %d: %s", e.Status, e.Body)
+}
+
+// Transient reports whether asking again could get a different answer: a
+// server error, a timeout or a rate limit. Any other 4xx is a refusal.
+func (e *pollStatusError) Transient() bool {
+	return e.Status >= 500 || e.Status == http.StatusRequestTimeout || e.Status == http.StatusTooManyRequests
+}
+
 // Poll asks eID how the ceremony is going and records what it says.
 func (u *usecase) Poll(ctx context.Context, ownerRegNo, sessionID string) (string, error) {
 	st, err := u.loadState(ctx, sessionID)
@@ -491,6 +510,15 @@ func (u *usecase) Poll(ctx context.Context, ownerRegNo, sessionID string) (strin
 	}
 
 	res, err := u.pollV3(ctx, st.V3SessionID)
+	var refused *pollStatusError
+	if errors.As(err, &refused) && !refused.Transient() {
+		// eID understood the question and said no — the relying party's
+		// credentials, its mTLS certificate, or the session itself. Asking
+		// again cannot change that, and answering "running" would leave the
+		// citizen waiting on a ceremony nobody can finish.
+		slog.WarnContext(ctx, "eidsign: eID refused the poll", "status", refused.Status, "error", err)
+		return "", err
+	}
 	if err != nil {
 		// A failed poll is not a failed ceremony: eID is slow or a connection
 		// dropped, and the citizen may be holding their phone right now. The
@@ -846,7 +874,8 @@ func (u *usecase) pollV3(ctx context.Context, v3SessionID string) (v3PollResult,
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
-		return v3PollResult{}, fmt.Errorf("eidsign: poll answered %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return v3PollResult{}, &pollStatusError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
 
 	var answer struct {
