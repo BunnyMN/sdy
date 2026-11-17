@@ -7,13 +7,17 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// startsSoon is a start time inside the check-in window: an hour from now.
+func startsSoon() string { return time.Now().Add(time.Hour).UTC().Format(time.RFC3339) }
 
 func TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory(t *testing.T) {
 	f := newEventFixture(t)
 	e := f.create(t, 2)
 	user := f.users[1]
-	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Points","starts_at":"2026-10-01T02:00:00Z","points_value":10}`, f.tenant, f.users[0], true), 200)
+	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Points","starts_at":"`+startsSoon()+`","points_value":10}`, f.tenant, f.users[0], true), 200)
 	status(t, f.request("POST", "/"+e.ID+"/register", "", f.tenant, user, false), 200)
 	status(t, f.request("POST", "/"+e.ID+"/check-in-code", "", f.tenant, user, false), 403)
 	issued := f.request("POST", "/"+e.ID+"/check-in-code", "", f.tenant, f.users[0], true)
@@ -53,7 +57,7 @@ func TestCheckinAwardsPointsOnceAndCorrectionsKeepHistory(t *testing.T) {
 		}
 	}
 	check(10, 1)
-	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Points","starts_at":"2026-10-01T02:00:00Z","points_value":20}`, f.tenant, f.users[0], true), 409)
+	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Points","starts_at":"`+startsSoon()+`","points_value":20}`, f.tenant, f.users[0], true), 409)
 	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"attended"}`, f.tenant, f.users[0], true), 200)
 	check(10, 1)
 	status(t, f.request("PUT", "/"+e.ID+"/attendance/"+user, `{"status":"absent","note":"Correction"}`, f.tenant, f.users[0], true), 200)
@@ -79,7 +83,7 @@ func TestExpiredCheckinCodeDoesNotChangeAttendanceOrPoints(t *testing.T) {
 	f := newEventFixture(t)
 	e := f.create(t, 1)
 	user := f.users[1]
-	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Expired check-in","starts_at":"2026-10-01T02:00:00Z","points_value":10}`, f.tenant, f.users[0], true), 200)
+	status(t, f.request("PUT", "/"+e.ID+"/", `{"title":"Expired check-in","starts_at":"`+startsSoon()+`","points_value":10}`, f.tenant, f.users[0], true), 200)
 	status(t, f.request("POST", "/"+e.ID+"/register", "", f.tenant, user, false), 200)
 	issued := f.request("POST", "/"+e.ID+"/check-in-code", "", f.tenant, f.users[0], true)
 	status(t, issued, 200)
@@ -89,7 +93,7 @@ func TestExpiredCheckinCodeDoesNotChangeAttendanceOrPoints(t *testing.T) {
 	if err := json.Unmarshal(issued.Body.Bytes(), &code); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(context.Background(), `UPDATE events_events SET checkin_expires_at=now()-interval '1 second' WHERE id=$1`, e.ID); err != nil {
+	if _, err := f.pool.Exec(context.Background(), `UPDATE events_checkin_codes SET expires_at=now()-interval '1 second' WHERE event_id=$1`, e.ID); err != nil {
 		t.Fatal(err)
 	}
 	status(t, f.request("POST", "/"+e.ID+"/check-in", `{"token":"`+code.Token+`"}`, f.tenant, user, false), 409)

@@ -67,7 +67,7 @@ func New(p nexus.Platform) *Module {
 
 func (m *Module) ID() string      { return ID }
 func (m *Module) Name() string    { return "Events" }
-func (m *Module) Version() string { return "1.5.0" }
+func (m *Module) Version() string { return "1.6.0" }
 
 func (m *Module) Dependencies() []nexus.Dependency { return nil }
 
@@ -125,6 +125,8 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 		er.With(read).Get("/mine", m.myParticipation)
 		er.With(read).Get("/points", m.myPoints)
 		er.With(manage).Get("/summary", m.summary)
+		// Moderation: issues members reported, for an organiser to review.
+		er.With(manage).Get("/reported", m.reported)
 		er.With(read).Get("/leaderboard", m.leaderboard)
 		// Blocking: a member stops seeing the issues one person raises.
 		er.With(read).Get("/blocks", m.blocks)
@@ -154,6 +156,7 @@ func (m *Module) RegisterRoutes(r chi.Router, gate func(http.Handler) http.Handl
 			one.With(read).Post("/motions/{motionID}/vote/poll", m.pollVote)
 			one.With(read).Get("/motions/{motionID}/votes", m.votes)
 			one.With(read, nexus.RateLimit(10, 2)).Post("/motions/{motionID}/report", m.report)
+			one.With(manage).Post("/motions/{motionID}/reports/dismiss", m.dismissReports)
 
 			// Tasks: managers create and assign; members accept, decline or
 			// volunteer; a manager confirms the work, which awards its points.
@@ -474,15 +477,17 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if in.Status == "" {
-		in.Status = "planned"
-	}
 	tx, current, err := m.lockEvent(r.Context(), claims.WorkspaceID, claims.UserID, id)
 	if err != nil {
 		eventError(w, err)
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
+	// A PUT that leaves the status out is an edit of the details, not a
+	// decision to reopen the event: a done or cancelled event stays so.
+	if in.Status == "" {
+		in.Status = current.Status
+	}
 	if in.Capacity != nil && *in.Capacity < current.Registered {
 		nexus.Error(w, http.StatusConflict, "capacity is below the number of participants")
 		return
@@ -676,6 +681,7 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		UserID string `json:"user_id"`
 		Status string `json:"status"`
+		Note   string `json:"note"`
 	}
 	if err := decode(r, &in); err != nil || strings.TrimSpace(in.UserID) == "" {
 		nexus.Error(w, http.StatusBadRequest, "user_id is required")
@@ -686,6 +692,11 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validAttendance(in.Status) {
 		nexus.Error(w, http.StatusBadRequest, "status must be registered, attended or absent")
+		return
+	}
+	in.Note = strings.TrimSpace(in.Note)
+	if len([]rune(in.Note)) > 500 {
+		nexus.Error(w, http.StatusBadRequest, "note is too long")
 		return
 	}
 	if !m.isMember(r.Context(), claims.WorkspaceID, in.UserID) {
@@ -704,17 +715,35 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
+	if e.Status == "cancelled" {
+		nexus.Error(w, http.StatusConflict, ErrEventCancelled)
+		return
+	}
+	// Putting one's own name down is what /register is for; recording that
+	// one came, or changing one's recorded attendance, is another
+	// organiser's call — it moves points.
+	if in.UserID == claims.UserID && (in.Status != "registered" || e.MyStatus != "") {
+		nexus.Error(w, http.StatusForbidden, ErrSelfAttendance)
+		return
+	}
 	if needsUnavailableSeat(e, in.Status) {
 		nexus.Error(w, http.StatusConflict, "this event is full")
 		return
 	}
+	// This is an upsert: on someone already marked it is the same
+	// correction /attendance/{userID} makes, and needs the same reason.
+	if needsCorrectionReason(e.MyStatus, in.Status, in.Note) {
+		nexus.Error(w, http.StatusBadRequest, errCorrectionReason)
+		return
+	}
 	tag, err := tx.Exec(r.Context(), `
-		INSERT INTO events_attendance (tenant_id, event_id, user_id, status, checked_at, checked_by)
-		SELECT $1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid
+		INSERT INTO events_attendance (tenant_id, event_id, user_id, status, checked_at, checked_by, note)
+		SELECT $1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid, $7
 		 WHERE EXISTS (SELECT 1 FROM events_events WHERE tenant_id = $1::uuid AND id = $2::uuid)
 		ON CONFLICT (event_id, user_id) DO UPDATE
-		   SET status = EXCLUDED.status, checked_at = EXCLUDED.checked_at, checked_by = EXCLUDED.checked_by`,
-		claims.WorkspaceID, id, in.UserID, in.Status, checked, checkedBy)
+		   SET status = EXCLUDED.status, checked_at = EXCLUDED.checked_at, checked_by = EXCLUDED.checked_by,
+		       note = CASE WHEN EXCLUDED.note = '' THEN events_attendance.note ELSE EXCLUDED.note END`,
+		claims.WorkspaceID, id, in.UserID, in.Status, checked, checkedBy, in.Note)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not add the participant")
 		return
@@ -732,7 +761,7 @@ func (m *Module) addParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nexus.Audit(r.Context(), claims.WorkspaceID, claims.UserID, "events.attendance.add", id,
-		map[string]any{"user_id": in.UserID, "status": in.Status})
+		map[string]any{"user_id": in.UserID, "previous_status": e.MyStatus, "status": in.Status, "reason": in.Note})
 	nexus.JSON(w, http.StatusOK, map[string]any{"status": in.Status})
 }
 
@@ -772,8 +801,16 @@ func (m *Module) mark(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusNotFound, "that person is not on this event's list")
 		return
 	}
-	if e.MyStatus != "registered" && e.MyStatus != in.Status && strings.TrimSpace(in.Note) == "" {
-		nexus.Error(w, http.StatusBadRequest, "provide a reason for the attendance correction")
+	if e.Status == "cancelled" {
+		nexus.Error(w, http.StatusConflict, ErrEventCancelled)
+		return
+	}
+	if userID == claims.UserID {
+		nexus.Error(w, http.StatusForbidden, ErrSelfAttendance)
+		return
+	}
+	if needsCorrectionReason(e.MyStatus, in.Status, in.Note) {
+		nexus.Error(w, http.StatusBadRequest, errCorrectionReason)
 		return
 	}
 	if needsUnavailableSeat(e, in.Status) {
@@ -838,12 +875,37 @@ func (m *Module) members(w http.ResponseWriter, r *http.Request) {
 	nexus.JSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
+// isMember is whether an organiser may put this person on an event's list:
+// they still have access to the branch (memberships.active — the same test
+// the people picker and discussions use) and their union membership here is
+// not suspended or ended. A person with access but no union membership in
+// this branch ('none' — staff, or a member of another branch working here)
+// may take part.
 func (m *Module) isMember(ctx context.Context, tenantID, userID string) bool {
 	var ok bool
 	err := m.db.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM workspace.memberships WHERE tenant_id = $1::uuid AND user_id = $2::uuid)`,
+		`SELECT EXISTS (SELECT 1 FROM workspace.memberships WHERE tenant_id = $1::uuid AND user_id = $2::uuid
+			AND active AND member_status NOT IN ('suspended','left','alumni'))`,
 		tenantID, userID).Scan(&ok)
 	return err == nil && ok
+}
+
+// Stable error strings the apps map to their own wording.
+const (
+	ErrSelfAttendance   = "you cannot record your own attendance"
+	ErrSelfTask         = "you cannot confirm your own task"
+	ErrSelfCheckin      = "you cannot check in with a check-in code you issued"
+	ErrEventCancelled   = "this event is cancelled"
+	ErrCheckinWindow    = "check-in is open from 2 hours before the event starts until 2 hours after it ends"
+	errCorrectionReason = "provide a reason for the attendance correction"
+)
+
+// needsCorrectionReason: changing attendance that was already recorded —
+// attended or absent — to something else moves points or takes them away,
+// so it carries a reason. Recording the first outcome of a registration
+// does not.
+func needsCorrectionReason(previous, next, note string) bool {
+	return previous != "" && previous != "registered" && previous != next && strings.TrimSpace(note) == ""
 }
 
 func validAttendance(status string) bool {

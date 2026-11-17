@@ -98,10 +98,30 @@ func (in *sanctionInput) validate() error {
 	return nil
 }
 
+// IdempotencyHeader names the optional request header that makes a decision
+// safe to resend. Same key from the same committee member: the first decision
+// is returned again and no second deduction is made.
+const IdempotencyHeader = "Idempotency-Key"
+
+const (
+	errIdempotencyKey   = "Idempotency-Key must be a UUID"
+	ErrIdempotencyReuse = "this Idempotency-Key was already used for a different decision"
+)
+
 func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 	claims, ok := who(w, r)
 	if !ok {
 		return
+	}
+	var key *string
+	if raw := strings.TrimSpace(r.Header.Get(IdempotencyHeader)); raw != "" {
+		parsed, err := uuid.Parse(raw)
+		if err != nil {
+			nexus.Error(w, http.StatusBadRequest, errIdempotencyKey)
+			return
+		}
+		k := parsed.String()
+		key = &k
 	}
 	var in sanctionInput
 	if err := decode(r, &in); err != nil {
@@ -117,6 +137,41 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	tx, err := m.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if key != nil {
+		// Two copies of one resend arrive together as easily as one after the
+		// other; the lock makes the second wait for the first and then find it.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('events.sanction:'||$1||':'||$2,0))`, claims.UserID, *key); err != nil {
+			nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
+			return
+		}
+		var previous, user, reason string
+		var event *string
+		var points int
+		err := tx.QueryRow(ctx, `SELECT id::text,user_id::text,event_id::text,points,reason FROM events_sanctions
+			WHERE tenant_id=$1 AND actor_id=$2 AND idempotency_key=$3`, claims.WorkspaceID, claims.UserID, *key).Scan(&previous, &user, &event, &points, &reason)
+		switch {
+		case err == nil:
+			same := user == in.UserID && points == in.Points && reason == in.Reason &&
+				((event == nil && in.EventID == nil) || (event != nil && in.EventID != nil && *event == strings.ToLower(*in.EventID)))
+			if !same {
+				nexus.Error(w, http.StatusConflict, ErrIdempotencyReuse)
+				return
+			}
+			_ = tx.Rollback(ctx)
+			w.Header().Set("Idempotent-Replayed", "true")
+			m.writeSanction(w, r, claims, previous, http.StatusOK)
+			return
+		case !errors.Is(err, pgx.ErrNoRows):
+			nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
+			return
+		}
+	}
 	if !m.isActiveMember(ctx, claims.WorkspaceID, in.UserID) {
 		nexus.Error(w, http.StatusNotFound, "no such member in this branch")
 		return
@@ -127,12 +182,6 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	tx, err := m.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if err != nil {
-		nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
-		return
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 	var entry *string
 	if in.Points > 0 {
 		var id string
@@ -145,9 +194,9 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 		entry = &id
 	}
 	var id string
-	if err := tx.QueryRow(ctx, `INSERT INTO events_sanctions (tenant_id,user_id,actor_id,event_id,points,reason,point_entry_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`,
-		claims.WorkspaceID, in.UserID, claims.UserID, in.EventID, in.Points, in.Reason, entry).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO events_sanctions (tenant_id,user_id,actor_id,event_id,points,reason,point_entry_id,idempotency_key)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`,
+		claims.WorkspaceID, in.UserID, claims.UserID, in.EventID, in.Points, in.Reason, entry, key).Scan(&id); err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not record the decision")
 		return
 	}
@@ -157,7 +206,11 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 	}
 	nexus.Audit(ctx, claims.WorkspaceID, claims.UserID, "events.sanction", id,
 		map[string]any{"user_id": in.UserID, "points": in.Points, "event_id": in.EventID})
-	rows, err := m.db.Query(ctx, sanctionColumns+` AND s.id = $2::uuid`, claims.WorkspaceID, id)
+	m.writeSanction(w, r, claims, id, http.StatusCreated)
+}
+
+func (m *Module) writeSanction(w http.ResponseWriter, r *http.Request, claims nexus.UserClaims, id string, code int) {
+	rows, err := m.db.Query(r.Context(), sanctionColumns+` AND s.id = $2::uuid`, claims.WorkspaceID, id)
 	if err != nil {
 		nexus.Error(w, http.StatusInternalServerError, "could not read the decision")
 		return
@@ -167,7 +220,7 @@ func (m *Module) sanction(w http.ResponseWriter, r *http.Request) {
 		nexus.Error(w, http.StatusInternalServerError, "could not read the decision")
 		return
 	}
-	nexus.JSON(w, http.StatusCreated, list[0])
+	nexus.JSON(w, code, list[0])
 }
 
 // sanctions lists the branch's decisions, newest first, for the committee.
