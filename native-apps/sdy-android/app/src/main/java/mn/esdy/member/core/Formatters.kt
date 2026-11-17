@@ -64,6 +64,35 @@ object Formatters {
         }
     }
 
+    /** "11-р сарын 9, 18:30" — the year only when it is not this one. */
+    fun dayAndTime(date: Instant, now: Instant = Instant.now()): String {
+        val d = date.atZone(zone)
+        val year = if (d.year != now.atZone(zone).year) "${d.year} оны " else ""
+        return "$year${d.monthValue}-р сарын ${d.dayOfMonth}, ${timeOnly.format(date)}"
+    }
+
+    /** "11-р сарын 9, 18:30–20:30"; across days both ends in full. */
+    fun range(start: String?, end: String?, now: Instant = Instant.now()): String {
+        val from = parseDate(start) ?: return "—"
+        val to = parseDate(end)?.takeIf { it > from } ?: return dayAndTime(from, now)
+        if (from.atZone(zone).toLocalDate() == to.atZone(zone).toLocalDate()) {
+            return "${dayAndTime(from, now)}–${timeOnly.format(to)}"
+        }
+        return "${dayAndTime(from, now)} – ${dayAndTime(to, now)}"
+    }
+
+    /** Day of month and month number in Ulaanbaatar (the list's date badge). */
+    fun dayMonth(date: Instant): Pair<Int, Int> = date.atZone(zone).let { it.dayOfMonth to it.monthValue }
+
+    /** The hour of day in Ulaanbaatar. */
+    fun hour(date: Instant = Instant.now()): Int = date.atZone(zone).hour
+
+    /** "2026-11", "2026-10", … — this month first, as Ulaanbaatar counts them. */
+    fun recentPeriods(count: Int = 12, now: Instant = Instant.now()): List<String> {
+        val month = java.time.YearMonth.from(now.atZone(zone))
+        return (0 until count).map { month.minusMonths(it.toLong()).toString() }
+    }
+
     private val moneyFormat = DecimalFormat("#,##0", DecimalFormatSymbols(Locale.US)).apply { roundingMode = RoundingMode.HALF_UP }
 
     /** Swift's `.rounded()`: half away from zero. */

@@ -1,5 +1,6 @@
 package mn.esdy.member.features.login
 
+import androidx.compose.ui.semantics.role
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Canvas
@@ -227,13 +228,22 @@ private fun FinePrint(onLink: (String) -> Unit) {
         link("Нууцлал", AppConfig.privacyURL)
         append(" · ")
         link("Тусламж", AppConfig.supportURL)
-        append(" · ")
-        link("Нууц үгээр нэвтрэх", PASSWORD_LINK)
     }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("eID Mongolia-аар баталгаажсан иргэн нэвтэрнэ.", fontSize = 12.sp, color = Night.muted, textAlign = TextAlign.Center)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Its own button, big enough to hit (App Review's way in).
+        Box(
+            Modifier.heightIn(min = 44.dp).pressable { onLink(PASSWORD_LINK) }.padding(horizontal = 16.dp)
+                .semantics { role = androidx.compose.ui.semantics.Role.Button },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Нууц үгээр нэвтрэх", fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                color = Night.silver, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+            )
+        }
+        Text("eID Mongolia-аар баталгаажсан иргэн нэвтэрнэ.", fontSize = 13.sp, color = Night.muted, textAlign = TextAlign.Center)
         ClickableText(
-            text, style = TextStyle(fontSize = 12.sp, color = Night.muted, textAlign = TextAlign.Center),
+            text, style = TextStyle(fontSize = 13.sp, color = Night.muted, textAlign = TextAlign.Center),
             modifier = Modifier,
         ) { offset -> text.getStringAnnotations("url", offset, offset).firstOrNull()?.let { onLink(it.item) } }
     }

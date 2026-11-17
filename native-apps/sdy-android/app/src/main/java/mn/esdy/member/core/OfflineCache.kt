@@ -13,6 +13,13 @@ import java.util.concurrent.Executors
  */
 class OfflineCache(private val directory: File) {
     private val queue = Executors.newSingleThreadExecutor()
+    @Volatile private var _generation = 0
+
+    /**
+     * Bumped by every `clearAll`. A request that began before the wipe
+     * (sign-out) saves its answer only while this is unchanged.
+     */
+    val generation: Int get() = _generation
 
     init { directory.mkdirs() }
 
@@ -21,9 +28,11 @@ class OfflineCache(private val directory: File) {
         return File(directory, "$safe.json")
     }
 
-    fun save(data: ByteArray, scope: String, path: String) {
+    fun save(data: ByteArray, scope: String, path: String, ifGeneration: Int? = null) {
         val file = fileFor(scope, path)
         queue.execute {
+            // On the queue, after any wipe queued before it: a late answer stays out.
+            if (ifGeneration != null && ifGeneration != _generation) return@execute
             try {
                 val tmp = File(file.path + ".tmp")
                 tmp.writeBytes(data)
@@ -36,7 +45,10 @@ class OfflineCache(private val directory: File) {
         queue.submit<ByteArray?> { fileFor(scope, path).takeIf { it.exists() }?.readBytes() }.get()
 
     fun clearAll() {
-        queue.submit { directory.listFiles()?.forEach { it.delete() } }.get()
+        queue.submit {
+            _generation += 1
+            directory.listFiles()?.forEach { it.delete() }
+        }.get()
     }
 
     companion object {

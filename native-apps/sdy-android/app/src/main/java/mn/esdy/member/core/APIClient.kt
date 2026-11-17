@@ -54,6 +54,11 @@ class APIClient(
     var onSessionEnded: (() -> Unit)? = null
     /** Called on the main thread with whether the last request reached the server. */
     var onReachability: ((Boolean) -> Unit)? = null
+    /**
+     * Called on the main thread after a 403: the person's permissions may
+     * have changed (a new position, one taken away) since /auth/me was read.
+     */
+    var onForbidden: (() -> Unit)? = null
 
     /** DEBUG-only: answers from bundled JSON instead of the network. */
     var fixtures: FixtureRouter? = null
@@ -74,14 +79,18 @@ class APIClient(
      * the last good copy for this branch, if there is one.
      */
     suspend inline fun <reified T> get(path: String, cached: Boolean = true): T {
+        // A sign-out (or branch switch) while this is in flight wipes the
+        // cache; a late answer must not write the last person's data back.
+        val generation = cache.generation
+        val owner = scope(path)
         try {
             val data = raw(HTTPMethod.GET, path)
             val value = decode<T>(data)
-            if (cached) cache.save(data, scope(path), path)
+            if (cached) cache.save(data, owner, path, ifGeneration = generation)
             return value
         } catch (error: APIError) {
             if (error.isNetwork && cached) {
-                val data = cache.load(scope(path), path)
+                val data = cache.load(owner, path)
                 if (data != null) {
                     try { return decode<T>(data) } catch (_: APIError) {}
                 }
@@ -101,9 +110,10 @@ class APIClient(
         method: HTTPMethod,
         path: String,
         body: Map<String, Any?>? = null,
+        headers: Map<String, String> = emptyMap(),
         timeoutSeconds: Long = 30,
         signsOutOn401: Boolean = true,
-    ): T = decode(raw(method, path, body, timeoutSeconds = timeoutSeconds, signsOutOn401 = signsOutOn401))
+    ): T = decode(raw(method, path, body, headers = headers, timeoutSeconds = timeoutSeconds, signsOutOn401 = signsOutOn401))
 
     suspend fun perform(method: HTTPMethod, path: String, body: Map<String, Any?>? = null) {
         raw(method, path, body)
@@ -129,16 +139,17 @@ class APIClient(
         path: String,
         body: Map<String, Any?>? = null,
         upload: Pair<ByteArray, String>? = null,
+        headers: Map<String, String> = emptyMap(),
         timeoutSeconds: Long = 30,
         signsOutOn401: Boolean = true,
     ): ByteArray = try {
-        transmit(method, path, body, upload, timeoutSeconds, signsOutOn401)
+        transmit(method, path, body, upload, headers, timeoutSeconds, signsOutOn401)
     } catch (e: StaleToken) {
         // The token this request carried was replaced while it was in flight
         // (a branch switch revokes the old one at once). The server turned it
         // away before acting, so once more with the current one.
         try {
-            transmit(method, path, body, upload, timeoutSeconds, signsOutOn401)
+            transmit(method, path, body, upload, headers, timeoutSeconds, signsOutOn401)
         } catch (e: StaleToken) {
             throw APIError(APIError.Kind.Unauthorized)
         }
@@ -152,6 +163,7 @@ class APIClient(
         path: String,
         body: Map<String, Any?>?,
         upload: Pair<ByteArray, String>?,
+        headers: Map<String, String>,
         timeoutSeconds: Long,
         signsOutOn401: Boolean,
     ): ByteArray {
@@ -166,6 +178,7 @@ class APIClient(
             .header("Accept-Language", "mn")
             .header("X-Session-Transport", "bearer")
             .header("X-Client", "SDYMember-Android/${AppConfig.appVersion}")
+        for ((name, value) in headers) builder.header(name, value)
         // The token this request goes out with: whatever the answer says about
         // the session is about this token, which may be stale by then.
         val sentToken = tokens.token?.takeIf { it.isNotEmpty() }
@@ -209,6 +222,7 @@ class APIClient(
             throw APIError(APIError.Kind.Unauthorized, message, code)
         }
         if (status !in 200..299) {
+            if (status == 403 && hadToken) notifyForbidden()
             val (message, code) = errorBody(data)
             throw APIError(APIError.Kind.Server(status), message, code)
         }
@@ -235,6 +249,7 @@ class APIClient(
     }
 
     private fun notifySessionEnded() { main?.post { onSessionEnded?.invoke() } ?: onSessionEnded?.invoke() }
+    private fun notifyForbidden() { main?.post { onForbidden?.invoke() } ?: onForbidden?.invoke() }
     private fun notifyReachability(reachable: Boolean) { main?.post { onReachability?.invoke(reachable) } ?: onReachability?.invoke(reachable) }
 
     // endregion

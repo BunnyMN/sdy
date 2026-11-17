@@ -2,6 +2,7 @@ package mn.esdy.member.features.events
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -116,6 +117,7 @@ internal fun DiscussionSection(model: DiscussionModel) {
                 MotionRow(
                     motion, data, signingActive = model.signing != null, offline = app.isOffline,
                     onVote = { choice -> confirm = motion to choice },
+                    onCheck = { model.check(motion) },
                     onReport = { reporting = motion },
                     onBlock = { blocking = motion },
                 )
@@ -182,6 +184,7 @@ private fun MotionRow(
     signingActive: Boolean,
     offline: Boolean,
     onVote: (String) -> Unit,
+    onCheck: () -> Unit,
     onReport: () -> Unit,
     onBlock: () -> Unit,
 ) {
@@ -224,13 +227,13 @@ private fun MotionRow(
         }
         if (motion.body.isNotEmpty()) Text(motion.body, style = SdyType.subheadline, color = Color.White)
         if (motion.status == "voting" || motion.status == "decided") Tally(motion)
-        MyVote(motion)
+        MyVote(motion, checkEnabled = !signingActive && !offline, onCheck = onCheck)
         if (data.needsMyVote(motion)) {
             val enabled = !signingActive && !offline
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("yes", "no", "abstain").forEach { choice ->
-                    if (choice == "yes") PrimaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true, small = true, color = Theme.accent) { onVote(choice) }
-                    else SecondaryButton(Labels.choice(choice), Modifier.weight(1f), enabled = enabled, fillWidth = true, small = true) { onVote(choice) }
+                    if (choice == "yes") PrimaryButton(Labels.choice(choice), enabled = enabled, fillWidth = true, small = true, color = Theme.accent, modifier = Modifier.weight(1f).heightIn(min = Theme.minTap)) { onVote(choice) }
+                    else SecondaryButton(Labels.choice(choice), Modifier.weight(1f).heightIn(min = Theme.minTap), enabled = enabled, fillWidth = true, small = true) { onVote(choice) }
                 }
             }
         }
@@ -266,13 +269,20 @@ private fun Tally(motion: Motion) {
 }
 
 @Composable
-private fun MyVote(motion: Motion) {
+private fun MyVote(motion: Motion, checkEnabled: Boolean, onCheck: () -> Unit) {
     val vote = motion.myVote ?: return
     when (vote.status) {
         "signed" -> IconLabel("Таны санал: ${Labels.chose(vote.choice)} · eID-ээр зурсан", Icons.Rounded.Verified,
             color = Theme.success, style = SdyType.footnote.copy(fontWeight = FontWeight.Medium), iconSize = 16.dp)
-        "signing" -> IconLabel("Таны санал (${Labels.chose(vote.choice)}) зурагдаж дуусаагүй байна.", Icons.Rounded.HourglassTop,
-            color = Theme.warning, style = SdyType.footnote, iconSize = 16.dp)
+        "signing" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconLabel("Таны санал (${Labels.chose(vote.choice)}) зурагдаж дуусаагүй байна.", Icons.Rounded.HourglassTop,
+                color = Theme.warning, style = SdyType.footnote, iconSize = 16.dp, modifier = Modifier.weight(1f))
+            SecondaryButton(
+                "Шалгах", enabled = checkEnabled, small = true,
+                modifier = Modifier.heightIn(min = Theme.minTap).semantics { contentDescription = "Шалгах: eID гарын үсэг зурагдсан эсэхийг шалгана" },
+                onClick = onCheck,
+            )
+        }
         else -> IconLabel("Таны санал зурагдаагүй — дахин санал өгнө үү.", Icons.Rounded.ErrorOutline,
             color = Theme.danger, style = SdyType.footnote, iconSize = 16.dp)
     }
