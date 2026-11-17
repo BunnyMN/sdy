@@ -8,18 +8,18 @@ import { apiBase } from "@/lib/apiBase";
 
 export type ArchiveKind = "minutes" | "decision" | "vote_protocol";
 export type ArchiveStatus = "draft" | "signing" | "signed" | "cancelled";
-export type SignerStatus = "pending" | "signing" | "signed" | "refused";
+export type SignerStatus = "pending" | "signing" | "signed" | "refused" | "replaced";
 
 export type ArchiveSigner = {
   user_id: string; name: string; position_title: string; order: number; status: SignerStatus;
   signed_at: string | null; cert_name: string; cert_serial: string; cert_issuer: string;
-  has_eid: boolean; current: boolean; last_error?: string;
+  has_eid: boolean; current: boolean; last_error?: string; replace_reason?: string;
 };
 export type ArchiveVersion = { revision: number; sha256: string; size: number; signer_user_id: string | null; signer_name: string; created_at: string };
 
 export type ArchiveDocument = {
   id: string; kind: ArchiveKind; kind_title: string; number: string; title: string; body: string;
-  event_id: string | null; event_title: string; motion_id: string | null; status: ArchiveStatus; draft_reason: string;
+  event_id: string | null; event_title: string; motion_id: string | null; status: ArchiveStatus; draft_reason: string; notice: string;
   created_by: string; created_by_name: string; created_at: string; updated_at: string;
   issued_at: string | null; signed_at: string | null; cancelled_at: string | null; cancel_reason: string;
   pdf_sha256: string; final_sha256: string; signer_count: number; signed_count: number; revisions: number;
@@ -61,6 +61,9 @@ export const archiveApi = {
   update: (id: string, input: ArchiveInput) => request<{ document: ArchiveDocument }>(one(id), { method: "PUT", body: JSON.stringify(input) }),
   send: (id: string) => request<{ document: ArchiveDocument }>(`${one(id)}/send`, post()),
   cancel: (id: string, reason: string) => request<{ document: ArchiveDocument }>(`${one(id)}/cancel`, post({ reason })),
+  /** Who still has to sign, while the document is out: the open signers are replaced by these, in order. */
+  replaceSigners: (id: string, signers: string[], reason: string) =>
+    request<{ document: ArchiveDocument }>(`${one(id)}/signers`, { method: "PUT", body: JSON.stringify({ signers, reason }) }),
   candidates: (q = "") => request<SignerCandidates>(`/archive/signers${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   /** callbackUrl, from a phone: the answer's app_link opens the eID app, which returns there. */
   sign: (id: string, callbackUrl = "") => request<SignStart>(`${one(id)}/sign`, post({ callback_url: callbackUrl })),

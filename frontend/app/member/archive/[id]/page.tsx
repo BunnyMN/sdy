@@ -9,14 +9,15 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Ban, CheckCircle2, Circle, Clock, Download, FileText, Pencil, PenLine, Send, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Circle, Clock, Download, FileText, Pencil, PenLine, Repeat, Send, UserX, XCircle } from "lucide-react";
 
 import ArchiveSign from "@/components/archive/ArchiveSign";
+import SignerPicker, { type Signer } from "@/components/archive/SignerPicker";
 import { archiveApi, archivePdfUrl, type ArchiveDocument, type ArchiveSigner } from "@/lib/api/archive";
 import { ApiError } from "@/lib/errorMessage";
 import { useI18n } from "@/lib/i18n";
 import { useErrorMessage } from "@/lib/useErrorMessage";
-import { Badge, Banner, LoadingBlock, useConfirm } from "@/components/ui";
+import { Badge, Banner, LoadingBlock, fieldClass, useConfirm } from "@/components/ui";
 import { memberDate } from "@/lib/memberFormat";
 import { ARCHIVE_PATH, archiveErrorKey, kindKey, progressText, statusKey, statusTone } from "@/lib/archive";
 
@@ -33,6 +34,9 @@ export default function ArchiveDocumentPage() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [round, setRound] = useState(0);
+  const [replacing, setReplacing] = useState(false);
+  const [replacement, setReplacement] = useState<Signer[]>([]);
+  const [replaceReason, setReplaceReason] = useState("");
 
   const explain = useCallback((err: unknown) => {
     const key = archiveErrorKey(err);
@@ -74,6 +78,12 @@ export default function ArchiveDocumentPage() {
     await act(() => archiveApi.cancel(doc.id, answer.reason), t("events.archive.status.cancelled"));
   }
 
+  async function replaceSigners() {
+    if (!doc) return;
+    await act(() => archiveApi.replaceSigners(doc.id, replacement.map(s => s.user_id), replaceReason.trim()), t("events.archive.replaced_done"));
+    setReplacing(false); setReplacement([]); setReplaceReason("");
+  }
+
   if (doc === null) return <div className="mx-auto max-w-[860px] space-y-4"><h1 className="text-2xl font-semibold">{t("events.archive.not_found")}</h1>
     <Link href={ARCHIVE_PATH} className="text-sm underline">{t("events.archive.title")}</Link></div>;
   if (doc === undefined) return <div className="mx-auto max-w-[860px] space-y-4">{error ? <Banner tone="error" message={error} /> : <LoadingBlock />}</div>;
@@ -97,6 +107,7 @@ export default function ArchiveDocumentPage() {
     {notice && <Banner tone="success" message={notice} onDismiss={() => setNotice("")} />}
     {error && <Banner tone="error" message={error} onDismiss={() => setError("")} />}
     {doc.status === "draft" && doc.draft_reason === "no_signers" && <Banner tone="warning" message={t("events.archive.no_signers_reason")} />}
+    {doc.can_manage && doc.notice && (doc.status === "draft" || doc.status === "signing") && <Banner tone="warning" message={doc.notice} />}
     {doc.status === "cancelled" && doc.cancel_reason && <Banner tone="info" message={t("events.archive.cancelled_note", { reason: doc.cancel_reason })} />}
 
     {doc.my_turn && ready && <ArchiveSign documentID={doc.id} onSigned={reload} />}
@@ -105,8 +116,23 @@ export default function ArchiveDocumentPage() {
       {canEdit && <Link href={`${ARCHIVE_PATH}/${doc.id}/edit`} className={btn}><Pencil aria-hidden="true" className="h-4 w-4" />{t("events.archive.edit")}</Link>}
       {canEdit && <button type="button" disabled={busy || signers.length === 0} onClick={() => void send()} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-50">
         <Send aria-hidden="true" className="h-4 w-4" />{t("events.archive.send")}</button>}
+      {doc.status === "signing" && <button type="button" disabled={busy} aria-expanded={replacing} onClick={() => setReplacing(v => !v)} className={btn}>
+        <Repeat aria-hidden="true" className="h-4 w-4" />{t("events.archive.replace")}</button>}
       <button type="button" disabled={busy} onClick={() => void cancel()} className={`${btn} text-danger`}><Ban aria-hidden="true" className="h-4 w-4" />{t("events.archive.cancel")}</button>
     </div>}
+
+    {replacing && doc.can_manage && doc.status === "signing" && <section aria-labelledby="archive-replace" className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-5">
+      <div>
+        <h2 id="archive-replace" className="font-semibold">{t("events.archive.replace")}</h2>
+        <p className="mt-1 text-xs text-muted">{t("events.archive.replace_hint")}</p>
+      </div>
+      <SignerPicker signers={replacement} setSigners={change => setReplacement(change)}
+        exclude={signers.filter(s => s.status === "signed").map(s => s.user_id)} />
+      <label className="block space-y-1.5 text-sm"><span className="font-medium">{t("events.archive.replace_reason")}</span>
+        <input required maxLength={500} value={replaceReason} onChange={e => setReplaceReason(e.target.value)} className={fieldClass} /></label>
+      <button type="button" disabled={busy || replacement.length === 0 || !replaceReason.trim()} onClick={() => void replaceSigners()}
+        className="min-h-11 rounded-md bg-accent px-5 text-sm font-medium text-on-accent disabled:opacity-50">{t("events.archive.replace_save")}</button>
+    </section>}
 
     <section aria-labelledby="archive-signers" className="space-y-3 rounded-lg border border-line bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -114,7 +140,7 @@ export default function ArchiveDocumentPage() {
         {signers.length > 0 && <span className="text-sm tabular-nums text-muted">{t("events.archive.progress", { progress: progressText(doc.signed_count, doc.signer_count) })}</span>}
       </div>
       {signers.length === 0 ? <p className="text-sm text-muted">{t("events.archive.form.none")}</p>
-        : <ol className="divide-y divide-line">{signers.map(s => <SignerRow key={s.user_id} s={s} />)}</ol>}
+        : <ol className="divide-y divide-line">{signers.map(s => <SignerRow key={`${s.order}-${s.user_id}`} s={s} />)}</ol>}
     </section>
 
     {doc.kind !== "vote_protocol" && doc.body && <section className="rounded-lg border border-line bg-surface p-4 sm:p-5">
@@ -147,6 +173,7 @@ function SignerRow({ s }: { s: ArchiveSigner }) {
   const { t } = useI18n();
   const icon = s.status === "signed" ? <CheckCircle2 aria-hidden="true" className="h-5 w-5 text-success" />
     : s.current ? <PenLine aria-hidden="true" className="h-5 w-5 text-accent" />
+    : s.status === "replaced" ? <UserX aria-hidden="true" className="h-5 w-5 text-muted" />
     : s.status === "refused" ? <XCircle aria-hidden="true" className="h-5 w-5 text-warning" />
     : s.status === "signing" ? <Clock aria-hidden="true" className="h-5 w-5 text-muted" />
     : <Circle aria-hidden="true" className="h-5 w-5 text-muted" />;
@@ -160,7 +187,8 @@ function SignerRow({ s }: { s: ArchiveSigner }) {
         {s.current && <Badge tone="accent">{t("events.archive.signer.current")}</Badge>}
       </span>
       {s.cert_name && <span className="block text-xs text-muted">{t("events.archive.signer.cert", { name: s.cert_name })}</span>}
-      {!s.has_eid && s.status !== "signed" && <span className="block text-xs text-warning">{t("events.archive.form.no_eid")}</span>}
+      {s.replace_reason && <span className="block text-xs text-muted">{t("events.archive.signer.replaced_reason", { reason: s.replace_reason })}</span>}
+      {!s.has_eid && s.status !== "signed" && s.status !== "replaced" && <span className="block text-xs text-warning">{t("events.archive.form.no_eid")}</span>}
       {s.last_error && <span className="block break-words text-xs text-danger">{s.last_error}</span>}
     </span>
   </li>;

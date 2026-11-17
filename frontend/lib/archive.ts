@@ -29,6 +29,11 @@ export function addSigners<T extends Pick<SignerCandidate, "user_id">>(current: 
   return out;
 }
 
+/** «Бүх тэргүүлэгч + Тэргүүн + Нарийн бичиг»: the chair and the secretary first, then the board. */
+export function boardWithOfficers<T extends Pick<SignerCandidate, "user_id">>(c: { board: T[]; officers: T[] }): T[] {
+  return addSigners(addSigners([] as T[], c.officers), c.board);
+}
+
 /** Moves one signer up (-1) or down (+1); out of range leaves the list as it was. */
 export function moveSigner<T>(list: T[], index: number, delta: -1 | 1): T[] {
   const to = index + delta;
@@ -91,6 +96,9 @@ const KNOWN: Record<string, string> = {
   "this installation cannot sign pdf documents": "events.archive.error.signing_off",
   "eid mongolia could not start the signature": "events.archive.error.start",
   "a signed or cancelled document cannot be cancelled": "events.archive.error.final",
+  "give a reason for changing the signers": "events.archive.error.replace_reason",
+  "name who signs instead": "events.archive.error.replace_none",
+  "a new signer has already signed this document": "events.archive.error.replace_signed",
 };
 
 /** The i18n key for a known refusal, or "" to fall back to the shared error text. */

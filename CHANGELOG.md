@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Платформ:** `nexus.DocumentSignatureRequest.CallbackURL`, `RailSignatureOnly`,
   `nexus.ErrSignedDocumentUnavailable`, `SignedDocument.Signer*` — rail-only PDF ёслол fallback-гүй.
   eID mock нь rail-only баримтад incremental гарын үсэг нэмнэ.
+- **Зурагч солих:** `PUT /api/v1/archive/{id}/signers` `{signers, reason}` — илгээсэн баримтын зураагүй
+  зурагчдыг шалтгаантай солино (`replaced` төлөв хадгалагдана). Протокол eID-гүй/идэвхгүй Тэргүүн,
+  Нарийн бичгийг алгасаж `notice`-оор анхааруулна. Илгээгдээгүй (цуцлагдсан төсөл ч) баримт гишүүнд
+  харагдахгүй.
+- **Revision шалгалт** задлан уншдаг: яг нэг гарын үсэг бүтэн файлыг хамарсан, хуудас/фонт/catalog
+  өөрчлөгдөөгүй, `%%EOF`-ийн дараа өгөгдөлгүй.
 - **PDF үүсгэгч** (`internal/apps/events/pdfdoc`): детерминист A4 PDF, Inter (SIL OFL) фонт subset-ээр
   суулгагдсан, Монгол кирилл (Ө, Ү) хайгдаж хуулагдана.
 

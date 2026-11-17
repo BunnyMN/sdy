@@ -16,8 +16,12 @@
 
 - Сервер **саналын хуудас PDF** үүсгэж, түүнийг eID-д PDF-ээр өгнө (`RailSignatureOnly`).
   `digest_hex` нь тэр PDF-ийн SHA-256; PIN2 дэлгэц дээр «Санал: Зөвшөөрөв — <асуудал>» гарна.
-- Санал нь eID-ийн баталгаажуулсан digest-ээр тоологдоно (өмнөх шигээ). eID-ийн тамгалсан
-  PAdES PDF тэр мөчид ирээгүй бол санал тоологдсон хэвээр, дараагийн poll (≤30 мин) түүнийг хавсаргана.
+- Санал нь eID-ийн баталгаажуулсан digest-ээр тоологдож **эхлээд commit** хийгдэнэ (өмнөх шигээ);
+  eID-ийн тамгалсан PAdES PDF-ийг хариу өгсний дараа ард нь татна — poll-ийн хариу stamp-аас
+  хамаарахгүй. Ирээгүй бол дараагийн poll (зурснаас хойш ≤30 мин, санал бүрт 5 минутад нэгээс
+  илүүгүй) дахин оролдоно.
+- Зурагдсан саналын poll үргэлж `200 {state: "signed", points}` — зэрэг хоёр poll, эсвэл санал
+  хураалт хаагдсаны дараах poll ч мөн адил (өмнө нь зэрэг poll 409 өгч болдог байв).
 - eID нь зөвхөн digest зурдаг бол (PDF гарын үсэг боломжгүй) ижил PDF-ийн digest-ийг зурна.
 
 Шинэ талбарууд (нэмэлт, хуучин апп эвдэхгүй):
@@ -48,18 +52,22 @@
 ArchiveDocument {
   id, kind: "minutes"|"decision"|"vote_protocol", kind_title, number: "2026/014" ("" төсөлд),
   title, body, event_id|null, event_title, motion_id|null,
-  status: "draft"|"signing"|"signed"|"cancelled", draft_reason: ""|"no_signers",
+  status: "draft"|"signing"|"signed"|"cancelled", draft_reason: ""|"no_signers", notice,
   created_by, created_by_name, created_at, updated_at, issued_at|null, signed_at|null,
   cancelled_at|null, cancel_reason, pdf_sha256, final_sha256,
   signer_count, signed_count, revisions, current_signer|null, my_turn: bool,
   signers?: [ArchiveSigner], versions?: [ArchiveVersion], can_manage: bool
 }
-ArchiveSigner { user_id, name, position_title, order, status: "pending"|"signing"|"signed"|"refused",
-  signed_at|null, cert_name, cert_serial, cert_issuer, has_eid, current, last_error? }
+ArchiveSigner { user_id, name, position_title, order, status: "pending"|"signing"|"signed"|"refused"|"replaced",
+  signed_at|null, cert_name, cert_serial, cert_issuer, has_eid, current, last_error?, replace_reason? }
 ArchiveVersion { revision, sha256, size, signer_user_id|null, signer_name, created_at }
 ```
 
-`last_error` нь зөвхөн тухайн зурагч өөрт ба менежерт харагдана.
+`last_error` нь зөвхөн тухайн зурагч өөрт ба менежерт харагдана. `notice` — системийн анхааруулга
+(жишээ нь протоколд eID-гүй Тэргүүнийг алгассан). `signer_count` нь солигдсоныг тоолохгүй; нэг хүн
+солигдоод дахин нэрлэгдвэл жагсаалтад хоёр мөрөөр (`replaced` ба шинэ) гарна — түлхүүр нь `order`.
+Гишүүнд хэзээ ч илгээгдээгүй (`issued_at` null) баримт харагдахгүй — цуцлагдсан төсөл ч мөн.
+`GET …/pdf` минутад 30 хүсэлтээр хязгаарлагдана.
 
 ### Endpoint
 
@@ -72,13 +80,14 @@ ArchiveVersion { revision, sha256, size, signer_user_id|null, signer_name, creat
 | PUT | `/api/v1/archive/{docID}` | manage | төсөлд л; POST-той ижил бие → `{document}`. Протоколд зөвхөн `signers` өөрчлөгдөнө |
 | POST | `/api/v1/archive/{docID}/send` | manage | → `{document}` (status `signing`, дугаар, revision 0) |
 | POST | `/api/v1/archive/{docID}/cancel` | manage | `{reason}` (`signing` үед заавал) → `{document}` |
+| PUT | `/api/v1/archive/{docID}/signers` | manage | `signing` үед: `{signers: [user_id…], reason}` → `{document}`. Зураагүй зурагчид `replaced` болж (шалтгаантай, хадгалагдана), өгсөн хүмүүс зурсны дараа дарааллаар орно; эхнийх нь мэдэгдэл авна |
 | GET | `/api/v1/archive/{docID}/pdf` | read | `?revision=N&inline=1` → `application/pdf` (сүүлийн хувилбар анхдагч; төсөлд менежерт «ТӨСӨЛ» урьдчилсан харагдац) |
 | POST | `/api/v1/archive/{docID}/sign` | read | `{callback_url?}` → 202 `{session_id, verification_code, app_link, state: "signing"}` |
 | POST | `/api/v1/archive/{docID}/sign/poll` | read | `{session_id?}` → 200 `{state, document_status, reason?}` |
 | POST | `/api/v1/events/{id}/motions/{motionID}/protocol` | events.manage | хаалтын үед протокол үүсч чадаагүй бол дахин үүсгэнэ → 201 `{document}`; байгаа бол 409 |
 
 `state`: `signing` (PIN2 хүлээж байна — 2–3 секунд тутам дахин poll), `signed`, `failed`
-(`reason`: `rejected`, `expired`, `failed`, `refused…`; «Дахин оролдох» → шинэ `…/sign`), `pending`
+(`reason`: `rejected`, `expired`, `failed`, `refused…`, `replaced`; «Дахин оролдох» → шинэ `…/sign`), `pending`
 (ёслол эхлээгүй).
 
 ### Гарын үсэг зурах урсгал
@@ -114,3 +123,6 @@ ArchiveVersion { revision, sha256, size, signer_user_id|null, signer_name, creat
 | 409 | `choose who signs the document first` | Гарын үсэг зурагч сонгоно уу |
 | 409 | `only a draft can be edited` / `only a draft can be sent for signature` | Зөвхөн төслийг |
 | 400 | `give a reason for cancelling a document out for signature` | Цуцлах шалтгаан бичнэ үү |
+| 400 | `give a reason for changing the signers` | Зурагч солих шалтгаан бичнэ үү |
+| 400 | `name who signs instead` | Оронд нь зурах хүнийг сонгоно уу |
+| 409 | `a new signer has already signed this document` | Сонгосон хүн аль хэдийн зурсан |

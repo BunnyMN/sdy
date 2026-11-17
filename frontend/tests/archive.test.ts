@@ -2,11 +2,11 @@
 // builds, the phone's round trip to the eID app, poll states and the words for
 // every refusal the API sends.
 
-import { expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 
 import { archiveQuery, archivePdfUrl, ballotUrl } from "@/lib/api/archive";
 import {
-  ARCHIVE_POLL_FOR, ARCHIVE_SIGN_STORAGE_KEY, addSigners, archiveCallback, archiveErrorKey, forgetSignSession,
+  ARCHIVE_POLL_FOR, ARCHIVE_SIGN_STORAGE_KEY, addSigners, boardWithOfficers, archiveCallback, archiveErrorKey, forgetSignSession,
   kindKey, moveSigner, pollStep, progressText, readSignSession, saveSignSession, statusKey, statusTone,
 } from "@/lib/archive";
 import "@/lib/i18n/apps/events";
@@ -96,3 +96,18 @@ test("every kind, status and signer state has words and a tone", () => {
   for (const s of ["pending", "signing", "signed", "refused", "current"]) expect(lookup("mn", `events.archive.signer.${s}`)).toBeTruthy();
   expect(progressText(2, 5)).toBe("2/5");
 });
+
+describe("the combined signer preset", () => {
+  it("puts the chair and the secretary first, then the board, without duplicates", () => {
+    const officers = [{ user_id: "chair" }, { user_id: "secretary" }];
+    const board = [{ user_id: "b1" }, { user_id: "chair" }, { user_id: "b2" }];
+    expect(boardWithOfficers({ board, officers }).map(s => s.user_id)).toEqual(["chair", "secretary", "b1", "b2"]);
+    expect(boardWithOfficers({ board: [], officers: [] })).toEqual([]);
+  });
+  it("maps the replace refusals to words", () => {
+    for (const message of ["give a reason for changing the signers", "name who signs instead", "a new signer has already signed this document"]) {
+      expect(archiveErrorKey({ message })).not.toBe("");
+    }
+  });
+});
+
