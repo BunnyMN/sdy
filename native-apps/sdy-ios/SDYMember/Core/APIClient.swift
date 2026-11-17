@@ -31,6 +31,9 @@ final class APIClient {
     var onSessionEnded: (() -> Void)?
     /// Called on the main actor with whether the last request reached the server.
     var onReachability: ((Bool) -> Void)?
+    /// Called on the main actor after a 403: the person's permissions may have
+    /// changed (a new position, one taken away) since /auth/me was read.
+    var onForbidden: (() -> Void)?
 
     #if DEBUG
     var fixtures: FixtureRouter? = AppConfig.fixturesEnabled ? FixtureRouter() : nil
@@ -59,13 +62,17 @@ final class APIClient {
     /// GET with offline fallback: a failure to reach the server answers with
     /// the last good copy for this branch, if there is one.
     func get<T: Decodable>(_ path: String, as type: T.Type = T.self, cached: Bool = true) async throws -> T {
+        // A sign-out (or branch switch) while this is in flight wipes the
+        // cache; a late answer must not write the last person's data back.
+        let generation = cache.generation
+        let owner = self.scope(for: path)
         do {
             let data = try await raw(.get, path)
             let value = try decode(T.self, from: data)
-            if cached { cache.save(data, scope: scope(for: path), path: path) }
+            if cached { cache.save(data, scope: owner, path: path, ifGeneration: generation) }
             return value
         } catch let error as APIError where error.isNetwork && cached {
-            if let data = cache.load(scope: scope(for: path), path: path), let value = try? decode(T.self, from: data) {
+            if let data = cache.load(scope: owner, path: path), let value = try? decode(T.self, from: data) {
                 return value
             }
             throw error
@@ -80,9 +87,10 @@ final class APIClient {
     }
 
     func send<T: Decodable>(_ method: HTTPMethod, _ path: String, body: [String: Any]? = nil,
+                            headers: [String: String] = [:],
                             timeout: TimeInterval = 30, as type: T.Type = T.self,
                             signsOutOn401: Bool = true) async throws -> T {
-        let data = try await raw(method, path, body: body, timeout: timeout, signsOutOn401: signsOutOn401)
+        let data = try await raw(method, path, body: body, headers: headers, timeout: timeout, signsOutOn401: signsOutOn401)
         return try decode(T.self, from: data)
     }
 
@@ -107,16 +115,16 @@ final class APIClient {
     // MARK: - Transport
 
     func raw(_ method: HTTPMethod, _ path: String, body: [String: Any]? = nil,
-             upload: (data: Data, type: String)? = nil,
+             upload: (data: Data, type: String)? = nil, headers: [String: String] = [:],
              timeout: TimeInterval = 30, signsOutOn401: Bool = true) async throws -> Data {
         do {
-            return try await transmit(method, path, body: body, upload: upload, timeout: timeout, signsOutOn401: signsOutOn401)
+            return try await transmit(method, path, body: body, upload: upload, headers: headers, timeout: timeout, signsOutOn401: signsOutOn401)
         } catch StaleToken.rejected {
             // The token this request carried was replaced while it was in
             // flight (a branch switch revokes the old one at once). The server
             // turned it away before acting, so once more with the current one.
             do {
-                return try await transmit(method, path, body: body, upload: upload, timeout: timeout, signsOutOn401: signsOutOn401)
+                return try await transmit(method, path, body: body, upload: upload, headers: headers, timeout: timeout, signsOutOn401: signsOutOn401)
             } catch StaleToken.rejected {
                 throw APIError(kind: .unauthorized, serverMessage: "", code: nil)
             }
@@ -127,7 +135,7 @@ final class APIClient {
     private enum StaleToken: Error { case rejected }
 
     private func transmit(_ method: HTTPMethod, _ path: String, body: [String: Any]?,
-                          upload: (data: Data, type: String)?,
+                          upload: (data: Data, type: String)?, headers: [String: String],
                           timeout: TimeInterval, signsOutOn401: Bool) async throws -> Data {
         #if DEBUG
         if let fixtures {
@@ -143,6 +151,7 @@ final class APIClient {
         request.setValue("mn", forHTTPHeaderField: "Accept-Language")
         request.setValue("bearer", forHTTPHeaderField: "X-Session-Transport")
         request.setValue("SDYMember-iOS/\(AppConfig.appVersion)", forHTTPHeaderField: "X-Client")
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         // The token this request goes out with: whatever the answer says about
         // the session is about this token, which may be stale by then.
         let sentToken = tokens.token.flatMap { $0.isEmpty ? nil : $0 }
@@ -186,6 +195,7 @@ final class APIClient {
             throw APIError(kind: .unauthorized, serverMessage: message, code: code)
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 403, hadToken { notifyForbidden() }
             let (message, code) = Self.errorBody(data)
             throw APIError(kind: .server(status: http.statusCode), serverMessage: message, code: code)
         }
@@ -229,6 +239,11 @@ final class APIClient {
 
     private func notifySessionEnded() {
         let handler = onSessionEnded
+        DispatchQueue.main.async { handler?() }
+    }
+
+    private func notifyForbidden() {
+        let handler = onForbidden
         DispatchQueue.main.async { handler?() }
     }
 

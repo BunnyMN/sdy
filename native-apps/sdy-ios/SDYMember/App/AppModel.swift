@@ -33,6 +33,10 @@ final class AppModel: ObservableObject {
     @Published var photo: UIImage?
     /// This phone's APNs token, once iOS has given one.
     var pushToken: String?
+    /// A notification tapped before the app was signed in (a cold launch from
+    /// the push, or a session that had to be renewed): opened once it is.
+    var pendingPush: (path: String?, id: String?)?
+    private var identityCheckedAt: Date = .distantPast
 
     let api: APIClient
 
@@ -52,6 +56,11 @@ final class AppModel: ObservableObject {
             guard let self, self.isOffline == reachable else { return }
             self.isOffline = !reachable
         }
+        // Refused: perhaps a position was taken away. Read who we are again,
+        // so the screens stop offering what the server no longer allows.
+        api.onForbidden = { [weak self] in
+            Task { await self?.refreshIdentity(minimumInterval: 30) }
+        }
         #if DEBUG
         // `-SDYSignedOut` keeps the fixtures but starts at the sign-in screen.
         if AppConfig.fixturesEnabled && !ProcessInfo.processInfo.arguments.contains("-SDYSignedOut") {
@@ -66,11 +75,13 @@ final class AppModel: ObservableObject {
         guard api.tokens.hasToken else { phase = .signedOut; return }
         do {
             try await loadIdentity()
+            identityCheckedAt = Date()
             phase = .signedIn
             applyLaunchArguments()
             Task { await loadPhoto() }
             Task { await enablePush() }
             await refreshUnread()
+            await openPendingPush()
         } catch let error as APIError where error.kind == .unauthorized {
             clearLocal()
         } catch {
@@ -107,6 +118,7 @@ final class AppModel: ObservableObject {
     }
 
     func signOut() async {
+        pendingPush = nil
         await disablePush()
         await api.logout()
         clearLocal()
@@ -150,16 +162,66 @@ final class AppModel: ObservableObject {
 
     /// Moves the session to another branch. The token rotates; everything
     /// loaded before belongs to the branch just left, so all tabs rebuild.
+    ///
+    /// Once the server has switched, the app is in the new branch whatever
+    /// happens next: if reading the new identity fails, the screens still
+    /// rebuild for the new branch (with no officer rights until /auth/me
+    /// answers) rather than show the old one while requests go to the new.
     func switchBranch(to tenantID: String) async throws {
-        _ = try await api.switchTenant(tenantID)
-        let identity = try await api.me()
-        api.cacheScope = identity.tenantId
-        me = identity
-        record = try? await api.memberRecord()
+        let switched = try await api.switchTenant(tenantID)
+        let newTenant = switched.tenantId.isEmpty ? tenantID : switched.tenantId
+        api.cacheScope = newTenant
         eventsPath = []
         homePath = []
-        epoch += 1
+        defer { epoch += 1 }
+        do {
+            let identity = try await api.me()
+            api.cacheScope = identity.tenantId
+            me = identity
+            identityCheckedAt = Date()
+        } catch {
+            if let fresh = try? await api.memberRecord() { record = fresh }
+            if var stale = me {
+                stale.tenantId = newTenant
+                stale.tenantName = record?.memberships.first { $0.tenantId == newTenant }?.name ?? ""
+                stale.permissions = []
+                stale.isAdmin = false
+                me = stale
+            }
+            identityCheckedAt = .distantPast
+            throw error
+        }
+        record = try? await api.memberRecord()
         await refreshUnread()
+    }
+
+    /// Reads /auth/me and the member record again: positions (and with them
+    /// permissions) change on the server while the app stays open.
+    func refreshIdentity(minimumInterval: TimeInterval = 0) async {
+        guard phase == .signedIn, Date().timeIntervalSince(identityCheckedAt) >= minimumInterval else { return }
+        identityCheckedAt = Date()
+        guard let identity = try? await api.me(), phase == .signedIn else { return }
+        if identity.tenantId != me?.tenantId {
+            // Moved elsewhere (another device switched branch): rebuild.
+            api.cacheScope = identity.tenantId
+            eventsPath = []
+            homePath = []
+            epoch += 1
+        }
+        if identity != me { me = identity }
+        if let record = try? await api.memberRecord(), record != self.record { self.record = record }
+    }
+
+    /// Marks one notification read; the count drops only once the server agreed.
+    @discardableResult
+    func markNotificationRead(_ id: String) async -> Bool {
+        do {
+            try await api.markRead(id)
+            unreadCount = max(0, unreadCount - 1)
+            return true
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Profile photo

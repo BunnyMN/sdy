@@ -6,8 +6,16 @@ import UserNotifications
 /// is about. The server sends registry.member_notifications through APNs
 /// (backend internal/workspace/push).
 final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    /// Set by SDYMemberApp; the delegate outlives no model.
-    weak var app: AppModel?
+    /// Set by SDYMemberApp; the delegate outlives no model. A tap that
+    /// launched the app can arrive before it is set: kept until then.
+    weak var app: AppModel? {
+        didSet {
+            guard let app, let tap = earlyTap else { return }
+            earlyTap = nil
+            Task { @MainActor in app.openPushed(path: tap.path, notificationID: tap.id) }
+        }
+    }
+    private var earlyTap: (path: String?, id: String?)?
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -28,7 +36,8 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
 
     /// In the foreground too: a banner, and the list refreshes.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        await MainActor.run { Task { await self.app?.refreshUnread() } }
+        // A position notification may come with new rights: read them again.
+        await MainActor.run { Task { await self.app?.refreshUnread(); await self.app?.refreshIdentity(minimumInterval: 5) } }
         return [.banner, .list, .sound, .badge]
     }
 
@@ -36,7 +45,9 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         let info = response.notification.request.content.userInfo
         let path = info["path"] as? String
         let id = info["notification_id"] as? String
-        await MainActor.run { self.app?.openPushed(path: path, notificationID: id) }
+        await MainActor.run {
+            if let app = self.app { app.openPushed(path: path, notificationID: id) } else { self.earlyTap = (path, id) }
+        }
     }
 }
 
@@ -79,15 +90,28 @@ extension AppModel {
         try? await api.unregisterPushToken(token)
     }
 
+    /// A tapped notification. Before sign-in (the push launched the app, or
+    /// the session must be renewed first) it waits, and opens once signed in.
     func openPushed(path: String?, notificationID: String? = nil) {
-        guard phase == .signedIn else { return }
-        Task {
-            // Opening a notification is reading it, as on the web.
-            if let notificationID { try? await api.markRead(notificationID) }
-            await refreshUnread()
-            guard let path, !path.isEmpty else { homePath = [.notifications]; tab = .home; return }
-            try? await openNotificationPath(path)
+        guard phase == .signedIn else {
+            pendingPush = (path, notificationID)
+            return
         }
+        Task { await openPush(path: path, notificationID: notificationID) }
+    }
+
+    func openPendingPush() async {
+        guard phase == .signedIn, let pending = pendingPush else { return }
+        pendingPush = nil
+        await openPush(path: pending.path, notificationID: pending.id)
+    }
+
+    private func openPush(path: String?, notificationID: String?) async {
+        // Opening a notification is reading it, as on the web.
+        if let notificationID { try? await api.markRead(notificationID) }
+        await refreshUnread()
+        guard let path, !path.isEmpty else { homePath = [.notifications]; tab = .home; return }
+        try? await openNotificationPath(path)
     }
 
     /// The icon's number follows the unread count.

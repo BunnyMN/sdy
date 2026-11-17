@@ -13,9 +13,11 @@ import Security
 /// restored to another device.
 final class TokenStore {
     static let shared = TokenStore()
+    /// The binding of the "this phone" eID sign-in in flight (see PendingEIDSession).
+    static let eidBinding = TokenStore(account: "eid_binding")
 
     private let service = "mn.esdy.member"
-    private let account = "session_token"
+    private let account: String
     private let lock = NSLock()
     private var cached: String?
     private var loaded = false
@@ -23,8 +25,28 @@ final class TokenStore {
     /// Tests and fixture mode use an in-memory store so the real Keychain is untouched.
     private let inMemory: Bool
 
-    init(inMemory: Bool = false) {
+    init(inMemory: Bool = false, account: String = "session_token") {
         self.inMemory = inMemory
+        self.account = account
+    }
+
+    private static let installMarker = "install.marker"
+
+    /// The Keychain outlives the app: a session token from before a delete and
+    /// reinstall would sign the next launch straight into the old account.
+    /// UserDefaults do not survive a reinstall, so a missing marker means this
+    /// is the first launch of this install — clear what an earlier one left.
+    /// An update from a version without the marker still has the app's own
+    /// files (`hasLocalData`, the offline cache): that is not a reinstall, and
+    /// the member stays signed in. True if it cleared.
+    @discardableResult
+    static func clearIfFreshInstall(_ stores: [TokenStore], hasLocalData: Bool,
+                                    defaults: UserDefaults = .standard) -> Bool {
+        guard !defaults.bool(forKey: installMarker) else { return false }
+        defaults.set(true, forKey: installMarker)
+        guard !hasLocalData else { return false }
+        stores.forEach { $0.clear() }
+        return true
     }
 
     var token: String? {

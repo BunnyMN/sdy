@@ -54,9 +54,13 @@ final class EIDLoginModel: ObservableObject {
     private var deadline: Date = .distantFuture
     private var hasDeadline = false
     private let api: APIClient
+    private let gap: UInt64
     var onSignedIn: (() async -> Void)?
 
-    init(api: APIClient = .shared) { self.api = api }
+    init(api: APIClient = .shared, gap: UInt64 = EIDLoginModel.gap) {
+        self.api = api
+        self.gap = gap
+    }
 
     var registerHint: String? { RegisterNumber.hint(for: registerNumber) }
     var canStart: Bool {
@@ -94,7 +98,7 @@ final class EIDLoginModel: ObservableObject {
                     : try await api.eidStartSamePhone()
                 guard !Task.isCancelled else { return }
                 self.begin(started)
-                PendingEIDSession.remember(started.sessionId)
+                PendingEIDSession.remember(started.sessionId, binding: started.binding, expiresAt: started.expiresAt)
                 if method == .samePhone, !AppConfig.fixturesEnabled {
                     guard await Self.openApp(started) else {
                         self.showRegistration(notice: Self.appMissingNotice)
@@ -138,11 +142,10 @@ final class EIDLoginModel: ObservableObject {
             pollTask?.cancel()
             pollTask = Task { [weak self] in await self?.pollLoop(started) }
         } else if let session = sessionFromLink, phase == .idle || phase == .starting,
-                  PendingEIDSession.matches(session) {
+                  let started = PendingEIDSession.resumable(session) {
             // The app was relaunched by eID's universal link: pick the session up —
             // only one this phone started, so a link from someone else cannot sign
-            // the member into another account.
-            let started = EIDStart(resumingSession: session)
+            // the member into another account. Its binding goes with every poll.
             begin(started)
             pollTask?.cancel()
             pollTask = Task { [weak self] in await self?.pollLoop(started) }
@@ -175,15 +178,17 @@ final class EIDLoginModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 let wrapped = APIError.wrap(error)
                 if wrapped.kind == .cancelled { return }
+                // The server no longer knows the session: it ran out.
+                if wrapped.status == 404 { finish(.expired); return }
                 // A 4xx is an answer, not a dropped connection.
                 if case .server(let status) = wrapped.kind, (400..<500).contains(status) {
                     finish(.failed(Self.pollMessage(wrapped))); return
                 }
                 if wrapped.kind == .unauthorized { finish(.failed(Self.pollMessage(wrapped))); return }
                 failures += 1
-                if failures > Self.toleratedFailures { finish(.failed(wrapped.message)); return }
+                if failures > Self.toleratedFailures { finish(.failed(Self.pollMessage(wrapped))); return }
             }
-            try? await Task.sleep(nanoseconds: Self.gap)
+            try? await Task.sleep(nanoseconds: gap)
         }
     }
 
@@ -225,20 +230,28 @@ final class EIDLoginModel: ObservableObject {
         if left <= 0, case .waiting = phase { stop(); PendingEIDSession.forget(); phase = .expired }
     }
 
+    /// The server's own sentence when it is a known one, else by status.
     static func startMessage(_ error: APIError) -> String {
+        if let known = ErrorText.known[error.serverMessage.trimmingCharacters(in: .whitespaces).lowercased()] { return known }
         switch error.status {
         case 400: return "Регистрийн дугаараа шалгаад дахин оролдоно уу."
         case 403: return "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
         case 404: return "Энэ регистрийн дугаартай eID бүртгэл олдсонгүй. eID Mongolia аппаа идэвхжүүлсэн эсэхээ шалгана уу."
+        case 429: return ErrorText.fallback(status: 429)
         case 502, 503, 504: return "eID Mongolia-тай холбогдож чадсангүй. Түр хүлээгээд дахин оролдоно уу."
         default: return error.message
         }
     }
 
     static func pollMessage(_ error: APIError) -> String {
+        if let known = ErrorText.known[error.serverMessage.trimmingCharacters(in: .whitespaces).lowercased()],
+           error.serverMessage.lowercased() != "unauthorized" { return known }
         switch error.status {
         case 401: return "eID баталгаажуулалт амжилтгүй боллоо. Дахин оролдоно уу."
+        // "eid_session_other_device" is known above; any other 403 is a sign-in refused.
         case 403: return "Энэ системд нэвтрэх эрх олгогдоогүй байна. Салбартаа хандана уу."
+        case 404: return "eID хүсэлтийн хугацаа дууслаа. Дахин эхлүүлнэ үү."
+        case 502, 503, 504: return "eID Mongolia-тай холбогдож чадсангүй. Түр хүлээгээд дахин оролдоно уу."
         default: return error.message
         }
     }
@@ -250,12 +263,22 @@ final class EIDLoginModel: ObservableObject {
 enum PendingEIDSession {
     private static let idKey = "eid.pendingSession"
     private static let atKey = "eid.pendingSessionAt"
+    private static let expiresKey = "eid.pendingSessionExpires"
     /// Longer than any eID session lives (EIDLoginModel's backstop).
     private static let lifetime: TimeInterval = 15 * 60
+    /// The binding proves to the server that this app started the session; it
+    /// is a credential for the poll, so it lives in the Keychain, not defaults.
+    static var bindingStore: TokenStore = .eidBinding
 
-    static func remember(_ id: String) {
+    static func remember(_ id: String, binding: String? = nil, expiresAt: String? = nil) {
         UserDefaults.standard.set(id, forKey: idKey)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: atKey)
+        if let expiresAt, !expiresAt.isEmpty {
+            UserDefaults.standard.set(expiresAt, forKey: expiresKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: expiresKey)
+        }
+        if let binding, !binding.isEmpty { bindingStore.save(binding) } else { bindingStore.clear() }
     }
 
     static func matches(_ id: String) -> Bool {
@@ -264,8 +287,18 @@ enum PendingEIDSession {
         return Date().timeIntervalSince1970 - at < lifetime
     }
 
+    /// The session as this phone kept it, for the poll after a relaunch:
+    /// its binding and its end. Nil for any other session.
+    static func resumable(_ id: String) -> EIDStart? {
+        guard matches(id) else { return nil }
+        return EIDStart(resumingSession: id, binding: bindingStore.token,
+                        expiresAt: UserDefaults.standard.string(forKey: expiresKey))
+    }
+
     static func forget() {
         UserDefaults.standard.removeObject(forKey: idKey)
         UserDefaults.standard.removeObject(forKey: atKey)
+        UserDefaults.standard.removeObject(forKey: expiresKey)
+        bindingStore.clear()
     }
 }

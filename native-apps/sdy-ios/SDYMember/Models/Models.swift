@@ -75,14 +75,16 @@ struct EIDStart: Decodable, Hashable {
 }
 
 extension EIDStart {
-    /// A session known only by its id (the app was reopened by eID's link).
-    init(resumingSession id: String) {
+    /// A session known only by what this phone kept of it (the app was
+    /// reopened by eID's link): its id, the binding and when it runs out.
+    init(resumingSession id: String, binding: String? = nil, expiresAt: String? = nil) {
         self.sessionId = id
         self.deviceLinkUrl = nil
         self.qrLinks = []
         self.appLink = nil
         self.verificationCode = ""
-        self.expiresAt = nil
+        self.expiresAt = expiresAt
+        self.binding = binding
     }
 }
 
@@ -285,6 +287,22 @@ struct EventRecord: Decodable, Hashable, Identifiable {
     var isOpen: Bool { status == "planned" }
     var startDate: Date? { Formatters.parseDate(startsAt) }
     var isUpcoming: Bool { (startDate ?? .distantPast) >= Date() }
+    var endDate: Date? { Formatters.parseDate(endsAt) }
+
+    /// Over: marked done, or its end (six hours after the start when it
+    /// names none) has passed — a three-day camp stays upcoming until it ends.
+    func isPast(now: Date = Date()) -> Bool {
+        if status == "done" { return true }
+        guard let start = startDate else { return false }
+        let end = endDate.flatMap { $0 > start ? $0 : nil } ?? start.addingTimeInterval(6 * 3600)
+        return end < now
+    }
+
+    /// "12/50 бүртгүүлсэн", with "· 3 ирсэн" once anybody has come.
+    var capacityShort: String {
+        let reg = capacity.map { "\(registeredCount)/\($0)" } ?? "\(registeredCount)"
+        return attendedCount > 0 ? "\(reg) бүртгүүлсэн · \(attendedCount) ирсэн" : "\(reg) бүртгүүлсэн"
+    }
 
     /// "12/50 бүртгүүлсэн · 3 ирсэн"
     var capacityText: String {
