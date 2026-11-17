@@ -91,6 +91,7 @@ struct GlassCapsule: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 22).padding(.vertical, 10)
+                .frame(minHeight: Theme.minTap)
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
         }

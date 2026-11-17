@@ -95,6 +95,37 @@ enum Formatters {
         }
     }
 
+    /// "11-р сарын 9, 18:30" — the year only when it is not this one.
+    static func dayAndTime(_ date: Date, now: Date = Date()) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = c.year != calendar.component(.year, from: now) ? "\(c.year ?? 0) оны " : ""
+        return "\(year)\(c.month ?? 0)-р сарын \(c.day ?? 0), \(timeOnly.string(from: date))"
+    }
+
+    /// "11-р сарын 9, 18:30–20:30"; across days both ends in full.
+    static func range(_ start: String?, _ end: String?, now: Date = Date()) -> String {
+        guard let from = parseDate(start) else { return "—" }
+        guard let to = parseDate(end), to > from else { return dayAndTime(from, now: now) }
+        if calendar.isDate(from, inSameDayAs: to) {
+            return "\(dayAndTime(from, now: now))–\(timeOnly.string(from: to))"
+        }
+        return "\(dayAndTime(from, now: now)) – \(dayAndTime(to, now: now))"
+    }
+
+    /// Day of month and month number in Ulaanbaatar (the list's date badge).
+    static func dayMonth(_ date: Date) -> (day: Int, month: Int) {
+        let c = calendar.dateComponents([.day, .month], from: date)
+        return (c.day ?? 0, c.month ?? 0)
+    }
+
+    /// "2026-11", "2026-10", … — this month first, as Ulaanbaatar counts them.
+    static func recentPeriods(_ count: Int = 12, now: Date = Date()) -> [String] {
+        (0..<count).compactMap { calendar.date(byAdding: .month, value: -$0, to: now) }.map { date in
+            let c = calendar.dateComponents([.year, .month], from: date)
+            return String(format: "%04d-%02d", c.year ?? 0, c.month ?? 0)
+        }
+    }
+
     /// "1,250,000₮"
     static func money(_ value: Double) -> String {
         (money.string(from: NSNumber(value: value.rounded())) ?? "0") + "₮"

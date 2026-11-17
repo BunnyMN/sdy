@@ -42,19 +42,29 @@ extension APIClient {
     // MARK: Control committee
     func sanctions(offset: Int = 0) async throws -> SanctionList { try await get("/events/sanctions?offset=\(offset)", cached: false) }
     func mySanctions() async throws -> SanctionList { try await get("/events/sanctions/mine", cached: false) }
-    func sanction(userID: String, points: Int, reason: String) async throws -> Sanction {
-        try await send(.post, "/events/sanctions", body: ["user_id": userID, "points": points, "reason": reason])
+    /// `idempotencyKey`: one per decision the officer means to record, the
+    /// same on every retry of it, so a lost answer never records it twice.
+    func sanction(userID: String, points: Int, reason: String, idempotencyKey: String) async throws -> Sanction {
+        try await send(.post, "/events/sanctions", body: ["user_id": userID, "points": points, "reason": reason],
+                       headers: ["Idempotency-Key": idempotencyKey])
     }
 
     // MARK: Finance
     func financeOverview(period: String = "", offset: Int = 0) async throws -> FinanceOverview {
         try await get("/dues/finance?period=\(q(period))&offset=\(offset)", cached: false)
     }
+    func financeOverview(period: String, page query: String) async throws -> FinanceOverview {
+        try await get("/dues/finance?period=\(q(period))&\(query)", cached: false)
+    }
     func reviewPayment(_ id: String, action: String, reason: String) async throws {
         try await perform(.post, "/dues/payments/\(p(id))/review", body: ["action": action, "reason": reason])
     }
     func waiveCharge(_ id: String, reason: String) async throws {
         try await perform(.post, "/dues/charges/\(p(id))/waive", body: ["reason": reason])
+    }
+    /// Withdraws an exemption (finance; never on one's own charge).
+    func unwaiveCharge(_ id: String, reason: String) async throws {
+        try await perform(.post, "/dues/charges/\(p(id))/unwaive", body: ["reason": reason])
     }
     func createCharges(period: String) async throws {
         try await perform(.post, "/dues/charges", body: ["period": period])

@@ -6,6 +6,11 @@ struct SDYMemberApp: App {
     @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // Before anything reads the token: a reinstall starts signed out.
+        if !AppConfig.fixturesEnabled { TokenStore.clearIfFreshInstall([.shared, .eidBinding], hasLocalData: OfflineCache.shared.hasFiles) }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -27,7 +32,13 @@ struct SDYMemberApp: App {
                     if phase == .active {
                         app.resumeTick += 1
                         // Read elsewhere (the web, another phone): the badge catches up.
-                        if app.phase == .signedIn { Task { await app.refreshUnread() } }
+                        // A position given or taken away meanwhile: what the app offers follows.
+                        if app.phase == .signedIn {
+                            Task {
+                                await app.refreshUnread()
+                                await app.refreshIdentity()
+                            }
+                        }
                     }
                 }
         }

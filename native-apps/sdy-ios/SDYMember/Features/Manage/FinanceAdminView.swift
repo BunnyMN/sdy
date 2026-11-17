@@ -18,24 +18,22 @@ struct FinanceAdminView: View {
     enum Tab: String, CaseIterable { case payments = "Төлөлт", charges = "Хураамж" }
 
     struct Decision: Identifiable {
-        enum Kind { case approve, reject, reverse, waive }
+        enum Kind { case approve, reject, reverse, waive, unwaive }
         let kind: Kind
         let id: String
         let title: String
     }
 
-    private static let periods: [String] = {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM"; f.timeZone = Formatters.timeZone
-        let now = Date()
-        return (0..<12).compactMap { Calendar.current.date(byAdding: .month, value: -$0, to: now) }.map(f.string(from:))
-    }()
+    /// This month first, in Ulaanbaatar — worked out each time, so a screen
+    /// left open across the 1st offers the new month.
+    private var periods: [String] { Formatters.recentPeriods() }
 
     var body: some View {
         List {
             Section {
                 Picker("Сар", selection: $period) {
                     Text("Бүх сар").tag("")
-                    ForEach(Self.periods, id: \.self) { Text($0).tag($0) }
+                    ForEach(periods, id: \.self) { Text($0).tag($0) }
                 }
                 if let totals = data?.totals {
                     LabeledContent("Ногдуулсан", value: Formatters.money(totals.charged))
@@ -44,7 +42,7 @@ struct FinanceAdminView: View {
                     LabeledContent("Чөлөөлсөн", value: Formatters.money(totals.waived))
                 }
                 Button { confirmCharges = true } label: {
-                    Label("\(Self.periods[0]) сарын хураамж ногдуулах", systemImage: "plus.circle")
+                    Label("\(periods[0]) сарын хураамж ногдуулах", systemImage: "plus.circle")
                 }
                 .disabled(busy || app.isOffline)
             }
@@ -77,7 +75,7 @@ struct FinanceAdminView: View {
                 await decide(decision, reason: reason)
             }
         }
-        .confirmationDialog("\(Self.periods[0]) сарын хураамжийг бүх гишүүнд ногдуулах уу?", isPresented: $confirmCharges, titleVisibility: .visible) {
+        .confirmationDialog("\(periods[0]) сарын хураамжийг бүх гишүүнд ногдуулах уу?", isPresented: $confirmCharges, titleVisibility: .visible) {
             Button("Ногдуулах") { Task { await raiseCharges() } }
             Button("Болих", role: .cancel) {}
         } message: { Text("Аль хэдийн ногдуулсан гишүүнд давхардахгүй.") }
@@ -101,14 +99,14 @@ struct FinanceAdminView: View {
                     if p.status == "pending" {
                         HStack {
                             Button("Батлах") { deciding = Decision(kind: .approve, id: p.id, title: "\(p.name) · \(Formatters.money(p.amount))") }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.borderedProminent).frame(minHeight: Theme.minTap)
                             Button("Татгалзах", role: .destructive) { deciding = Decision(kind: .reject, id: p.id, title: "\(p.name) · \(Formatters.money(p.amount))") }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.bordered).frame(minHeight: Theme.minTap)
                         }
                         .disabled(busy || app.isOffline)
                     } else if p.status == "approved" {
                         Button("Буцаах", role: .destructive) { deciding = Decision(kind: .reverse, id: p.id, title: "\(p.name) · \(Formatters.money(p.amount))") }
-                            .buttonStyle(.bordered).disabled(busy || app.isOffline)
+                            .buttonStyle(.bordered).frame(minHeight: Theme.minTap).disabled(busy || app.isOffline)
                     }
                 }
                 .padding(.vertical, 4)
@@ -131,9 +129,20 @@ struct FinanceAdminView: View {
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     if c.waived {
                         Text("Чөлөөлсөн: \(c.waiverReason)").font(.caption).foregroundStyle(.orange)
+                        Button("Чөлөөлөлтийг буцаах", role: .destructive) {
+                            deciding = Decision(kind: .unwaive, id: c.id, title: "\(c.name) · \(c.period)")
+                        }
+                        .buttonStyle(.bordered).frame(minHeight: Theme.minTap).disabled(busy || app.isOffline)
                     } else if c.balance > 0 {
+                        if c.pending > 0 {
+                            // The server refuses it (409): the transfer would never be confirmed.
+                            Label("Хүлээгдэж буй төлбөр \(Formatters.money(c.pending)) байна. Чөлөөлөхийн өмнө төлбөрийг батлах эсвэл татгалзана уу.",
+                                  systemImage: "hourglass")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
                         Button("Чөлөөлөх") { deciding = Decision(kind: .waive, id: c.id, title: "\(c.name) · \(c.period)") }
-                            .buttonStyle(.bordered).disabled(busy || app.isOffline)
+                            .buttonStyle(.bordered).frame(minHeight: Theme.minTap)
+                            .disabled(busy || app.isOffline || c.pending > 0)
                     }
                 }
                 .padding(.vertical, 4)
@@ -147,6 +156,7 @@ struct FinanceAdminView: View {
         case .reject: return "Татгалзах"
         case .reverse: return "Буцаах"
         case .waive: return "Чөлөөлөх"
+        case .unwaive: return "Чөлөөлөлтийг буцаах"
         }
     }
 
@@ -156,12 +166,12 @@ struct FinanceAdminView: View {
     }
 
     private func more() async {
-        guard let data, let next = data.nextOffset else { return }
+        guard let data, let query = data.nextPageQuery(chargesShown: data.charges.count, paymentsShown: data.payments.count) else { return }
         busy = true; defer { busy = false }
         do {
-            var page = try await app.api.financeOverview(period: period, offset: next)
-            page.charges = data.charges + page.charges
-            page.payments = data.payments + page.payments
+            var page = try await app.api.financeOverview(period: period, page: query)
+            page.charges = data.charges.appendingUnique(page.charges)
+            page.payments = data.payments.appendingUnique(page.payments)
             self.data = page
         } catch { actionError = APIError.wrap(error).message }
     }
@@ -175,6 +185,7 @@ struct FinanceAdminView: View {
             case .reject: try await app.api.reviewPayment(decision.id, action: "reject", reason: reason)
             case .reverse: try await app.api.reviewPayment(decision.id, action: "reverse", reason: reason)
             case .waive: try await app.api.waiveCharge(decision.id, reason: reason)
+            case .unwaive: try await app.api.unwaiveCharge(decision.id, reason: reason)
             }
             notice = "Хадгалагдлаа."
             Haptics.success()
@@ -191,8 +202,8 @@ struct FinanceAdminView: View {
         busy = true; actionError = nil; notice = nil
         defer { busy = false }
         do {
-            try await app.api.createCharges(period: Self.periods[0])
-            notice = "\(Self.periods[0]) сарын хураамж ногдууллаа."
+            try await app.api.createCharges(period: periods[0])
+            notice = "\(periods[0]) сарын хураамж ногдууллаа."
             await load()
         } catch { actionError = APIError.wrap(error).message }
     }

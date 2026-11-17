@@ -43,7 +43,7 @@ struct TransfersView: View {
     private var form: some View {
         Form {
             Section {
-                Text("Очих салбарын админ батлах хүртэл одоогийн харьяалал хэвээр байна. Батлагдвал дахин нэвтэрнэ. Өмнөх ирц, оноо, төлөлтийн түүх хуучин салбарын бүртгэлд хадгалагдана.")
+                Text("Очих салбарын удирдлага батлах хүртэл одоогийн харьяалал хэвээр байна. Батлагдвал дахин нэвтэрнэ. Өмнөх ирц, оноо, төлөлтийн түүх хуучин салбарын бүртгэлд хадгалагдана.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             if let notice { Section { notice } }
@@ -177,7 +177,7 @@ struct JoinRequestView: View {
                             .lineLimit(3...6)
                             .onChange(of: message) { _, v in if v.count > 500 { message = String(v.prefix(500)) } }
                     } footer: {
-                        Text("Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Менежер эсвэл админ баталсны дараа гишүүн болно.")
+                        Text("Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Салбарын удирдлага баталсны дараа гишүүн болно.")
                     }
                     if let error { Section { NoticeView(text: error, kind: .error) } }
                     Section {

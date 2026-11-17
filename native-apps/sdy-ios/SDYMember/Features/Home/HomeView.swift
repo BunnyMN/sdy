@@ -18,7 +18,12 @@ struct HomeView: View {
     @StateObject private var loader = Loader<HomeData> { try await HomeView.fetch(app: nil) }
     @State private var switching: String?
     @State private var switchError: String?
-    @State private var pointsHidden = false
+    /// Set in Профайл («Нүүрэнд оноогоо нуух»).
+    @AppStorage(HomeView.pointsHiddenKey) private var pointsHidden = false
+    @Environment(\.scenePhase) private var scenePhase
+    static let pointsHiddenKey = "home.pointsHidden"
+    /// How old the to-do list may be when Нүүр shows again.
+    static let staleAfter: TimeInterval = 60
 
     var body: some View {
         NavigationStack(path: $app.homePath) {
@@ -38,6 +43,15 @@ struct HomeView: View {
         .task {
             loader.setFetch { [weak app] in try await HomeView.fetch(app: app) }
             await loader.loadIfNeeded()
+        }
+        // The to-do list follows what happened elsewhere: back from a screen,
+        // back to the app, another tab.
+        .onAppear { Task { await loader.refresh(olderThan: Self.staleAfter) } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await loader.refresh(olderThan: Self.staleAfter) } }
+        }
+        .onChange(of: app.tab) { _, tab in
+            if tab == .home { Task { await loader.refresh(olderThan: Self.staleAfter) } }
         }
     }
 
@@ -107,15 +121,14 @@ struct HomeView: View {
 
             Spacer(minLength: 16)
 
+            // Events, check-in and dues are tabs of their own; Нүүр does not repeat them.
             HStack(spacing: 8) {
                 if app.hasApprovedBranch {
-                    GlassTile(title: "Арга хэмжээ", systemImage: "calendar") { app.tab = .events }
-                    GlassTile(title: "Ирц", systemImage: "qrcode.viewfinder") { app.tab = .checkin }
-                    GlassTile(title: "Хураамж", systemImage: "banknote.fill") { app.tab = .dues }
                     GlassTile(title: "Түүх", systemImage: "clock.arrow.circlepath") { app.homePath.append(HomeRoute.history) }
+                        .frame(maxWidth: 96)
                 } else {
+                    // The bell above already opens the notifications.
                     GlassTile(title: "Элсэх", systemImage: "person.badge.plus") { app.homePath.append(HomeRoute.joinRequest) }
-                    GlassTile(title: "Мэдэгдэл", systemImage: "bell.fill", badge: app.unreadCount) { app.homePath.append(HomeRoute.notifications) }
                     GlassTile(title: "Гишүүнчлэл", systemImage: "person.text.rectangle") { app.homePath.append(HomeRoute.record) }
                     GlassTile(title: "Тусламж", systemImage: "questionmark") { UIApplication.shared.open(AppConfig.supportURL) }
                 }
@@ -139,12 +152,6 @@ struct HomeView: View {
             }
             Spacer()
             HStack(spacing: 12) {
-                if app.hasApprovedBranch {
-                    GlassCircleButton(systemImage: pointsHidden ? "eye.slash.fill" : "eye.fill",
-                                      label: pointsHidden ? "Оноог харуулах" : "Оноог нуух") {
-                        withAnimation(.snappy) { pointsHidden.toggle() }
-                    }
-                }
                 GlassCircleButton(systemImage: "bell.fill",
                                   label: app.unreadCount > 0 ? "Мэдэгдэл, \(app.unreadCount) уншаагүй" : "Мэдэгдэл",
                                   dot: app.unreadCount > 0) {
@@ -168,7 +175,7 @@ struct HomeView: View {
     }
 
     private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
+        let hour = Formatters.calendar.component(.hour, from: Date())
         switch hour {
         case 5..<12: return "Өглөөний мэнд"
         case 12..<18: return "Өдрийн мэнд"
@@ -188,15 +195,11 @@ struct HomeView: View {
     @ViewBuilder
     private func todoSection(_ data: HomeData) -> some View {
         let toReport = data.dues?.totals.map { $0.outstanding - $0.pending } ?? 0
-        let anything = toReport > 0 || data.nextEvent != nil || !data.openVotes.isEmpty || !data.taskOffers.isEmpty || data.unread > 0
-        SheetHeader("Танд хийх зүйл") {
-            if data.unread > 0 {
-                Text("\(data.unread)").font(.subheadline.bold()).foregroundStyle(.white)
-                    .frame(minWidth: 34, minHeight: 34).background(Theme.brandRed, in: Circle())
-                    .accessibilityLabel("\(data.unread) уншаагүй мэдэгдэл")
-            }
-        }
-        .rise(0)
+        // The live count, not the one loaded with the page: reading a
+        // notification anywhere takes it off here at once.
+        let unread = app.unreadCount
+        let anything = toReport > 0 || data.nextEvent != nil || !data.openVotes.isEmpty || !data.taskOffers.isEmpty || unread > 0
+        SheetHeader("Танд хийх зүйл").rise(0)
 
         if let dues = data.dues, let totals = dues.totals, toReport > 0 {
             let overdue = dues.charges.contains { $0.isOverdue() }
@@ -225,7 +228,7 @@ struct HomeView: View {
             .rise(1)
         }
 
-        let rows = todoRows(data)
+        let rows = todoRows(data, unread: unread)
         if !rows.isEmpty {
             RowGroup {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -250,7 +253,7 @@ struct HomeView: View {
 
     private struct TodoRow { let icon: String; let title: String; let subtitle: String; let action: () -> Void }
 
-    private func todoRows(_ data: HomeData) -> [TodoRow] {
+    private func todoRows(_ data: HomeData, unread: Int) -> [TodoRow] {
         var rows: [TodoRow] = []
         if let event = data.nextEvent {
             rows.append(TodoRow(icon: "calendar.badge.clock", title: event.title,
@@ -262,8 +265,8 @@ struct HomeView: View {
         for item in data.taskOffers {
             rows.append(TodoRow(icon: "hand.raised.fill", title: "Танд санал болгосон ажил: \(item.task.title)", subtitle: item.event.title) { app.openEvent(item.event.id) })
         }
-        if data.unread > 0 {
-            rows.append(TodoRow(icon: "bell.badge.fill", title: "\(data.unread) уншаагүй мэдэгдэл", subtitle: "Шинэ мэдээллээ үзнэ үү") {
+        if unread > 0 {
+            rows.append(TodoRow(icon: "bell.badge.fill", title: "\(unread) уншаагүй мэдэгдэл", subtitle: "Шинэ мэдээллээ үзнэ үү") {
                 app.homePath.append(HomeRoute.notifications)
             })
         }
@@ -286,7 +289,17 @@ struct HomeView: View {
             }
             .rise(1)
         }
-        if pending.isEmpty && !(app.record?.hasPrimary ?? false) {
+        let primary = app.record?.memberships.first { $0.isPrimary }
+        if let primary, pending.isEmpty {
+            // Suspended, lapsed or left: a join request is not the way back.
+            DarkCard(padding: 16) {
+                IconRow(title: "Гишүүнчлэл: \(Labels.membershipStatus(primary.status))",
+                        subtitle: "\(primary.name). Гишүүнчлэлээ сэргээх талаар салбарын удирдлагад хандана уу.",
+                        systemImage: "exclamationmark.circle", chevron: false)
+            }
+            .rise(2)
+        }
+        if pending.isEmpty && primary == nil {
             NavigationLink(value: HomeRoute.joinRequest) {
                 DarkCard(padding: 16) {
                     IconRow(title: "Салбарт элсэх хүсэлт илгээх", systemImage: "person.badge.plus", tint: .white, tile: Theme.brandRed)
@@ -295,9 +308,11 @@ struct HomeView: View {
             .buttonStyle(PressableStyle(scale: 0.98))
             .rise(2)
         }
-        Text(pending.isEmpty
-             ? "Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Салбарын менежер баталсны дараа арга хэмжээ, ирц, хураамжийн хэсгүүд нээгдэнэ."
-             : "Таны хүсэлтийг салбарын менежер шийдвэрлэсний дараа бүх хэсэг нээгдэнэ. Доош татаж шинэчилнэ үү.")
+        Text(!pending.isEmpty
+             ? "Таны хүсэлтийг салбарын удирдлага шийдвэрлэсний дараа бүх хэсэг нээгдэнэ. Доош татаж шинэчилнэ үү."
+             : primary != nil
+             ? "Гишүүнчлэл идэвхжсэний дараа арга хэмжээ, ирц, хураамжийн хэсгүүд дахин нээгдэнэ."
+             : "Харьяалагдах салбараа сонгож элсэх хүсэлт илгээнэ. Салбарын удирдлага баталсны дараа арга хэмжээ, ирц, хураамжийн хэсгүүд нээгдэнэ.")
             .font(.footnote).foregroundStyle(Theme.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)

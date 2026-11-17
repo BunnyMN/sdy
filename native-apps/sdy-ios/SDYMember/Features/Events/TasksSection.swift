@@ -28,7 +28,15 @@ final class TasksModel: ObservableObject {
         } catch {
             self.error = APIError.wrap(error).message
             Haptics.error()
+            // Refused because the list moved on (the last place went to
+            // somebody else): show it as it now stands.
+            await reload()
         }
+    }
+
+    /// The list again, keeping the error that explains why.
+    private func reload() async {
+        if let fresh = try? await api.tasks(eventID) { data = fresh }
     }
 
     func volunteer(_ task: EventTask) async { await act { [api, eventID] in try await api.volunteer(eventID, task: task.id) } }
@@ -39,6 +47,8 @@ struct TasksSection: View {
     @ObservedObject var model: TasksModel
     let closed: Bool
     @EnvironmentObject var app: AppModel
+    @State private var leaving: EventTask?
+    @State private var declining: EventTask?
 
     var body: some View {
         Section {
@@ -55,6 +65,16 @@ struct TasksSection: View {
             Label("Ажил үүрэг", systemImage: "checklist")
         } footer: {
             Text("Гүйцэтгэл батлагдахад тухайн ажлын оноо танд орно.")
+        }
+        .confirmationDialog("Энэ ажлаас чөлөөлөгдөх үү?", isPresented: Binding(get: { leaving != nil }, set: { if !$0 { leaving = nil } }),
+                            titleVisibility: .visible) {
+            Button("Чөлөөлөгдөх", role: .destructive) { if let task = leaving { Task { await model.respond(task, accept: false) } } }
+            Button("Болих", role: .cancel) {}
+        } message: { Text("Таны суудал бусдад нээгдэнэ.") }
+        .confirmationDialog("Санал болгосон ажлаас татгалзах уу?", isPresented: Binding(get: { declining != nil }, set: { if !$0 { declining = nil } }),
+                            titleVisibility: .visible) {
+            Button("Татгалзах", role: .destructive) { if let task = declining { Task { await model.respond(task, accept: false) } } }
+            Button("Болих", role: .cancel) {}
         }
     }
 
@@ -73,23 +93,24 @@ struct TasksSection: View {
                 Text("Танд энэ ажлыг санал болгосон байна.").font(.footnote)
                 HStack {
                     Button { Task { await model.respond(task, accept: true) } } label: {
-                        Label("Хүлээн авах", systemImage: "checkmark").frame(maxWidth: .infinity, minHeight: 36)
+                        Label("Хүлээн авах", systemImage: "checkmark").frame(maxWidth: .infinity, minHeight: Theme.minTap)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy || !task.isFree || app.isOffline)
-                    Button { Task { await model.respond(task, accept: false) } } label: {
-                        Label("Татгалзах", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: 36)
+                    Button { declining = task } label: {
+                        Label("Татгалзах", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: Theme.minTap)
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.busy || app.isOffline)
                 }
             } else if mine?.status == "accepted" {
-                Button("Чөлөөлөгдөх") { Task { await model.respond(task, accept: false) } }
+                Button("Чөлөөлөгдөх") { leaving = task }
                     .buttonStyle(.bordered)
+                    .frame(minHeight: Theme.minTap)
                     .disabled(model.busy || app.isOffline)
             } else if !closed && task.isFree && (mine == nil || mine?.status == "declined") {
                 Button { Task { await model.volunteer(task) } } label: {
-                    Label("Би хийнэ", systemImage: "hand.raised").frame(minHeight: 36)
+                    Label("Би хийнэ", systemImage: "hand.raised").frame(minHeight: Theme.minTap)
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.busy || app.isOffline)

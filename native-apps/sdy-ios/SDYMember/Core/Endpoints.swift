@@ -5,7 +5,9 @@ extension APIClient {
     private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#"))) ?? s }
 
     // MARK: Auth
-    func me() async throws -> Me { try await get("/auth/me") }
+    /// `cached: false` for a check of who we are now: an offline copy may be
+    /// of another branch (or before a switch) and must not stand in for it.
+    func me(cached: Bool = true) async throws -> Me { try await get("/auth/me", cached: cached) }
     func profile() async throws -> Profile { try await get("/profile") }
     func login(email: String, password: String) async throws -> LoginResponse {
         try await send(.post, "/auth/login", body: ["email": email, "password": password], signsOutOn401: false)
@@ -31,7 +33,9 @@ extension APIClient {
 
     // MARK: Membership
     func branches() async throws -> BranchesResponse { try await get("/me/branches") }
-    func memberRecord(offset: Int = 0) async throws -> MemberRecord { try await get("/me/member-record?offset=\(offset)", cached: offset == 0) }
+    func memberRecord(offset: Int = 0, cached: Bool = true) async throws -> MemberRecord {
+        try await get("/me/member-record?offset=\(offset)", cached: cached && offset == 0)
+    }
     func saveMemberProfile(_ profile: MemberProfile) async throws -> MemberProfile {
         try await send(.put, "/me/member-record", body: profile.body)
     }
@@ -106,6 +110,8 @@ extension APIClient {
     // MARK: Dues
     func duesSettings() async throws -> DuesSettings { try await get("/dues/settings") }
     func myDues(offset: Int = 0) async throws -> MyDuesPage { try await get("/dues/mine?offset=\(offset)", cached: offset == 0) }
+    /// A later page: `query` from `DuesPaged.nextPageQuery`.
+    func myDues(page query: String) async throws -> MyDuesPage { try await get("/dues/mine?\(query)", cached: false) }
     func reportPayment(chargeID: String, requestKey: String, amount: Double, reference: String) async throws -> ReportResult {
         try await send(.post, "/dues/payments", body: [
             "charge_id": chargeID, "request_key": requestKey, "amount": Int(amount.rounded()), "reference": reference,

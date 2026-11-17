@@ -106,7 +106,6 @@ struct MainTabView: View {
             HomeView()
                 .tabItem { Label("Нүүр", systemImage: "house") }
                 .tag(AppModel.Tab.home)
-                .badge(app.unreadCount)
             if app.hasApprovedBranch {
                 EventsListView()
                     .tabItem { Label("Арга хэмжээ", systemImage: "calendar") }

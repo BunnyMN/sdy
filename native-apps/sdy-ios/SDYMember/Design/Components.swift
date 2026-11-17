@@ -19,6 +19,7 @@ final class Loader<T>: ObservableObject {
         defer { isLoading = false }
         do {
             value = try await fetch()
+            loadedAt = Date()
             error = nil
         } catch {
             let wrapped = APIError.wrap(error)
@@ -27,6 +28,17 @@ final class Loader<T>: ObservableObject {
     }
 
     func loadIfNeeded() async { if value == nil { await load() } }
+
+    /// When the last good load finished.
+    private(set) var loadedAt: Date?
+
+    /// Loads again when what is shown is older than `age`. Nothing shown
+    /// yet is `loadIfNeeded`'s to fetch.
+    func refresh(olderThan age: TimeInterval, now: Date = Date()) async {
+        guard !isLoading, value != nil else { return }
+        if let loadedAt, now.timeIntervalSince(loadedAt) < age { return }
+        await load()
+    }
 }
 
 /// Skeleton → content, or an explained error with retry.
