@@ -82,7 +82,15 @@ enum ErrorText {
         "location is too long": "Байршил хэт урт байна.",
         "ends_at is before starts_at": "Дуусах цаг эхлэх цагаас өмнө байна.",
         "capacity must be a positive number": "Хүний тоо эерэг тоо байна.",
-        // self-actions and cancelled events (officers)
+        // self-actions, cancelled events, check-in window (backend PR #46)
+        "you cannot check in with a check-in code you issued": "Өөрийн гаргасан QR кодоор ирцээ бүртгэх боломжгүй. Өөр зохион байгуулагчийн кодыг уншуулна уу.",
+        "check-in is open from 2 hours before the event starts until 2 hours after it ends": "Ирц арга хэмжээ эхлэхээс 2 цагийн өмнөөс дууссанаас хойш 2 цаг хүртэл бүртгэгдэнэ.",
+        "you cannot change the exemption of your own charge": "Өөрийнхөө хураамжийн чөлөөлөлтийг өөрөө өөрчлөх боломжгүй. Өөр санхүүчид хандана уу.",
+        "this charge has a pending payment report; approve or reject it before exempting the charge": "Энэ хураамжид хүлээгдэж буй төлбөрийн мэдэгдэл байна. Чөлөөлөхийн өмнө төлбөрийг батлах эсвэл татгалзана уу.",
+        "this idempotency-key was already used for a different decision": "Шийдвэрийг өөр утгатайгаар давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу.",
+        "idempotency-key must be a uuid": "Шийдвэрийн түлхүүр буруу байна. Аппаа шинэчилнэ үү.",
+        "no waived charge with that id": "Хураамж олдсонгүй эсвэл чөлөөлөгдөөгүй байна.",
+        "provide the reason for withdrawing the exemption": "Чөлөөлөлтийг буцаах шалтгаанаа бичнэ үү.",
         "you cannot record your own attendance": "Өөрийнхөө ирц, оноог өөрөө батлах боломжгүй. Өөр зохион байгуулагчид хандана уу.",
         "you cannot change your own attendance": "Өөрийнхөө ирц, оноог өөрөө батлах боломжгүй. Өөр зохион байгуулагчид хандана уу.",
         "you cannot award points to yourself": "Өөртөө оноо олгох боломжгүй. Өөр зохион байгуулагчид хандана уу.",

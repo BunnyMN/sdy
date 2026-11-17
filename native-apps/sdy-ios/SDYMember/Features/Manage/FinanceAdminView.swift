@@ -18,7 +18,7 @@ struct FinanceAdminView: View {
     enum Tab: String, CaseIterable { case payments = "Төлөлт", charges = "Хураамж" }
 
     struct Decision: Identifiable {
-        enum Kind { case approve, reject, reverse, waive }
+        enum Kind { case approve, reject, reverse, waive, unwaive }
         let kind: Kind
         let id: String
         let title: String
@@ -129,6 +129,10 @@ struct FinanceAdminView: View {
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     if c.waived {
                         Text("Чөлөөлсөн: \(c.waiverReason)").font(.caption).foregroundStyle(.orange)
+                        Button("Чөлөөлөлтийг буцаах", role: .destructive) {
+                            deciding = Decision(kind: .unwaive, id: c.id, title: "\(c.name) · \(c.period)")
+                        }
+                        .buttonStyle(.bordered).frame(minHeight: Theme.minTap).disabled(busy || app.isOffline)
                     } else if c.balance > 0 {
                         if c.pending > 0 {
                             // The server refuses it (409): the transfer would never be confirmed.
@@ -152,6 +156,7 @@ struct FinanceAdminView: View {
         case .reject: return "Татгалзах"
         case .reverse: return "Буцаах"
         case .waive: return "Чөлөөлөх"
+        case .unwaive: return "Чөлөөлөлтийг буцаах"
         }
     }
 
@@ -161,10 +166,10 @@ struct FinanceAdminView: View {
     }
 
     private func more() async {
-        guard let data, let next = data.nextOffset else { return }
+        guard let data, let query = data.nextPageQuery(chargesShown: data.charges.count, paymentsShown: data.payments.count) else { return }
         busy = true; defer { busy = false }
         do {
-            var page = try await app.api.financeOverview(period: period, offset: next)
+            var page = try await app.api.financeOverview(period: period, page: query)
             page.charges = data.charges.appendingUnique(page.charges)
             page.payments = data.payments.appendingUnique(page.payments)
             self.data = page
@@ -180,6 +185,7 @@ struct FinanceAdminView: View {
             case .reject: try await app.api.reviewPayment(decision.id, action: "reject", reason: reason)
             case .reverse: try await app.api.reviewPayment(decision.id, action: "reverse", reason: reason)
             case .waive: try await app.api.waiveCharge(decision.id, reason: reason)
+            case .unwaive: try await app.api.unwaiveCharge(decision.id, reason: reason)
             }
             notice = "Хадгалагдлаа."
             Haptics.success()

@@ -526,12 +526,42 @@ struct MyDuesTotals: Decodable, Hashable {
     var paidPercent: Int { DuesMath.percent(paid, of: owed) }
 }
 
-struct MyDuesPage: Decodable {
+struct MyDuesPage: Decodable, DuesPaged {
     @DefaultEmpty var charges: [Charge]
     @DefaultEmpty var payments: [Payment]
     @DefaultFalse var hasMore: Bool
     var nextOffset: Int?
     var totals: MyDuesTotals?
+    var chargesHasMore: Bool?
+    var paymentsHasMore: Bool?
+    var nextChargesOffset: Int?
+    var nextPaymentsOffset: Int?
+}
+
+/// /dues/mine and /dues/finance page charges and payments separately
+/// (charges_offset / payments_offset); an older server pages both with one
+/// offset. What to ask for next, either way.
+protocol DuesPaged {
+    var hasMore: Bool { get }
+    var nextOffset: Int? { get }
+    var chargesHasMore: Bool? { get }
+    var paymentsHasMore: Bool? { get }
+    var nextChargesOffset: Int? { get }
+    var nextPaymentsOffset: Int? { get }
+}
+
+extension DuesPaged {
+    /// The query for the next page, given how many rows of each list are
+    /// shown; nil when both lists have run out.
+    func nextPageQuery(chargesShown: Int, paymentsShown: Int) -> String? {
+        guard hasMore else { return nil }
+        if chargesHasMore != nil || paymentsHasMore != nil {
+            let charges = (chargesHasMore ?? false) ? (nextChargesOffset ?? chargesShown) : chargesShown
+            let payments = (paymentsHasMore ?? false) ? (nextPaymentsOffset ?? paymentsShown) : paymentsShown
+            return "charges_offset=\(charges)&payments_offset=\(payments)"
+        }
+        return "offset=\(nextOffset ?? max(chargesShown, paymentsShown))"
+    }
 }
 
 struct ReportResult: Decodable {

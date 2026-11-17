@@ -814,3 +814,85 @@ final class ScreenLogicTests: XCTestCase {
         XCTAssertEqual(PersonPicker.filter(people, "M42@").map(\.userId), ["u42"])
     }
 }
+
+// MARK: - Backend PR #46 (fix/audit-2026-11-backend)
+
+@MainActor
+final class BackendPR46Tests: XCTestCase {
+    override func tearDown() { StubProtocol.handler = nil }
+
+    private func text(_ status: Int, _ message: String) -> String {
+        APIError(kind: .server(status: status), serverMessage: message, code: nil).message
+    }
+
+    /// The backend's exact sentences, each with its own Mongolian wording.
+    func testExactBackendSentences() {
+        let cases: [(Int, String, String)] = [
+            (403, "you cannot record your own attendance", "Өөрийнхөө ирц, оноог өөрөө батлах боломжгүй. Өөр зохион байгуулагчид хандана уу."),
+            (403, "you cannot confirm your own task", "Өөрийнхөө ажлыг өөрөө батлах боломжгүй."),
+            (403, "you cannot check in with a check-in code you issued", "Өөрийн гаргасан QR кодоор ирцээ бүртгэх боломжгүй. Өөр зохион байгуулагчийн кодыг уншуулна уу."),
+            (403, "you cannot review your own payment", "Өөрийнхөө төлбөрийг өөрөө батлах боломжгүй. Өөр санхүүчид хандана уу."),
+            (403, "you cannot change the exemption of your own charge", "Өөрийнхөө хураамжийн чөлөөлөлтийг өөрөө өөрчлөх боломжгүй. Өөр санхүүчид хандана уу."),
+            (409, "this event is cancelled", "Энэ арга хэмжээ цуцлагдсан."),
+            (409, "check-in is open from 2 hours before the event starts until 2 hours after it ends", "Ирц арга хэмжээ эхлэхээс 2 цагийн өмнөөс дууссанаас хойш 2 цаг хүртэл бүртгэгдэнэ."),
+            (409, "this charge has a pending payment report; approve or reject it before exempting the charge", "Энэ хураамжид хүлээгдэж буй төлбөрийн мэдэгдэл байна. Чөлөөлөхийн өмнө төлбөрийг батлах эсвэл татгалзана уу."),
+            (409, "this Idempotency-Key was already used for a different decision", "Шийдвэрийг өөр утгатайгаар давхар илгээсэн байна. Цонхоо хаагаад дахин оролдоно уу."),
+            (400, "Idempotency-Key must be a UUID", "Шийдвэрийн түлхүүр буруу байна. Аппаа шинэчилнэ үү."),
+            (400, "provide a reason for the attendance correction", "Ирц залруулах шалтгаанаа бичнэ үү."),
+        ]
+        for (status, message, expected) in cases {
+            XCTAssertEqual(text(status, message), expected, message)
+        }
+        // The generic fallbacks stay for wording not known yet.
+        XCTAssertEqual(text(403, "you cannot do something else to your own thing"),
+                       "Өөрийнхөө талаар энэ үйлдлийг хийх боломжгүй. Өөр эрх бүхий хүнд хандана уу.")
+    }
+
+    /// A repeated key: 200 with `Idempotent-Replayed: true` and the decision
+    /// as first recorded — success, not an error.
+    func testReplayedSanctionIsSuccess() async throws {
+        let api = stubClient()
+        api.tokens.save("tok")
+        StubProtocol.handler = { _ in
+            (200, ["Idempotent-Replayed": "true", "Content-Type": "application/json"],
+             json(#"{"id":"s1","user_id":"u2","points":5,"reason":"r"}"#))
+        }
+        let sanction = try await api.sanction(userID: "u2", points: 5, reason: "r", idempotencyKey: UUID().uuidString)
+        XCTAssertEqual(sanction.id, "s1")
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, _ text: String) throws -> T {
+        let d = JSONDecoder(); d.keyDecodingStrategy = .convertFromSnakeCase
+        return try d.decode(T.self, from: json(text))
+    }
+
+    /// Charges ran out, payments did not: only the payments move on.
+    func testPerListPaging() throws {
+        let page = try decode(MyDuesPage.self, #"{"charges":[],"payments":[],"has_more":true,"next_offset":50,"charges_has_more":false,"payments_has_more":true,"next_charges_offset":null,"next_payments_offset":50}"#)
+        XCTAssertEqual(page.nextPageQuery(chargesShown: 3, paymentsShown: 50), "charges_offset=3&payments_offset=50")
+        let both = try decode(FinanceOverview.self, #"{"has_more":true,"next_offset":50,"charges_has_more":true,"payments_has_more":true,"next_charges_offset":50,"next_payments_offset":50}"#)
+        XCTAssertEqual(both.nextPageQuery(chargesShown: 50, paymentsShown: 50), "charges_offset=50&payments_offset=50")
+        let done = try decode(MyDuesPage.self, #"{"has_more":false,"charges_has_more":false,"payments_has_more":false}"#)
+        XCTAssertNil(done.nextPageQuery(chargesShown: 1, paymentsShown: 1))
+    }
+
+    /// An older server: one shared offset, as before.
+    func testSharedOffsetFallback() throws {
+        let old = try decode(MyDuesPage.self, #"{"has_more":true,"next_offset":50}"#)
+        XCTAssertEqual(old.nextPageQuery(chargesShown: 50, paymentsShown: 12), "offset=50")
+        let noOffset = try decode(FinanceOverview.self, #"{"has_more":true}"#)
+        XCTAssertEqual(noOffset.nextPageQuery(chargesShown: 50, paymentsShown: 12), "offset=50")
+    }
+
+    func testUnwaivePathAndReason() async throws {
+        let api = stubClient()
+        api.tokens.save("tok")
+        let seen = Seen()
+        StubProtocol.handler = { request in
+            seen.add("\(request.httpMethod ?? "") \(request.url!.path) \((bodyJSON(request)["reason"] as? String) ?? "")")
+            return (200, [:], json(#"{"ok":true,"waived":false}"#))
+        }
+        try await api.unwaiveCharge("c1", reason: "Алдаа")
+        XCTAssertEqual(seen.all, ["POST /api/v1/dues/charges/c1/unwaive Алдаа"])
+    }
+}

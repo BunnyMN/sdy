@@ -110,6 +110,8 @@ extension APIClient {
     // MARK: Dues
     func duesSettings() async throws -> DuesSettings { try await get("/dues/settings") }
     func myDues(offset: Int = 0) async throws -> MyDuesPage { try await get("/dues/mine?offset=\(offset)", cached: offset == 0) }
+    /// A later page: `query` from `DuesPaged.nextPageQuery`.
+    func myDues(page query: String) async throws -> MyDuesPage { try await get("/dues/mine?\(query)", cached: false) }
     func reportPayment(chargeID: String, requestKey: String, amount: Double, reference: String) async throws -> ReportResult {
         try await send(.post, "/dues/payments", body: [
             "charge_id": chargeID, "request_key": requestKey, "amount": Int(amount.rounded()), "reference": reference,

@@ -98,7 +98,13 @@ struct FinanceOverview: Decodable {
     var totals: Totals?
     @DefaultFalse var hasMore: Bool
     var nextOffset: Int?
+    var chargesHasMore: Bool?
+    var paymentsHasMore: Bool?
+    var nextChargesOffset: Int?
+    var nextPaymentsOffset: Int?
 }
+
+extension FinanceOverview: DuesPaged {}
 
 struct IssuedCheckin: Decodable {
     let token: String

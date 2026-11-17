@@ -53,11 +53,18 @@ extension APIClient {
     func financeOverview(period: String = "", offset: Int = 0) async throws -> FinanceOverview {
         try await get("/dues/finance?period=\(q(period))&offset=\(offset)", cached: false)
     }
+    func financeOverview(period: String, page query: String) async throws -> FinanceOverview {
+        try await get("/dues/finance?period=\(q(period))&\(query)", cached: false)
+    }
     func reviewPayment(_ id: String, action: String, reason: String) async throws {
         try await perform(.post, "/dues/payments/\(p(id))/review", body: ["action": action, "reason": reason])
     }
     func waiveCharge(_ id: String, reason: String) async throws {
         try await perform(.post, "/dues/charges/\(p(id))/waive", body: ["reason": reason])
+    }
+    /// Withdraws an exemption (finance; never on one's own charge).
+    func unwaiveCharge(_ id: String, reason: String) async throws {
+        try await perform(.post, "/dues/charges/\(p(id))/unwaive", body: ["reason": reason])
     }
     func createCharges(period: String) async throws {
         try await perform(.post, "/dues/charges", body: ["period": period])

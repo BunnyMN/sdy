@@ -222,9 +222,11 @@ struct DuesView: View {
         guard let page else { return }
         loadingMore = true; defer { loadingMore = false }
         do {
-            var next = try await app.api.myDues(offset: page.nextOffset ?? page.charges.count)
-            next.charges = page.charges + next.charges
-            next.payments = page.payments + next.payments
+            // Charges and payments run out separately; each list asks for its own next rows.
+            guard let query = page.nextPageQuery(chargesShown: page.charges.count, paymentsShown: page.payments.count) else { return }
+            var next = try await app.api.myDues(page: query)
+            next.charges = page.charges.appendingUnique(next.charges)
+            next.payments = page.payments.appendingUnique(next.payments)
             next.totals = next.totals ?? page.totals
             self.page = next
         } catch {

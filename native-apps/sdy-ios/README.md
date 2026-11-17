@@ -18,7 +18,10 @@ SDY-ийн гишүүдэд зориулсан native SwiftUI апп (WebView а
 - Салбар солилт: сервер солисны дараа `/auth/me` амжилтгүй бол апп шинэ салбарт (эрхгүйгээр) шилжиж, алдааг харуулна.
 - eID: start-ийн `binding` Keychain-д, `expires_at` (байвал тоолуур, байхгүй бол 15 минутын backstop) хадгалагдаж, universal
   link-ээр дахин нээгдэхэд poll-д илгээгдэнэ (`PendingEIDSession`). Poll 404 → хугацаа дууссан.
-- Хяналтын хорооны шийдвэр `Idempotency-Key` толгойтой (нэг шийдвэрт нэг UUID, дахин оролдоход ижил).
+- Хяналтын хорооны шийдвэр `Idempotency-Key` толгойтой (нэг шийдвэрт нэг UUID, дахин оролдоход ижил); давтсан хүсэлтийн
+  200 + `Idempotent-Replayed: true` нь амжилт.
+- Хураамж ба Санхүүгийн хуудаслалт жагсаалт тус бүрээр (`charges_offset`, `payments_offset`; хуучин серверт `offset`).
+- Санхүү: «Чөлөөлөх» ба «Чөлөөлөлтийг буцаах» (`/dues/charges/{id}/waive|unwaive`, шалтгаан заавал).
 - Мэдэгдлийн линк (`registry.member_notifications.path`) → дэлгэц: `LinkParser.notificationTarget` —
   `/module/events/…` арга хэмжээ (өөр салбарынх бол салбар солино), `/member/history` Түүх, `/member/record`
   Гишүүнчлэл, `/member/participation` Оролцоо, `/member` Нүүр. Жагсаалтаас дарвал тухайн стек дээр (Нүүр эсвэл
@@ -63,7 +66,7 @@ xcodebuild test -project SDYMember.xcodeproj -scheme SDYMember \
   -destination 'platform=iOS Simulator,name=iPhone 16e'
 ```
 
-2026-11-17: 100 тест. `CODE_SIGNING_ALLOWED=NO`-оор ажиллуулбал Keychain-ийн тест (`testBindingRoundTripsThroughTheKeychain`)
+2026-11-17: 105 тест. `CODE_SIGNING_ALLOWED=NO`-оор ажиллуулбал Keychain-ийн тест (`testBindingRoundTripsThroughTheKeychain`)
 алгасагдана (гарын үсэггүй build-д Keychain алга).
 
 ### Backend-гүй харах (зөвхөн Debug)

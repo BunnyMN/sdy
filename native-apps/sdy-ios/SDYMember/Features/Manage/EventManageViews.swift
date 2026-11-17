@@ -247,7 +247,7 @@ struct CheckinQRView: View {
                         }
                     }
                     if let error { NoticeView(text: error, kind: .error) }
-                    Text("Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна. Шинэ код гаргахад өмнөх код хүчингүй болно — нэг арга хэмжээнд нэг л төхөөрөмжөөр QR харуулна уу.")
+                    Text("Гишүүд E-sdy апп-ын «Ирц» хэсгээр уншуулна. Шинэ код гаргахад таны өмнөх код хүчингүй болно. Хэд хэдэн зохион байгуулагч зэрэг QR харуулж болно. Өөрийн гаргасан кодоор өөрөө ирц бүртгэх боломжгүй.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 } else if let error {
                     NoticeView(text: error, kind: .error)
