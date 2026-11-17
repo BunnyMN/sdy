@@ -96,6 +96,39 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Daily database dump, and the pre-migration dump deploy.yml takes with
+  # `docker compose run --rm -T backup once predeploy`. Behind a profile so a
+  # deployment that has its own backup (deploy/scripts/backup.sh from host cron)
+  # is unchanged: e-sdy.mn turns it on with COMPOSE_PROFILES=backup in .env.
+  # The postgres image is used for its pg_dump, which matches the server's
+  # major version. Dumps land in ${BACKUP_HOST_DIR} on the host — the same
+  # disk; an off-site copy is still the operator's (docs/MZH.md).
+  backup:
+    logging: *bounded-logging
+    image: postgres:16-alpine
+    container_name: ${STACK:-gerege_nexus}_backup
+    profiles: ["backup"]
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/scripts/scheduled-backup.sh"]
+    command: ["loop"]
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGDATABASE: platform_db
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_KEEP_COUNT: ${BACKUP_KEEP_COUNT:-10}
+      # 19:15 UTC is 03:15 in Ulaanbaatar.
+      BACKUP_AT_UTC: ${BACKUP_AT_UTC:-19:15}
+      TEXTFILE_DIR: /backups/metrics
+    volumes:
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+      - ./deploy/scripts/scheduled-backup.sh:/scripts/scheduled-backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     logging: *bounded-logging
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
@@ -253,6 +286,11 @@ services:
       # callback_hosts-д түүний scheme (`gerege-nexus://`)-ийг
       # бүртгэсэн байх ёстой — эс бөгөөс тэд чимээгүй хаяна.
       EID_APP_CALLBACKS: ${EID_APP_CALLBACKS:-}
+      # The App Store's iOS 1.0 polls eID without a session binding. true
+      # (default) still serves it and counts each such poll
+      # (eid_unbound_bearer_polls_total); false refuses it with 403
+      # eid_session_other_device. Turn off once that counter stays at zero.
+      EID_ALLOW_UNBOUND_BEARER: ${EID_ALLOW_UNBOUND_BEARER:-true}
       # How long a session may go unused, on top of its absolute lifetime.
       # 0 turns it off.
       SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-90m}
