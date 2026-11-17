@@ -55,9 +55,15 @@ export type Motion = {
   proposer_id: string; proposer_name: string; status: MotionStatus; content_hash: string;
   opened_at: string | null; closed_at: string | null; result: "" | "approved" | "rejected";
   yes: number; no: number; abstain: number; note: string; created_at: string;
-  my_vote: { choice: VoteChoice; status: "signing" | "signed" | "failed" } | null;
+  my_vote: {
+    choice: VoteChoice; status: "signing" | "signed" | "failed";
+    /** events 1.7.0: a ballot PDF is stored for the signed vote; ballot_signed — it carries eID's PAdES signature. */
+    ballot?: boolean; ballot_signed?: boolean;
+  } | null;
   /** events 1.4.0: the caller reported it; open reports (managers only). */
   reported_by_me?: boolean; report_count?: number;
+  /** events 1.7.0: the signed archive's protocol of the decided vote, once it is out for signature. */
+  protocol_id?: string | null;
 };
 export type MotionList = {
   motions: Motion[]; eligible: number; can_vote: boolean; signing_ready: boolean;

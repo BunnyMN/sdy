@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, Building2, CalendarDays, CheckCircle2, ClipboardList, Fingerprint, RefreshCw, Users, Vote, Wallet, ChartNoAxesCombined, ChevronRight } from "lucide-react";
+import { Archive, Bell, Building2, CalendarDays, CheckCircle2, ClipboardList, Fingerprint, RefreshCw, Users, Vote, Wallet, ChartNoAxesCombined, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { memberApi, type MemberRecord } from "@/lib/api/member";
 import { duesApi, type MyDuesPage } from "@/lib/api/dues";
@@ -186,7 +186,7 @@ export default function MemberHome() {
         {(me.is_admin || me.permissions?.includes("events.manage")) && <Link href="/member/activity"><ChartNoAxesCombined aria-hidden="true" /><span>{t("events.activity.title")}</span><ChevronRight aria-hidden="true" /></Link>}
       </div></>}
     </section>}
-    <div className="sdy-action-list"><Link href="/member/record"><Users aria-hidden="true" /><span>{t("membership.record.title")}</span><ChevronRight aria-hidden="true" /></Link><Link href="/member/notifications"><Bell aria-hidden="true" /><span>{t("membership.record.notifications")}</span><ChevronRight aria-hidden="true" /></Link>{organisation && <Link href="/member/eid-test"><Fingerprint aria-hidden="true" /><span>{t("events.sign_test.link")}</span><ChevronRight aria-hidden="true" /></Link>}{canAdmit && <Link href="/member/overview"><ChartNoAxesCombined aria-hidden="true" /><span>{t("membership.record.overview")}</span><ChevronRight aria-hidden="true" /></Link>}</div>
+    <div className="sdy-action-list"><Link href="/member/record"><Users aria-hidden="true" /><span>{t("membership.record.title")}</span><ChevronRight aria-hidden="true" /></Link><Link href="/member/notifications"><Bell aria-hidden="true" /><span>{t("membership.record.notifications")}</span><ChevronRight aria-hidden="true" /></Link>{organisation && <Link href="/member/archive"><Archive aria-hidden="true" /><span>{t("events.archive.nav")}</span><ChevronRight aria-hidden="true" /></Link>}{organisation && <Link href="/member/eid-test"><Fingerprint aria-hidden="true" /><span>{t("events.sign_test.link")}</span><ChevronRight aria-hidden="true" /></Link>}{canAdmit && <Link href="/member/overview"><ChartNoAxesCombined aria-hidden="true" /><span>{t("membership.record.overview")}</span><ChevronRight aria-hidden="true" /></Link>}</div>
     <MembershipTransfers memberships={memberships} branches={branches} requests={data.transfers} reload={reload} />
     {items.length > 0 && <section className="space-y-3" aria-label={t("membership.requests")}>{items.map(item => <div key={item.id} className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-medium">{item.provider}</h2><p className="mt-1 text-sm text-muted">{t(`membership.${item.status.toLowerCase()}`)}</p>

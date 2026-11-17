@@ -7,9 +7,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ban, CheckCircle2, Clock, Fingerprint, Flag, Gavel, MessageSquarePlus, Pencil, RotateCcw, Undo2, Vote, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Clock, FileText, Fingerprint, Flag, Gavel, MessageSquarePlus, Pencil, RotateCcw, Undo2, Vote, XCircle } from "lucide-react";
 import Link from "next/link";
 
+import { ballotUrl } from "@/lib/api/archive";
 import { participationApi, type Motion, type MotionList, type SignedVote, type VoteChoice } from "@/lib/api/events";
 import { useI18n } from "@/lib/i18n";
 import { Chip, ErrorNote, Panel } from "@/components/module/kit";
@@ -258,6 +259,13 @@ export default function EventDiscussion({ eventID, onSummary }: {
                 {signedMine ? <>{t("events.discussion.my_vote", { choice: t(`events.discussion.chose.${m.my_vote.choice}`) })} <span className="text-muted">· {t("events.discussion.signed")}</span></>
                   : m.my_vote.status === "signing" ? t("events.discussion.my_vote_signing", { choice: t(`events.discussion.chose.${m.my_vote.choice}`) })
                   : t("events.discussion.my_vote_failed")}
+              </p>}
+              {(signedMine && m.my_vote?.ballot || (m.status === "decided" && m.protocol_id)) && <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                {signedMine && m.my_vote?.ballot && <span className="inline-flex items-center gap-1.5">
+                  <a href={ballotUrl(eventID, m.id)} className="inline-flex items-center gap-1 text-accent underline"><FileText aria-hidden="true" className="h-3.5 w-3.5" />{t("events.discussion.ballot_pdf")}</a>
+                  {!m.my_vote.ballot_signed && <span className="text-muted">· {t("events.discussion.ballot_pending")}</span>}
+                </span>}
+                {m.status === "decided" && m.protocol_id && <Link href={`/member/archive/${m.protocol_id}`} className="inline-flex items-center gap-1 text-accent underline"><FileText aria-hidden="true" className="h-3.5 w-3.5" />{t("events.discussion.protocol_link")}</Link>}
               </p>}
 
               <div className="flex flex-wrap gap-2">
